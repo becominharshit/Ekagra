@@ -1,5 +1,35 @@
 # Roadmap and Build Guide
 
+## 0. Current plan (overrides everything below)
+
+**Decided 2026-11-01:** the roadmap is compressed into **2 phases, "Working App First"**. Phase 1 is a fully working end-to-end app. Where §1–§4 of this document, the product spec or the technical design disagree with this section, **this section wins**.
+
+### Phase 1: the working app
+1. **Shell and auth:** React + TypeScript + Vite + Tailwind CSS + shadcn/ui + React Router + TanStack Query + Zustand + Capacitor (Android) + Supabase (Auth + Postgres with strict RLS).
+2. **Today and the deterministic planner** (`src/features/planner/`): pure TypeScript 14-day scheduler (default budget 55% Academics, 25% Hustle, 20% Life), Now card, Minimum Day ("I Crashed" one-tap reset; missed work is spread out with at most +20% on any day), evening energy check-in (1–5 sliders).
+3. **Academics:** subject and syllabus upload → dual-track topic tree (`exam` and `skill` tracks); past-paper priority `0.45 × examWeight + 0.35 × pyqScore + 0.20 × dependentsScore`; local pdf.js viewer with 1-click **AI Anchors**; lazy topic generator (`ai-generate`: lessons, check quizzes, `ts-fsrs` flashcards); mistake notebook (1 → 3 → 7 day ladder); Python Coding Lab (CodeMirror 6 + Pyodide in a Web Worker).
+4. **Hustle (moved up from P3):** templates (Freelancing, Content Creation, Startup, Custom; part-time work uses Custom), Kanban pipeline board, clients and transactions, automatic earnings per hour (net profit ÷ hours logged), Skill Bridge ("Learn this" creates a Skill-track course in Academics), AI screenshot/text task capture (`ai-capture`).
+5. **Focus engine and FocusGuard:** Pomodoro and Deep Work timers; mode-switch warning when switching between Academics and Hustle during a scheduled block; Kotlin FocusGuard plugin with the **Academic Tollbooth**: answer 3 rapid-fire questions from your active subject to earn a 3-minute emergency unlock. This replaces the reason-based 5-minute unlock described in docs 1 and 2.
+
+### Phase 2: everything else
+AI tutor and material search (pgvector), YouTube lectures, weekly AI review, learning metrics and adaptive difficulty, mock tests, friends and accountability, attendance and marks, habits and the full Life section, Gmail/Calendar/Drive and the other integrations, exam season mode, strict mode, in-app feedback, the Tools app.
+
+### Phase 1 milestones
+The current milestone is the first unchecked one.
+
+- [x] **M1 Foundation:** project structure, Tailwind + shadcn/ui, Phase 1 migration (`supabase/migrations/001_phase1_core.sql`) with RLS on every table and database tests (`tests/db/`), 5-tab app shell with Mode Chip and mode-switch warning (a temporary Mode Simulator on the Me tab stands in for the planner)
+- [ ] **M2 Supabase, sign-in, Android:** create and link the Supabase project, apply the migration, generate `src/types/database.ts`, Google sign-in (web + Android), Capacitor Android app on your phone, onboarding (profile, routine, time budget)
+- [ ] **M3 Academics core:** `_shared/ai.ts` (tiers, quotas, `ai_usage`), subjects, syllabus upload → `ai-syllabus` → dual-track topic tree editor, past papers → `ai-papers` → priority formula (unit-tested)
+- [ ] **M4 Planner and Today:** 14-day planner (unit-tested), Now card, "I Crashed", evening check-in; Mode Chip driven by real plan blocks (remove the Mode Simulator); mode switches saved to `distraction_events`
+- [ ] **M5 PDF library and AI Anchors:** pdf.js viewer, on-device text extraction, 1-click anchors
+- [ ] **M6 Learn loop:** `ai-generate` lessons, check quizzes and FSRS flashcards; quiz player; mistake notebook
+- [ ] **M7 Python Coding Lab:** CodeMirror 6 + Pyodide worker, code problems with tests, saved snippets
+- [ ] **M8 Hustle:** templates, Kanban, clients, transactions, time entries, earnings per hour, Skill Bridge, `ai-capture`
+- [ ] **M9 Focus engine:** timers, focus sessions (hustle sessions add time entries), FocusGuard plugin, Academic Tollbooth
+- [ ] **M10 Beta:** end-to-end polish, web deploy, APK for friends
+
+The 12-week plan in §3 and the phases in §1 and §4 are kept for reference only.
+
 ## 1. Phases
 
 | Phase | Goal | Rough length |

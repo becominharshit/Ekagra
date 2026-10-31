@@ -5,7 +5,7 @@ This project is built by a first-year student with AI help. Keep things simple, 
 ## Where things are
 - `docs/1-product-spec.md`: features and screens (with phase tags P1–P5)
 - `docs/2-technical-design.md`: stack, database, AI pipelines, planner, app blocker, integrations
-- `docs/3-roadmap-and-build-guide.md`: week-by-week checklist (the current milestone is the first unchecked week)
+- `docs/3-roadmap-and-build-guide.md`: **§0 is the current plan** (2 phases + milestone checklist; the current milestone is the first unchecked one). Where §0 disagrees with older text in any doc, §0 wins.
 - Read the relevant sections before coding. If the docs and the code disagree, ask.
 
 ## Stack
