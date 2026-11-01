@@ -6,11 +6,13 @@ import { AuthCallbackPage } from '@/pages/AuthCallbackPage'
 import { HustlePage } from '@/pages/HustlePage'
 import { LifePage } from '@/pages/LifePage'
 import { MePage } from '@/pages/MePage'
+import { OnboardingPage } from '@/pages/OnboardingPage'
 import { SignInPage } from '@/pages/SignInPage'
 import { TodayPage } from '@/pages/TodayPage'
 
 // Public pages: sign-in and the page Google sign-in returns to (web).
-// Everything else needs a signed-in user or Demo Mode (RequireAuth), and lives inside
+// Everything else needs a signed-in user or Demo Mode (RequireAuth), who is sent to
+// /onboarding until it's finished. Onboarding is full screen; the other pages live inside
 // AppShell (top bar + bottom tabs). createBrowserRouter is needed for useBlocker,
 // which powers the mode-switch warning.
 export const router = createBrowserRouter([
@@ -19,6 +21,7 @@ export const router = createBrowserRouter([
   {
     element: <RequireAuth />,
     children: [
+      { path: '/onboarding', element: <OnboardingPage /> },
       {
         path: '/',
         element: <AppShell />,

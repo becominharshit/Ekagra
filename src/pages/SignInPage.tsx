@@ -52,7 +52,7 @@ export function SignInPage() {
     <main className="pt-safe pb-safe flex min-h-full items-center justify-center px-4 py-10">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle className="text-xl">Student Mentor</CardTitle>
+          <CardTitle className="text-xl">Ekagra</CardTitle>
           <CardDescription>Studies, side hustle and life in one plan, with one clear next step.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3">

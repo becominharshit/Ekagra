@@ -23,6 +23,7 @@ React + TypeScript + Vite · Tailwind CSS + shadcn/ui · React Router · TanStac
 - TypeScript strict mode; avoid `any`.
 - Database changes only through SQL migrations in `supabase/migrations/`. Regenerate types after each migration.
 - Every table has Row Level Security. Users can only read and write their own rows unless the design says otherwise.
+- Every feature works both in Demo Mode (data stays on the device) and with Supabase. Screens use hooks backed by a repo interface (like `src/features/profile/queries.ts`), never the Supabase client directly.
 - The app only uses the Supabase URL and publishable (anon) key. Service role key, AI keys and OAuth secrets live only in Edge Function secrets. Never commit `.env`.
 - Every AI call goes through `supabase/functions/_shared/ai.ts`: model tier from env vars, quota check, Zod validation, usage logged to `ai_usage`.
 - Planner, priority, mastery, metrics and spaced-repetition code are pure functions with Vitest tests.

@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { activeBlock, MODE_LABEL } from '@/features/mode/modes'
 import { useModeStore } from '@/features/mode/modeStore'
+import { PlanPreview } from '@/features/planner/PlanPreview'
 import { useNow } from '@/hooks/useNow'
 
 const COMING = [
@@ -34,6 +35,8 @@ export function TodayPage() {
             </CardDescription>
           </CardHeader>
         </Card>
+
+        <PlanPreview />
 
         <Card>
           <CardHeader>

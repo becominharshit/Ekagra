@@ -1,0 +1,151 @@
+import { useState } from 'react'
+import { ArrowLeft, ArrowRight, Check, LoaderCircle } from 'lucide-react'
+import { useNavigate } from 'react-router'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { signOut } from '@/features/auth/auth'
+import { useAuthStore } from '@/features/auth/authStore'
+import { AboutStep } from '@/features/onboarding/AboutStep'
+import { BudgetStep } from '@/features/onboarding/BudgetStep'
+import { allProblems, draftFrom, problemsFor, resultFrom } from '@/features/onboarding/onboardingDraft'
+import { RhythmStep } from '@/features/onboarding/RhythmStep'
+import { RoutineStep } from '@/features/onboarding/RoutineStep'
+import { useProfile, useRoutine, useSaveOnboarding, type ProfileRow, type RoutineRow } from '@/features/profile/queries'
+import { cn } from '@/lib/utils'
+
+const STEPS = [
+  { title: 'About you', description: 'So your mentor knows who it is planning for.' },
+  { title: 'Your weekly routine', description: 'The fixed parts of your week. Everything else is free time to plan.' },
+  { title: 'Rhythm and mentor style', description: 'When you think best, and how your mentor should talk to you.' },
+  { title: 'Time budget', description: 'How your free time is shared between studies, hustle and life.' },
+] as const
+
+/** The 4-step setup. Also used later from Me → "Edit routine and budget". */
+export function OnboardingPage() {
+  const profile = useProfile()
+  const routine = useRoutine()
+
+  if (profile.isPending || routine.isPending) {
+    return (
+      <p className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground">
+        <LoaderCircle className="size-4 animate-spin" aria-hidden />
+        Loading…
+      </p>
+    )
+  }
+  if (profile.isError || routine.isError || !profile.data) {
+    const message = profile.error?.message ?? routine.error?.message ?? 'Your profile could not be loaded.'
+    return (
+      <p role="alert" className="flex h-full items-center justify-center px-6 text-center text-sm text-destructive">
+        {message}
+      </p>
+    )
+  }
+  return <OnboardingWizard profile={profile.data} routineRows={routine.data} />
+}
+
+function OnboardingWizard({ profile, routineRows }: { profile: ProfileRow; routineRows: RoutineRow[] }) {
+  const navigate = useNavigate()
+  const save = useSaveOnboarding()
+  const isDemo = useAuthStore((state) => state.status === 'demo')
+  const [step, setStep] = useState(0)
+  const [draft, setDraft] = useState(() => draftFrom(profile, routineRows))
+  const [problems, setProblems] = useState<string[]>([])
+  const editing = profile.onboarded_at !== null
+  const isLast = step === STEPS.length - 1
+  const current = STEPS[step] ?? STEPS[0]
+
+  function goTo(next: number) {
+    setProblems([])
+    setStep(next)
+    window.scrollTo({ top: 0 })
+  }
+
+  function goNext() {
+    const issues = isLast ? allProblems(draft) : problemsFor(step, draft)
+    setProblems(issues)
+    if (issues.length > 0) return
+    if (!isLast) {
+      goTo(step + 1)
+      return
+    }
+    save.mutate(resultFrom(draft, profile), { onSuccess: () => navigate('/today', { replace: true }) })
+  }
+
+  /** The first time there's no Me tab yet, so leaving (e.g. wrong Google account) happens here. */
+  function leave() {
+    signOut().catch((error: unknown) => {
+      setProblems([error instanceof Error ? error.message : 'Could not sign out. Please try again.'])
+    })
+  }
+
+  return (
+    <main className="pt-safe pb-safe min-h-full">
+      <div className="mx-auto grid w-full max-w-lg gap-4 px-4 py-6">
+        <div className="flex items-center justify-between">
+          <span className="font-heading text-base font-semibold tracking-tight">Ekagra</span>
+          {editing ? (
+            <Button variant="ghost" onClick={() => navigate('/me')}>
+              Cancel
+            </Button>
+          ) : (
+            <Button variant="ghost" onClick={leave}>
+              {isDemo ? 'Exit demo' : 'Sign out'}
+            </Button>
+          )}
+        </div>
+
+        <ol className="grid grid-cols-4 gap-1.5" aria-label="Progress">
+          {STEPS.map((item, index) => (
+            <li
+              key={item.title}
+              aria-current={index === step ? 'step' : undefined}
+              className={cn('h-1.5 rounded-full', index <= step ? 'bg-primary' : 'bg-muted')}
+            >
+              <span className="sr-only">{item.title}</span>
+            </li>
+          ))}
+        </ol>
+
+        <Card>
+          <CardHeader>
+            <p className="text-xs text-muted-foreground">
+              Step {step + 1} of {STEPS.length}
+            </p>
+            <CardTitle className="text-lg">{current.title}</CardTitle>
+            <CardDescription>{current.description}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {step === 0 && <AboutStep value={draft.about} onChange={(about) => setDraft({ ...draft, about })} />}
+            {step === 1 && <RoutineStep value={draft.routine} onChange={(routine) => setDraft({ ...draft, routine })} />}
+            {step === 2 && <RhythmStep value={draft.rhythm} onChange={(rhythm) => setDraft({ ...draft, rhythm })} />}
+            {step === 3 && <BudgetStep value={draft.budget} onChange={(budget) => setDraft({ ...draft, budget })} />}
+          </CardContent>
+        </Card>
+
+        {(problems.length > 0 || save.error) && (
+          <div role="alert" className="grid gap-1 text-sm text-destructive">
+            {problems.map((problem) => (
+              <p key={problem}>{problem}</p>
+            ))}
+            {save.error && <p>{save.error.message}</p>}
+          </div>
+        )}
+
+        <div className="flex gap-2">
+          {step > 0 && (
+            <Button variant="outline" onClick={() => goTo(step - 1)}>
+              <ArrowLeft aria-hidden />
+              Back
+            </Button>
+          )}
+          <Button className="flex-1" disabled={save.isPending} onClick={goNext}>
+            {isLast && (save.isPending ? <LoaderCircle className="animate-spin" aria-hidden /> : <Check aria-hidden />)}
+            {isLast ? (editing ? 'Save changes' : 'Finish and plan my day') : 'Next'}
+            {!isLast && <ArrowRight aria-hidden />}
+          </Button>
+        </div>
+      </div>
+    </main>
+  )
+}

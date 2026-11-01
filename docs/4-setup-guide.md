@@ -86,8 +86,8 @@ Supabase → **Authentication → URL Configuration**:
 
 1. Run `npm run dev`. If it was already running, restart it so it reads `.env`.
 2. Open http://localhost:5173, click **Continue with Google** and pick one of your test-user accounts.
-3. You land on **Today**, and **Me** shows your name and photo.
-4. In Supabase → **Table Editor → profiles**, a row with your name was created automatically.
+3. The first time, you land on the 4-step setup (about you, routine, rhythm, time budget). Finish it to reach **Today**, which shows a preview of your plan. **Me** shows your name and photo.
+4. In Supabase → **Table Editor**: `profiles` has your row (with `onboarded_at` filled in), and `routine_blocks` has your routine.
 
 ## 5. Run the Android app on your phone
 
@@ -116,4 +116,5 @@ After changing web code, run `npm run android` again, then press **Run ▶**.
 | After Google you land on `localhost:3000` or another wrong page | Add the return addresses in Supabase (3c) |
 | Android: the browser stays open and the app doesn't come back | Add `ekagra://auth/callback` to Supabase Redirect URLs (3c) |
 | The sign-in page says Google sign-in turns on once Supabase is connected | `.env` is missing or has a typo. Fix it and restart `npm run dev` |
+| After sign-in: "The database tables don't exist yet" | Do step 2 (`npm run db:push`), then tap **Try again** |
 | Android Studio: "SDK location not found" | Open the project through `npm run android` once; Android Studio then creates `android/local.properties` |

@@ -132,6 +132,27 @@ describe('standard day (55/25/20)', () => {
     expect(firstStart('select')).toBeLessThan(firstStart('joins'))
   })
 
+  it('keeps prerequisites first in time, even when a short later piece fits an earlier gap', () => {
+    // Free 07:00–07:35 (35 min), then busy until 10:00.
+    const tuition: RoutineBlock = { kind: 'custom', title: 'Tuition', daysOfWeek: EVERY_DAY, start: '07:35', end: '10:00' }
+    const topics = [
+      topic('advanced', 'dbms', 35, { priority: 0.9, prerequisiteIds: ['basics'] }),
+      topic('basics', 'dbms', 90, { priority: 0.1 }),
+    ]
+    const today = day(plan({ subjects: [subject('dbms')], topics, routine: [SLEEP, tuition] }), 0)
+    const learn = today.blocks.filter((block) => block.kind === 'learn').map((block) => block.topicId)
+    expect(learn).toEqual(['basics', 'basics', 'advanced'])
+  })
+
+  it('never puts 3 blocks of one subject in a row, even on a day with only one subject', () => {
+    const blocks = day(plan(STUDY), 0).blocks
+    expect(blocks.filter((block) => block.subjectId === 'dbms').length).toBeGreaterThan(2)
+    for (let index = 2; index < blocks.length; index++) {
+      const subjects = [blocks[index - 2], blocks[index - 1], blocks[index]].map((block) => block?.subjectId)
+      expect(subjects[0] !== undefined && subjects.every((id) => id === subjects[0])).toBe(false)
+    }
+  })
+
   it('puts hard topics into the best focus hours', () => {
     const topics = [
       topic('normalization', 'dbms', 50, { difficulty: 5, priority: 0.9 }),

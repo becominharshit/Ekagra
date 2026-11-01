@@ -18,9 +18,9 @@ AI tutor and material search (pgvector), YouTube lectures, weekly AI review, lea
 The current milestone is the first unchecked one.
 
 - [x] **M1 Foundation:** project structure, Tailwind + shadcn/ui, Phase 1 migration (`supabase/migrations/001_phase1_core.sql`) with RLS on every table and database tests (`tests/db/`), 5-tab app shell with Mode Chip and mode-switch warning (a temporary Mode Simulator on the Me tab stands in for the planner)
-- [ ] **M2 Supabase, sign-in, Android:** create and link the Supabase project, apply the migration, generate `src/types/database.ts`, Google sign-in (web + Android), Capacitor Android app on your phone, onboarding (profile, routine, time budget)
-- [ ] **M3 Academics core:** `_shared/ai.ts` (tiers, quotas, `ai_usage`), subjects, syllabus upload → `ai-syllabus` → dual-track topic tree editor, past papers → `ai-papers` → priority formula (unit-tested)
-- [ ] **M4 Planner and Today:** 14-day planner (unit-tested), Now card, "I Crashed", evening check-in; Mode Chip driven by real plan blocks (remove the Mode Simulator); mode switches saved to `distraction_events`
+- [x] **M2 Supabase, sign-in, Android:** Supabase client, Google sign-in (web + Android), Demo Mode (no account, works offline), Capacitor Android app (`app.ekagra.student`), 4-step onboarding (profile, routine, rhythm, time budget) saved to `profiles` + `routine_blocks`, 14-day planner and priority engines (unit-tested) with a plan preview on Today. **Your one-time steps:** link the Supabase project, `npm run db:push`, `npm run db:types` (docs/4-setup-guide.md)
+- [ ] **M3 Academics core:** `_shared/ai.ts` (tiers, quotas, `ai_usage`), subjects, syllabus upload → `ai-syllabus` → dual-track topic tree editor, past papers → `ai-papers` → topic priorities (formula built in M2)
+- [ ] **M4 Planner and Today:** save the 14-day plan (engine built in M2), Now card, "I Crashed", evening check-in; Mode Chip driven by real plan blocks (remove the Mode Simulator); mode switches saved to `distraction_events`
 - [ ] **M5 PDF library and AI Anchors:** pdf.js viewer, on-device text extraction, 1-click anchors
 - [ ] **M6 Learn loop:** `ai-generate` lessons, check quizzes and FSRS flashcards; quiz player; mistake notebook
 - [ ] **M7 Python Coding Lab:** CodeMirror 6 + Pyodide worker, code problems with tests, saved snippets

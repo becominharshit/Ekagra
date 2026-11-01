@@ -1,4 +1,4 @@
-import { addDays, daysBetween, freeIntervals, subtractIntervals, totalMinutes } from './time'
+import { addDays, daysBetween, freeIntervals, MINUTES_PER_DAY, subtractIntervals, totalMinutes } from './time'
 import type {
   Area,
   AtRiskItem,
@@ -499,8 +499,11 @@ interface Chunk {
 /**
  * Places a day's work into its free time:
  *   1. Hard topics (difficulty 4–5) first, inside the best focus hours.
- *   2. Then from the earliest free time: assignments, topics (subjects mixed), reviews, hustle, life.
- * Blocks are at most 50 minutes with 5-minute gaps. Work that doesn't fit is returned as `unplaced`.
+ *   2. Then everything else in order, each block after the previous one: assignments, topics
+ *      (subjects mixed, prerequisites first), reviews, hustle, life. After 2 blocks of the same
+ *      subject, a review, hustle or life block comes in between (while there are some left).
+ * Blocks are at most 50 minutes with 5-minute gaps. A block that doesn't fit after the previous
+ * one goes into the earliest gap where it fits. Work that doesn't fit at all is returned as `unplaced`.
  */
 function placeDay(
   date: LocalDate,
@@ -536,17 +539,28 @@ function placeDay(
     if (!tryPut(chunk, settings.peakWindow)) hardLeft.push(chunk)
   }
 
-  const ordered = [
+  const study = [
     ...chunks.filter((chunk) => chunk.item.area === 'academics' && chunk.item.kind === 'task'),
     ...interleave(
       [...hardLeft, ...chunks.filter((chunk) => chunk.item.kind === 'learn' && !isHard(chunk))],
       settings.maxSameSubjectInARow,
     ),
+  ]
+  const others = [
     ...chunks.filter((chunk) => chunk.item.kind === 'review'),
     ...chunks.filter((chunk) => chunk.item.area === 'hustle'),
     ...chunks.filter((chunk) => chunk.item.area === 'life'),
   ]
-  for (const chunk of ordered) {
+  // Each block starts after the previous one, so the order above is also the order in time.
+  // (Otherwise a short piece of a topic could jump into an earlier gap, before its prerequisite.)
+  let cursor: Minute = 0
+  for (const chunk of withBreaks(study, others, settings.maxSameSubjectInARow)) {
+    const start = findStart(space, chunk.minutes, { start: cursor, end: MINUTES_PER_DAY })
+    if (start !== null) {
+      put(chunk, start)
+      cursor = start + chunk.minutes
+      continue
+    }
     if (tryPut(chunk)) continue
     // No gap is long enough: use the longest one left if a short block fits there.
     const longest = longestInterval(space)
@@ -600,6 +614,27 @@ function interleave(chunks: Chunk[], maxInARow: number): Chunk[] {
     ordered.push(chunk)
   }
   return ordered
+}
+
+/** Study blocks in their order, but after `maxInARow` blocks of the same subject, one of the
+ *  `others` (review, hustle or life) comes next while there are some left. Then the rest of them. */
+function withBreaks(study: Chunk[], others: Chunk[], maxInARow: number): Chunk[] {
+  const rest = [...others]
+  const ordered: Chunk[] = []
+  let last: string | null = null
+  let run = 0
+  for (const chunk of study) {
+    const group = chunk.item.subjectId ?? chunk.item.key
+    const breaker = group === last && run >= maxInARow ? rest.shift() : undefined
+    if (breaker) {
+      ordered.push(breaker)
+      last = null
+    }
+    run = group === last ? run + 1 : 1
+    last = group
+    ordered.push(chunk)
+  }
+  return [...ordered, ...rest]
 }
 
 function toBlock(date: LocalDate, start: Minute, { item, minutes }: Chunk): PlannedBlock {

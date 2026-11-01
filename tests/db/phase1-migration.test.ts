@@ -310,4 +310,49 @@ describe('Phase 1 migration (001_phase1_core.sql)', () => {
       /check constraint/,
     )
   })
+
+  it('saves onboarding the way the app does: a new routine replaces the old one, then the profile', async () => {
+    // Like src/features/profile/queries.ts: rows are sent without user_id (the database fills it in),
+    // the new routine is saved before the old one is deleted, and the profile goes last.
+    const insertRoutine = (classTitle: string) =>
+      `insert into public.routine_blocks (kind, title, days_of_week, start_time, end_time) values
+         ('sleep', 'Sleep', '{0,1,2,3,4,5,6}', '23:00', '07:00'),
+         ('class', '${classTitle}', '{1,2,3,4,5}', '09:00', '16:00')`
+
+    await as(BOB, async (tx) => {
+      await tx.exec(insertRoutine('Classes')) // first onboarding
+      const old = await tx.query<{ id: string }>('select id from public.routine_blocks where user_id = $1', [BOB])
+      await tx.exec(insertRoutine('Lectures')) // edited later
+      await tx.query('delete from public.routine_blocks where id = any($1::uuid[])', [`{${old.rows.map((row) => row.id).join(',')}}`])
+
+      const { rows } = await tx.query(
+        'select kind, title, days_of_week, start_time, end_time from public.routine_blocks where user_id = $1 order by start_time',
+        [BOB],
+      )
+      expect(rows).toEqual([
+        { kind: 'class', title: 'Lectures', days_of_week: [1, 2, 3, 4, 5], start_time: '09:00:00', end_time: '16:00:00' },
+        { kind: 'sleep', title: 'Sleep', days_of_week: [0, 1, 2, 3, 4, 5, 6], start_time: '23:00:00', end_time: '07:00:00' },
+      ])
+
+      const settings = { budget: { academics: 60, hustle: 20, life: 20 }, planner: { peakStart: '18:00', peakEnd: '22:00' } }
+      const updated = await tx.query(
+        `update public.profiles
+            set full_name = 'Bob', year = 2, semester = 3, chronotype = 'night', mentor_tone = 'strict',
+                timezone = 'Asia/Calcutta', settings = $2::jsonb, onboarded_at = now()
+          where id = $1`,
+        [BOB, JSON.stringify(settings)],
+      )
+      expect(updated.affectedRows).toBe(1)
+    })
+
+    // Values the app never sends are refused by the database too.
+    await expect(
+      as(BOB, (tx) => tx.query(`update public.profiles set chronotype = 'owl' where id = $1`, [BOB])),
+    ).rejects.toThrow(/check constraint/)
+    await expect(
+      as(BOB, (tx) => tx.query(`insert into public.routine_blocks (kind, title, days_of_week, start_time, end_time) values ('nap', 'Nap', '{0}', '14:00', '15:00')`)),
+    ).rejects.toThrow(/check constraint/)
+    // Nobody else sees Bob's routine.
+    expect(await as(ALICE, (tx) => count(tx, 'routine_blocks'))).toBe(0)
+  })
 })

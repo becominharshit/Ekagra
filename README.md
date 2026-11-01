@@ -1,6 +1,6 @@
-# Student Mentor App: Project Plan
+# Ekagra: Project Plan
 
-> **Working title.** Pick a real name from the [name ideas](#name-ideas) below.
+> **Ekagra** (Sanskrit *ekāgra*: "one-pointed focus"). Android app ID `app.ekagra.student`.
 
 An AI mentor app for college students. It turns your syllabus, books and lectures into a daily plan, teaches and tests you, blocks distracting apps while you focus, and in later phases manages your side hustle and your health in the same place.
 
@@ -45,7 +45,7 @@ Details and the milestone checklist: [docs/3 §0](docs/3-roadmap-and-build-guide
 
 | Name | Meaning | Why it fits |
 |---|---|---|
-| **Ekagra** (top pick) | Sanskrit *ekāgra*: "one-pointed focus" | Names the exact problem the app solves |
+| **Ekagra** (chosen) | Sanskrit *ekāgra*: "one-pointed focus" | Names the exact problem the app solves |
 | **Kairo** (top pick) | From Greek *kairos*: "the right moment" | Right task at the right time; easy to say anywhere |
 | **Lakshya** (top pick) | Hindi/Sanskrit: "aim, target" | For ambitious students with big goals |
 | Sankalp | Sanskrit: "firm resolve" | Commitment and discipline |
@@ -55,7 +55,7 @@ Details and the milestone checklist: [docs/3 §0](docs/3-roadmap-and-build-guide
 | Focal | The focal point of your day | Short and focus-themed |
 | Mentora | Your mentor | Says what it does |
 
-Before choosing, check the Play Store, domains (.app, .in, .com) and Instagram/YouTube handles. Availability and trademarks were **not** checked.
+Before publishing, check the Play Store, domains (.app, .in, .com) and Instagram/YouTube handles. Availability and trademarks were **not** checked.
 
 ## Decisions log
 
@@ -64,3 +64,4 @@ Add a dated line whenever an important decision is made or changed.
 - 2026-10-31: Plan created. Stack changed from Expo to React + Capacitor because AI will write most of the code and the app is heavy on PDFs, quizzes and code editing (see technical design §2).
 - 2026-11-01: Roadmap compressed to 2 phases ("Working App First", docs/3 §0). Hustle module and Python Coding Lab move into Phase 1. New: 1-click AI Anchors in the PDF viewer, and the Academic Tollbooth (3 rapid-fire questions → 3-minute unlock) replaces the reason-based emergency unlock. Hustle templates: freelancing, content, startup, custom.
 - 2026-11-01: M1 done. The Phase 1 migration keeps only Phase 1 tables (AI tutor, pgvector search, calendar, habits and feedback tables move to a Phase 2 migration); signed-out visitors (`anon`) get no table access. Added PGlite (test-only) so `npm test` runs the real migration and checks RLS with two users. Kept oxlint from the scaffold for `npm run lint`.
+- 2026-11-01: M2 done (code; linking Supabase and `db:push` are your one-time steps in docs/4). The app is named **Ekagra** (app ID `app.ekagra.student`, sign-in return link `ekagra://auth/callback`). **Demo Mode**: one tap, no account, works offline; data stays on the device behind the same repo interface as Supabase, so every screen works in both. `capacitor.config.json` instead of `.ts` (TypeScript 7 can't load a TS config for the Capacitor CLI). `src/types/database.ts` is hand-written until `npm run db:types` can run. The 001 migration also creates profiles for accounts made before it runs. The planner and priority engines moved into M2 so onboarding can show a real plan preview; study blocks keep their order in time and never come 3 of one subject in a row.
