@@ -2,6 +2,7 @@ import { PGlite } from '@electric-sql/pglite'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import migration from '../../supabase/migrations/001_phase1_core.sql?raw'
 import hustleMigration from '../../supabase/migrations/002_hustle_mode.sql?raw'
+import betaMigration from '../../supabase/migrations/003_beta.sql?raw'
 import supabaseStubs from '../../tests/db/supabase-stubs.sql?raw'
 import { stubLocalStorage } from '@/test/memoryStorage'
 import { DEMO_TABLES, demoDb, type DemoTable } from './demoDb'
@@ -84,6 +85,8 @@ const ROWS: [DemoTable, Record<string, unknown>][] = [
   ['time_entries', { id: id(28), hustle_id: HUSTLE, client_id: CLIENT, focus_session_id: FOCUS, started_at: '2026-11-02T04:00:00.000Z', minutes: 60 }],
   ['blocked_apps', { id: id(30), package_name: 'com.instagram.android' }],
   ['blocked_apps', { id: id(31), package_name: 'com.google.android.youtube', label: 'YouTube', active: false }],
+  ['feedback', { id: id(32), kind: 'bug', message: 'The timer froze' }],
+  ['feedback', { id: id(33), kind: 'idea', message: 'Dark mode', screen: 'Me', path: '/me', context: { app: 'web' } }],
 ]
 
 /**
@@ -124,6 +127,7 @@ beforeAll(async () => {
   await db.exec(supabaseStubs)
   await db.exec(migration)
   await db.exec(hustleMigration)
+  await db.exec(betaMigration)
   await db.exec(`insert into auth.users (id, email, raw_user_meta_data) values ('${USER}', 'demo@example.com', '{}')`)
 })
 
@@ -144,7 +148,7 @@ async function insertEverywhere(): Promise<void> {
   }
 }
 
-describe('demoDb matches the real database (migrations 001 and 002)', () => {
+describe('demoDb matches the real database (migrations 001 to 003)', () => {
   it('has a test row for every demo table', () => {
     expect(new Set(ROWS.map(([table]) => table))).toEqual(new Set(DEMO_TABLES))
   })

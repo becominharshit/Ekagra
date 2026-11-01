@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { Outlet, useLocation } from 'react-router'
+import { FeedbackSheet } from '@/features/feedback/FeedbackSheet'
 import { FocusBar } from '@/features/focus/FocusBar'
 import { FocusGuardSync } from '@/features/focus/FocusGuardSync'
 import { LaunchpadBar } from '@/features/hustle/LaunchpadBar'
@@ -40,6 +41,7 @@ export function AppShell() {
       <BottomTabBar />
       <CaptureButton />
       <CaptureSheet />
+      <FeedbackSheet />
       <ModeSwitchGuard />
     </div>
   )

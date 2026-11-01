@@ -29,16 +29,22 @@ export function need(source: DataSource | null): DataSource {
 /** Checks added by later migrations: failing one means the server's database is older than the app. */
 const NEWER_CHECKS = ['hustles_type_check', 'hustles_links_is_list']
 
+/** Tables added by later migrations (003_beta.sql). */
+const NEWER_TABLES = /\bfeedback\b/
+
+const NEEDS_UPDATE = 'The database needs the latest update. Run `npm run db:push` (docs/4-setup-guide.md, step 2), then try again.'
+
 /** A database error in plain words. */
 export function dbError(error: PostgrestError): Error {
   if (error.code === 'PGRST205' || error.code === '42P01') {
+    if (NEWER_TABLES.test(error.message)) return new Error(NEEDS_UPDATE)
     return new Error(
       "The database tables don't exist yet. Run `npm run db:push` (docs/4-setup-guide.md, step 2), then try again.",
     )
   }
   // A column or rule from a newer migration in supabase/migrations/ isn't on the server yet.
   if (error.code === 'PGRST204' || error.code === '42703' || (error.code === '23514' && NEWER_CHECKS.some((name) => error.message.includes(name)))) {
-    return new Error('The database needs the latest update. Run `npm run db:push` (docs/4-setup-guide.md, step 2), then try again.')
+    return new Error(NEEDS_UPDATE)
   }
   return new Error(error.message)
 }

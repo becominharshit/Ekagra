@@ -7,6 +7,11 @@ import { defineConfig } from 'vite'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  // When this copy of the app was built (UTC), e.g. "2026-11-01 14:05". Feedback reports and the Me
+  // tab show it, so the founder knows which build (web deploy or APK) a bug came from.
+  define: {
+    __APP_BUILD__: JSON.stringify(new Date().toISOString().slice(0, 16).replace('T', ' ')),
+  },
   resolve: {
     // "@/..." means "src/..." (shorter imports, used by shadcn/ui too).
     // "@shared/..." is the AI request/answer shapes the app shares with the Edge Functions.

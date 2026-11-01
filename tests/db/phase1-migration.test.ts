@@ -50,6 +50,7 @@ beforeAll(async () => {
   await db.exec(`insert into auth.users (id, email, raw_user_meta_data) values ('${CAROL}', 'carol@example.com', '{"name": "Carol"}')`)
   await db.exec(readSql('../../supabase/migrations/001_phase1_core.sql'))
   await db.exec(readSql('../../supabase/migrations/002_hustle_mode.sql'))
+  await db.exec(readSql('../../supabase/migrations/003_beta.sql'))
 
   // Two people sign up. The sign-up trigger creates their profiles.
   await db.exec(`
@@ -138,6 +139,7 @@ beforeAll(async () => {
       `insert into public.tasks (area, hustle_id, title, source) values ('hustle', $1, 'Send the invoice', 'screenshot')`,
       [alice.hustle],
     )
+    await insertId(tx, `insert into public.feedback (kind, message, screen) values ('bug', 'The timer froze', 'Focus')`)
   })
 })
 
@@ -175,7 +177,7 @@ describe('Phase 1 migration (001_phase1_core.sql)', () => {
 
   it("hides Alice's rows from Bob, and Bob can't change or delete them", async () => {
     const aliceBefore = await as(ALICE, countAll)
-    expect(aliceBefore).toMatchObject({ subjects: 1, topics: 2, ai_anchors: 1, hustles: 1, transactions: 3, time_entries: 2 })
+    expect(aliceBefore).toMatchObject({ subjects: 1, topics: 2, ai_anchors: 1, hustles: 1, transactions: 3, time_entries: 2, feedback: 1 })
 
     await as(BOB, async (tx) => {
       for (const table of tables) {
@@ -419,5 +421,60 @@ describe('Hustle mode migration (002_hustle_mode.sql)', () => {
     await expect(as(BOB, (tx) => tx.query(`insert into public.hustles (type, name, links) values ('content', 'Vlogs', '{"url": "x"}')`))).rejects.toThrow(
       /hustles_links_is_list/,
     )
+  })
+})
+
+describe('Beta migration (003_beta.sql): feedback', () => {
+  it('saves feedback with the screen it was sent from; it starts as "new"', async () => {
+    const rows = await as(BOB, async (tx) => {
+      await tx.query(
+        `insert into public.feedback (kind, message, screen, path, context) values ('idea', 'Add dark mode', 'Me', '/me', '{"app": "web"}')`,
+      )
+      return (await tx.query('select kind, message, screen, path, screenshot_path, context, status from public.feedback')).rows
+    })
+    expect(rows).toEqual([
+      { kind: 'idea', message: 'Add dark mode', screen: 'Me', path: '/me', screenshot_path: null, context: { app: 'web' }, status: 'new' },
+    ])
+  })
+
+  it("doesn't let students change feedback or fake its status; the founder (dashboard) can", async () => {
+    await expect(as(ALICE, (tx) => tx.query(`update public.feedback set status = 'fixed'`))).resolves.toMatchObject({ affectedRows: 0 })
+    await expect(
+      as(ALICE, (tx) => tx.query(`insert into public.feedback (kind, message, status) values ('bug', 'Fixed already?', 'fixed')`)),
+    ).rejects.toThrow(/row-level security/)
+
+    // The dashboard's Table Editor skips RLS, like the service role.
+    await db.transaction(async (tx) => {
+      await tx.exec('set local role service_role')
+      const updated = await tx.query(`update public.feedback set status = 'seen' where user_id = $1`, [ALICE])
+      expect(updated.affectedRows).toBe(1)
+    })
+    const statuses = await as(ALICE, async (tx) => (await tx.query('select status from public.feedback')).rows)
+    expect(statuses).toEqual([{ status: 'seen' }])
+  })
+
+  it('rejects empty messages, unknown kinds and device details that are not an object', async () => {
+    const insert = (values: string) => as(BOB, (tx) => tx.query(`insert into public.feedback (kind, message, context) values ${values}`))
+    await expect(insert(`('bug', '   ', '{}')`)).rejects.toThrow(/check constraint/)
+    await expect(insert(`('rant', 'Too many notifications', '{}')`)).rejects.toThrow(/check constraint/)
+    await expect(insert(`('bug', 'Crash', '[]')`)).rejects.toThrow(/check constraint/)
+    await expect(insert(`('bug', '${'x'.repeat(4001)}', '{}')`)).rejects.toThrow(/check constraint/)
+  })
+
+  it("keeps screenshots in the student's own folder of the images bucket", async () => {
+    await as(ALICE, (tx) => tx.query(`insert into storage.objects (bucket_id, name) values ('images', $1)`, [`${ALICE}/feedback/1.png`]))
+    await expect(
+      as(ALICE, (tx) => tx.query(`insert into storage.objects (bucket_id, name) values ('images', $1)`, [`${BOB}/feedback/1.png`])),
+    ).rejects.toThrow(/row-level security/)
+  })
+
+  it('lets students delete their own feedback, and deleting an account deletes it too', async () => {
+    const deleted = await as(BOB, (tx) => tx.query('delete from public.feedback'))
+    expect(deleted.affectedRows).toBe(1)
+
+    await as(CAROL, (tx) => tx.query(`insert into public.feedback (kind, message) values ('other', 'Hi!')`))
+    await db.query('delete from auth.users where id = $1', [CAROL])
+    const { rows } = await db.query<{ n: number }>('select count(*)::int as n from public.feedback where user_id = $1', [CAROL])
+    expect(rows[0]?.n).toBe(0)
   })
 })

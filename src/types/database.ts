@@ -422,6 +422,48 @@ export type Database = {
           },
         ]
       }
+      feedback: {
+        Row: {
+          context: Json
+          created_at: string
+          id: string
+          kind: string
+          message: string
+          path: string | null
+          screen: string | null
+          screenshot_path: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          context?: Json
+          created_at?: string
+          id?: string
+          kind: string
+          message: string
+          path?: string | null
+          screen?: string | null
+          screenshot_path?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          context?: Json
+          created_at?: string
+          id?: string
+          kind?: string
+          message?: string
+          path?: string | null
+          screen?: string | null
+          screenshot_path?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       flashcard_reviews: {
         Row: {
           created_at: string

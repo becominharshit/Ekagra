@@ -4,7 +4,7 @@ import type { Database } from '@/types/database'
 // Demo Mode's database: the same tables and rows as Supabase, kept in this browser's localStorage
 // (one key per table). Nothing is sent to a server.
 // It does the jobs Postgres does for us: ids, timestamps, column defaults (copied from
-// supabase/migrations/001_phase1_core.sql and 002) and what happens to linked rows when a row is deleted
+// supabase/migrations/001_phase1_core.sql, 002 and 003) and what happens to linked rows when a row is deleted
 // (the foreign keys). demoDb.parity.test.ts checks all of this against the real migration.
 
 type PublicTables = Database['public']['Tables']
@@ -39,6 +39,7 @@ export const DEMO_TABLES = [
   'transactions',
   'time_entries',
   'blocked_apps',
+  'feedback',
 ] as const satisfies readonly (keyof PublicTables)[]
 
 export type DemoTable = (typeof DEMO_TABLES)[number]
@@ -267,6 +268,13 @@ const DEFAULTS: { [T in DemoTable]: (now: Date) => Partial<DemoRow<T>> } = {
   blocked_apps: () => ({
     label: null,
     active: true,
+  }),
+  feedback: () => ({
+    screen: null,
+    path: null,
+    screenshot_path: null,
+    context: {},
+    status: 'new',
   }),
 }
 
