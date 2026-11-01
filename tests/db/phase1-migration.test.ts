@@ -49,6 +49,7 @@ beforeAll(async () => {
   // Carol signed in (e.g. while testing Google sign-in) before the tables existed.
   await db.exec(`insert into auth.users (id, email, raw_user_meta_data) values ('${CAROL}', 'carol@example.com', '{"name": "Carol"}')`)
   await db.exec(readSql('../../supabase/migrations/001_phase1_core.sql'))
+  await db.exec(readSql('../../supabase/migrations/002_hustle_mode.sql'))
 
   // Two people sign up. The sign-up trigger creates their profiles.
   await db.exec(`
@@ -391,5 +392,32 @@ describe('Phase 1 migration (001_phase1_core.sql)', () => {
     await expect(
       as(ALICE, (tx) => tx.query(`insert into public.topics (subject_id, title) values ($1, 'Sneaky')`, [subject])),
     ).rejects.toThrow()
+  })
+})
+
+describe('Hustle mode migration (002_hustle_mode.sql)', () => {
+  it('accepts part-time / tutoring hustles, and still rejects unknown types', async () => {
+    await as(BOB, async (tx) => {
+      const id = await insertId(tx, `insert into public.hustles (type, name) values ('parttime', 'Maths tutoring')`)
+      const { rows } = await tx.query('select type, links from public.hustles where id = $1', [id])
+      expect(rows).toEqual([{ type: 'parttime', links: [] }])
+      await tx.query('delete from public.hustles where id = $1', [id])
+    })
+    await expect(as(BOB, (tx) => tx.query(`insert into public.hustles (type, name) values ('crypto', 'Trading')`))).rejects.toThrow(/hustles_type_check/)
+  })
+
+  it('keeps links as a list', async () => {
+    await as(BOB, async (tx) => {
+      const id = await insertId(
+        tx,
+        `insert into public.hustles (type, name, links) values ('content', 'Study vlogs', '[{"label": "YouTube", "url": "https://youtube.com/@me"}]')`,
+      )
+      const { rows } = await tx.query('select links from public.hustles where id = $1', [id])
+      expect(rows).toEqual([{ links: [{ label: 'YouTube', url: 'https://youtube.com/@me' }] }])
+      await tx.query('delete from public.hustles where id = $1', [id])
+    })
+    await expect(as(BOB, (tx) => tx.query(`insert into public.hustles (type, name, links) values ('content', 'Vlogs', '{"url": "x"}')`))).rejects.toThrow(
+      /hustles_links_is_list/,
+    )
   })
 })

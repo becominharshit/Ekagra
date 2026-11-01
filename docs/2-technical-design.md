@@ -198,7 +198,8 @@ speaking_sessions   user_id, scenario, duration_sec, transcript, scores jsonb,
 
 ── Hustle (P3) ───────────────────────────────────────────────────────────────
 hustles             user_id, type (freelancing|content|startup|parttime|custom), name,
-                    goal, goal_amount, goal_date, status
+                    goal, goal_amount, goal_date, currency, pipeline_stages, status,
+                    links jsonb ([{label, url}] for the Launchpad; migration 002)
 hustle_phases       hustle_id, user_id, order_index, title, status, started_at, completed_at
 hustle_steps        phase_id, user_id, title, done, skill_topic_id (skill bridge)
 hustle_items        hustle_id, user_id, kind (order|content|experiment|session|other),

@@ -44,7 +44,7 @@ npm run db:types
 
 - `login` opens your browser to allow the Supabase command-line tool.
 - `link` asks for the database password from step 1.
-- `db:push` creates every table, security rule (RLS) and storage bucket from `supabase/migrations/001_phase1_core.sql`.
+- `db:push` creates every table, security rule (RLS) and storage bucket from the files in `supabase/migrations/` (`001_phase1_core.sql`, then `002_hustle_mode.sql` and any later ones). Run it again whenever a new migration file appears; it only applies the new ones.
 - `db:types` writes `src/types/database.ts` from your real database. Run it again after every new migration.
 
 **Check:** Supabase → **Table Editor** lists tables such as `profiles`, `subjects`, `hustles`, and each one says RLS is enabled.
@@ -134,6 +134,7 @@ The Coding Lab doesn't need any of this: Python runs on the device. Its first ru
 | Android: the browser stays open and the app doesn't come back | Add `ekagra://auth/callback` to Supabase Redirect URLs (3c) |
 | The sign-in page says Google sign-in turns on once Supabase is connected | `.env` is missing or has a typo. Fix it and restart `npm run dev` |
 | After sign-in: "The database tables don't exist yet" | Do step 2 (`npm run db:push`), then tap **Try again** |
+| "The database needs the latest update" | A new migration isn't on the server yet: `npm run db:push` (step 2) |
 | Android Studio: "SDK location not found" | Open the project through `npm run android` once; Android Studio then creates `android/local.properties` |
 | "The AI features aren't on the server yet" | Deploy them: `npm run functions:deploy` (step 6) |
 | "AI is not set up on the server yet. Check these Edge Function secrets: …" | Fill in those names in `supabase/functions/.env`, then `npm run functions:secrets` (step 6) |

@@ -821,6 +821,7 @@ export type Database = {
           goal_amount: number | null
           goal_date: string | null
           id: string
+          links: Json
           name: string
           pipeline_stages: string[]
           status: string
@@ -835,6 +836,7 @@ export type Database = {
           goal_amount?: number | null
           goal_date?: string | null
           id?: string
+          links?: Json
           name: string
           pipeline_stages?: string[]
           status?: string
@@ -849,6 +851,7 @@ export type Database = {
           goal_amount?: number | null
           goal_date?: string | null
           id?: string
+          links?: Json
           name?: string
           pipeline_stages?: string[]
           status?: string

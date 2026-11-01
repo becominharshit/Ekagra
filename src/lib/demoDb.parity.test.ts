@@ -1,6 +1,7 @@
 import { PGlite } from '@electric-sql/pglite'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import migration from '../../supabase/migrations/001_phase1_core.sql?raw'
+import hustleMigration from '../../supabase/migrations/002_hustle_mode.sql?raw'
 import supabaseStubs from '../../tests/db/supabase-stubs.sql?raw'
 import { stubLocalStorage } from '@/test/memoryStorage'
 import { DEMO_TABLES, demoDb, type DemoTable } from './demoDb'
@@ -28,6 +29,10 @@ const SNIPPET = id(10)
 const TASK = id(17)
 const BLOCK = id(18)
 const FOCUS = id(20)
+const HUSTLE = id(22)
+const PHASE = id(23)
+const CLIENT = id(25)
+const ITEM = id(26)
 
 // The smallest rows each table accepts (in an order that respects the links), with ids given
 // so both databases link the same rows. Columns not listed here get their default.
@@ -48,7 +53,13 @@ const ROWS: [DemoTable, Record<string, unknown>][] = [
   ['flashcard_reviews', { id: id(15), flashcard_id: CARD, rating: 3 }],
   ['code_snippets', { id: SNIPPET, topic_id: TOPIC, question_id: QUESTION }],
   ['mistakes', { id: id(16), concept: 'Joins', topic_id: TOPIC, question_id: QUESTION, flashcard_id: CARD, code_snippet_id: SNIPPET }],
-  ['tasks', { id: TASK, title: 'DBMS assignment', subject_id: SUBJECT }],
+  ['hustles', { id: HUSTLE, type: 'parttime', name: 'Maths tutoring', pipeline_stages: ['requested', 'scheduled', 'done', 'paid'] }],
+  ['hustle_phases', { id: PHASE, hustle_id: HUSTLE, title: 'Find students' }],
+  ['hustle_steps', { id: id(24), phase_id: PHASE, title: 'Learn to teach online', skill_name: 'Online teaching', skill_subject_id: SUBJECT, skill_topic_id: TOPIC }],
+  ['clients', { id: CLIENT, hustle_id: HUSTLE, name: 'Riya (class 10)' }],
+  ['clients', { id: id(29), hustle_id: HUSTLE, name: 'Arjun (class 12)' }],
+  ['hustle_items', { id: ITEM, hustle_id: HUSTLE, kind: 'session', title: 'Algebra', stage: 'scheduled', order_index: 1.5, client_id: CLIENT, amount: 500 }],
+  ['tasks', { id: TASK, title: 'DBMS assignment', subject_id: SUBJECT, hustle_id: HUSTLE }],
   [
     'plan_blocks',
     {
@@ -63,18 +74,21 @@ const ROWS: [DemoTable, Record<string, unknown>][] = [
       subject_id: SUBJECT,
       topic_id: TOPIC,
       task_id: TASK,
+      hustle_id: HUSTLE,
     },
   ],
   ['daily_checkins', { id: id(19), date: '2026-11-02' }],
-  ['focus_sessions', { id: FOCUS, area: 'academics', mode: 'custom', planned_minutes: 45, plan_block_id: BLOCK, subject_id: SUBJECT }],
+  ['focus_sessions', { id: FOCUS, area: 'academics', mode: 'custom', planned_minutes: 45, plan_block_id: BLOCK, subject_id: SUBJECT, hustle_id: HUSTLE }],
   ['distraction_events', { id: id(21), kind: 'mode_switch', focus_session_id: FOCUS, quiz_id: QUIZ, from_mode: 'study', to_mode: 'hustle', reason: 'urgent' }],
+  ['transactions', { id: id(27), hustle_id: HUSTLE, client_id: CLIENT, hustle_item_id: ITEM, kind: 'income', amount: 500 }],
+  ['time_entries', { id: id(28), hustle_id: HUSTLE, client_id: CLIENT, focus_session_id: FOCUS, started_at: '2026-11-02T04:00:00.000Z', minutes: 60 }],
 ]
 
 /**
  * Columns that hold "now" (or "now + 1 day"), so their values differ by a few milliseconds, and
  * dates and times we set ourselves (Postgres gives them back as Date objects, the demo as text).
  */
-const TIME_COLUMNS = new Set(['created_at', 'updated_at', 'started_at', 'due_at', 'reviewed_at', 'next_review_at', 'at', 'date', 'start_at', 'end_at'])
+const TIME_COLUMNS = new Set(['created_at', 'updated_at', 'started_at', 'due_at', 'reviewed_at', 'next_review_at', 'at', 'date', 'start_at', 'end_at', 'occurred_on'])
 
 /** Makes Postgres and demo values comparable: the app gets numbers and plain JSON from Supabase. */
 function comparable(row: Record<string, unknown>): Record<string, unknown> {
@@ -107,6 +121,7 @@ beforeAll(async () => {
   db = new PGlite()
   await db.exec(supabaseStubs)
   await db.exec(migration)
+  await db.exec(hustleMigration)
   await db.exec(`insert into auth.users (id, email, raw_user_meta_data) values ('${USER}', 'demo@example.com', '{}')`)
 })
 
@@ -127,7 +142,7 @@ async function insertEverywhere(): Promise<void> {
   }
 }
 
-describe('demoDb matches the real database (001_phase1_core.sql)', () => {
+describe('demoDb matches the real database (migrations 001 and 002)', () => {
   it('has a test row for every demo table', () => {
     expect(new Set(ROWS.map(([table]) => table))).toEqual(new Set(DEMO_TABLES))
   })
@@ -161,5 +176,22 @@ describe('demoDb matches the real database (001_phase1_core.sql)', () => {
       const demo = demoRows(table).map(comparable)
       expect(demo, table).toEqual(real)
     }
+  })
+
+  it('deletes and unlinks the same rows when a client and then a hustle are deleted', async () => {
+    await asUser(async (tx) => {
+      await tx.query('delete from public.clients where id = $1', [CLIENT])
+      await tx.query('delete from public.hustles where id = $1', [HUSTLE])
+    })
+    demoDb.remove('clients', [CLIENT])
+    demoDb.remove('hustles', [HUSTLE])
+
+    for (const table of DEMO_TABLES) {
+      const real = (await postgresRows(table)).map(comparable)
+      const demo = demoRows(table).map(comparable)
+      expect(demo, table).toEqual(real)
+    }
+    expect(demoDb.list('clients').map((client) => client.hustle_id)).toEqual([null]) // the other client stays, unlinked
+    expect(demoDb.list('tasks')[0]?.hustle_id).toBeNull()
   })
 })

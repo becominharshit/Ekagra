@@ -4,7 +4,7 @@ import type { Database } from '@/types/database'
 // Demo Mode's database: the same tables and rows as Supabase, kept in this browser's localStorage
 // (one key per table). Nothing is sent to a server.
 // It does the jobs Postgres does for us: ids, timestamps, column defaults (copied from
-// supabase/migrations/001_phase1_core.sql) and what happens to linked rows when a row is deleted
+// supabase/migrations/001_phase1_core.sql and 002) and what happens to linked rows when a row is deleted
 // (the foreign keys). demoDb.parity.test.ts checks all of this against the real migration.
 
 type PublicTables = Database['public']['Tables']
@@ -31,6 +31,13 @@ export const DEMO_TABLES = [
   'daily_checkins',
   'focus_sessions',
   'distraction_events',
+  'hustles',
+  'hustle_phases',
+  'hustle_steps',
+  'clients',
+  'hustle_items',
+  'transactions',
+  'time_entries',
 ] as const satisfies readonly (keyof PublicTables)[]
 
 export type DemoTable = (typeof DEMO_TABLES)[number]
@@ -201,6 +208,61 @@ const DEFAULTS: { [T in DemoTable]: (now: Date) => Partial<DemoRow<T>> } = {
     quiz_id: null,
     unlock_until: null,
   }),
+  hustles: () => ({
+    goal: null,
+    goal_amount: null,
+    goal_date: null,
+    currency: 'INR',
+    pipeline_stages: [],
+    status: 'active',
+    links: [],
+  }),
+  hustle_phases: () => ({
+    order_index: 0,
+    status: 'todo',
+    started_at: null,
+    completed_at: null,
+  }),
+  hustle_steps: () => ({
+    order_index: 0,
+    done: false,
+    skill_name: null,
+    skill_subject_id: null,
+    skill_topic_id: null,
+  }),
+  clients: () => ({
+    hustle_id: null,
+    platform: null,
+    contact: null,
+    notes: null,
+  }),
+  hustle_items: () => ({
+    kind: 'other',
+    order_index: 0,
+    client_id: null,
+    amount: null,
+    currency: null,
+    due_at: null,
+    url: null,
+    data: {},
+  }),
+  transactions: (now) => ({
+    client_id: null,
+    hustle_item_id: null,
+    currency: 'INR',
+    occurred_on: now.toISOString().slice(0, 10),
+    category: null,
+    note: null,
+    source: 'manual',
+    source_ref: null,
+  }),
+  time_entries: () => ({
+    client_id: null,
+    focus_session_id: null,
+    ended_at: null,
+    source: 'manual',
+    note: null,
+  }),
 }
 
 interface ForeignKey {
@@ -248,6 +310,22 @@ const FOREIGN_KEYS: ForeignKey[] = [
   { table: 'focus_sessions', column: 'subject_id', references: 'subjects', onDelete: 'set null' },
   { table: 'distraction_events', column: 'focus_session_id', references: 'focus_sessions', onDelete: 'set null' },
   { table: 'distraction_events', column: 'quiz_id', references: 'quizzes', onDelete: 'set null' },
+  { table: 'hustle_phases', column: 'hustle_id', references: 'hustles', onDelete: 'cascade' },
+  { table: 'hustle_steps', column: 'phase_id', references: 'hustle_phases', onDelete: 'cascade' },
+  { table: 'hustle_steps', column: 'skill_subject_id', references: 'subjects', onDelete: 'set null' },
+  { table: 'hustle_steps', column: 'skill_topic_id', references: 'topics', onDelete: 'set null' },
+  { table: 'clients', column: 'hustle_id', references: 'hustles', onDelete: 'set null' },
+  { table: 'hustle_items', column: 'hustle_id', references: 'hustles', onDelete: 'cascade' },
+  { table: 'hustle_items', column: 'client_id', references: 'clients', onDelete: 'set null' },
+  { table: 'transactions', column: 'hustle_id', references: 'hustles', onDelete: 'cascade' },
+  { table: 'transactions', column: 'client_id', references: 'clients', onDelete: 'set null' },
+  { table: 'transactions', column: 'hustle_item_id', references: 'hustle_items', onDelete: 'set null' },
+  { table: 'time_entries', column: 'hustle_id', references: 'hustles', onDelete: 'cascade' },
+  { table: 'time_entries', column: 'client_id', references: 'clients', onDelete: 'set null' },
+  { table: 'time_entries', column: 'focus_session_id', references: 'focus_sessions', onDelete: 'set null' },
+  { table: 'tasks', column: 'hustle_id', references: 'hustles', onDelete: 'set null' },
+  { table: 'plan_blocks', column: 'hustle_id', references: 'hustles', onDelete: 'set null' },
+  { table: 'focus_sessions', column: 'hustle_id', references: 'hustles', onDelete: 'set null' },
 ]
 
 /** Inside this file rows are plain objects; the public functions below give them their table's type. */

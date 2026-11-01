@@ -83,6 +83,10 @@ export const router = createBrowserRouter([
             lazy: async () => ({ Component: (await import('@/pages/CodeEditorPage')).CodeEditorPage }),
           },
           { path: 'hustle', element: <HustlePage /> },
+          {
+            path: 'hustle/:hustleId',
+            lazy: async () => ({ Component: (await import('@/pages/HustleDetailPage')).HustleDetailPage }),
+          },
           { path: 'life', element: <LifePage /> },
           { path: 'me', element: <MePage /> },
           { path: '*', element: <Navigate to="/today" replace /> },

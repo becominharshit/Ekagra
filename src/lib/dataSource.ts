@@ -26,12 +26,19 @@ export function need(source: DataSource | null): DataSource {
   return source
 }
 
+/** Checks added by later migrations: failing one means the server's database is older than the app. */
+const NEWER_CHECKS = ['hustles_type_check', 'hustles_links_is_list']
+
 /** A database error in plain words. */
 export function dbError(error: PostgrestError): Error {
   if (error.code === 'PGRST205' || error.code === '42P01') {
     return new Error(
       "The database tables don't exist yet. Run `npm run db:push` (docs/4-setup-guide.md, step 2), then try again.",
     )
+  }
+  // A column or rule from a newer migration in supabase/migrations/ isn't on the server yet.
+  if (error.code === 'PGRST204' || error.code === '42703' || (error.code === '23514' && NEWER_CHECKS.some((name) => error.message.includes(name)))) {
+    return new Error('The database needs the latest update. Run `npm run db:push` (docs/4-setup-guide.md, step 2), then try again.')
   }
   return new Error(error.message)
 }
