@@ -3,6 +3,7 @@ import { addSampleSubjects } from '@/features/academics/sampleSubjects'
 import { defaultRoutine, routineToRows } from '@/features/onboarding/routineDraft'
 import { crashToday, saveCheckIn, saveEveningCheckIn, undoCrash } from '@/features/checkins/checkins'
 import { createHustle } from '@/features/hustle/hustles'
+import { learnSkill } from '@/features/hustle/skillBridge'
 import { planFromTemplate, TEMPLATES } from '@/features/hustle/templates'
 import { profileRepoFor } from '@/features/profile/queries'
 import { addTasks } from '@/features/tasks/tasks'
@@ -95,6 +96,30 @@ describe('making and saving the plan (Demo Mode)', () => {
     expect(hustleBlocks.every((block) => block.hustle_id === hustleId)).toBe(true)
     expect(hustleBlocks.some((block) => block.kind === 'hustle' && block.title === 'Logo design')).toBe(true)
     expect(hustleBlocks.some((block) => block.kind === 'task' && block.title === 'Send 5 proposals')).toBe(true)
+  })
+
+  it('plans a Skill Bridge course: exactly its weekly minutes in the first week', async () => {
+    const repo = profileRepoFor(DEMO)
+    await repo.saveProfile({ onboarded_at: '2026-11-01T00:00:00Z', chronotype: 'neutral' })
+    await repo.replaceRoutine(routineToRows(defaultRoutine()))
+    await createHustle(DEMO, {
+      type: 'content',
+      name: 'Study vlogs',
+      goal: null,
+      goalAmount: null,
+      goalDate: null,
+      currency: 'INR',
+      phases: planFromTemplate(TEMPLATES.content),
+      stages: TEMPLATES.content.stages,
+    })
+    const step = demoDb.list('hustle_steps').find((row) => row.skill_name === 'Video editing')
+    if (!step) throw new Error('no skill step')
+    const { subjectId } = await learnSkill(DEMO, { step, skillName: 'Video editing', weeklyMinutes: 120, topicId: null })
+
+    await replan(DEMO, { from: 'now', now: at(MONDAY, '06:00') })
+    const skillBlocks = planned().filter((block) => block.subject_id === subjectId)
+    expect(total(skillBlocks.filter((block) => block.date <= '2026-11-08'))).toBe(120)
+    expect(total(skillBlocks.filter((block) => block.date >= '2026-11-09'))).toBe(120)
   })
 
   it('takes work already done off the estimate', async () => {

@@ -53,6 +53,11 @@ export function dayOfWeek(date: LocalDate): number {
   return new Date(toUtcMs(date)).getUTCDay()
 }
 
+/** The Monday of the date's week (weeks run Monday to Sunday). */
+export function weekStart(date: LocalDate): LocalDate {
+  return addDays(date, -((dayOfWeek(date) + 6) % 7))
+}
+
 /** Sorts intervals and joins the ones that overlap or touch. Empty intervals are dropped. */
 export function mergeIntervals(intervals: Interval[]): Interval[] {
   const sorted = intervals.filter((interval) => interval.end > interval.start).sort((a, b) => a.start - b.start)

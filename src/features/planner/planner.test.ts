@@ -381,6 +381,40 @@ describe('at-risk work', () => {
   })
 })
 
+describe('skill courses (Hustle Skill Bridge)', () => {
+  const MONDAY = '2026-11-02'
+  const video = { id: 'video', name: 'Video editing', examDate: null, weeklyMinutes: 120 }
+  const skillTopic = topic('cuts', 'video', ENDLESS, { track: 'skill' })
+  const skillMinutes = (result: Plan, from: string, to: string) =>
+    result.days
+      .filter((entry) => entry.date >= from && entry.date <= to)
+      .flatMap((entry) => entry.work)
+      .filter((item) => item.subjectId === 'video')
+      .reduce((total, item) => total + item.minutes, 0)
+
+  it('get their weekly minutes, in blocks early in the week, and never more (even with time to spare)', () => {
+    const result = plan({ today: MONDAY, subjects: [video], topics: [skillTopic] })
+    expect(skillMinutes(result, MONDAY, '2026-11-08')).toBe(120)
+    expect(skillMinutes(result, '2026-11-09', '2026-11-15')).toBe(120)
+    const perDay = result.days.map((entry) => skillMinutes(result, entry.date, entry.date))
+    expect(perDay.slice(0, 7)).toEqual([40, 40, 40, 0, 0, 0, 0])
+  })
+
+  it('count what was already studied this week', () => {
+    const wednesday = '2026-11-04'
+    const result = plan({ today: wednesday, subjects: [video], topics: [skillTopic], skillMinutesThisWeek: { video: 100 } })
+    expect(skillMinutes(result, wednesday, '2026-11-08')).toBe(20)
+    expect(skillMinutes(result, '2026-11-09', '2026-11-15')).toBe(120)
+  })
+
+  it('pause in exam season, and come back after the exam', () => {
+    const dbms = subject('dbms', 5) // exam on Friday 6 November
+    const result = plan({ today: MONDAY, subjects: [video, dbms], topics: [skillTopic, topic('sql', 'dbms', 600)] })
+    expect(skillMinutes(result, MONDAY, dbms.examDate ?? '')).toBe(0)
+    expect(skillMinutes(result, addDays(dbms.examDate ?? '', 1), '2026-11-08')).toBeGreaterThan(0)
+  })
+})
+
 describe('re-planning in the middle of the day', () => {
   it("counts what was already studied today toward the subject's pace, so the afternoon goes to the other subjects", () => {
     // Re-planning at 14:00. DBMS (exam first) has a pace of 55 minutes a day; Python has the higher priority.

@@ -15,9 +15,9 @@ import { need, useDataSource, type DataSource } from '@/lib/dataSource'
 import { latestPlanVersion, listBlocks, listWorkRows, planKey, PlanConflictError, savePlan } from './planBlocks'
 import { buildPlan } from './planner'
 import { reviewMinutesByDay } from './reviewLoad'
-import { localDateOf, minuteOf, planFingerprint, planIsFresh, planRows, replanStart, workDone, type PlanRun } from './schedule'
+import { localDateOf, minutesBySubject, minuteOf, planFingerprint, planIsFresh, planRows, replanStart, workDone, type PlanRun } from './schedule'
 import { toPlannerStudy } from './studyData'
-import { addDays } from './time'
+import { addDays, weekStart } from './time'
 import type { LocalDate } from './types'
 
 // Making the plan: load what the planner needs, run it, save the blocks. It runs when the app
@@ -68,6 +68,8 @@ export async function replan(source: DataSource, { from, now = new Date() }: { f
     checkIns: toPlannerCheckIns(checkIns),
     doneTodayBySubject: planFrom === today ? Object.fromEntries(done.todayBySubject) : undefined,
     hustle: primaryHustle(hustles),
+    // Skill courses: what they already had in the plan's first week (Monday until today).
+    skillMinutesThisWeek: Object.fromEntries(minutesBySubject(workRows, weekStart(planFrom), today)),
     settings: plannerSettingsFor(settings, toChronotype(profile.chronotype)),
   })
   const rows = planRows(plan, version + 1).filter((row) => Date.parse(row.start_at) >= start.getTime())
@@ -119,7 +121,7 @@ export function usePlanFingerprint(): string | null {
     settings: profile.data.settings,
     chronotype: profile.data.chronotype,
     routine: routine.data.map((row) => [row.kind, row.days_of_week, row.start_time, row.end_time, row.valid_from, row.valid_to]),
-    subjects: study.data.subjects.map((subject) => [subject.id, subject.exam_date]),
+    subjects: study.data.subjects.map((subject) => [subject.id, subject.exam_date, subject.kind, subject.weekly_minutes_limit]),
     // Only "learned or not" matters to the planner (starting a topic doesn't change the plan).
     topics: study.data.topics
       .filter((topic) => topic.parent_id !== null)

@@ -8,6 +8,9 @@ import type { PlannerSubject, PlannerTopic } from './types'
 /** Topics in these states are already learned; the planner leaves them out. */
 const LEARNED = new Set(['review', 'mastered'])
 
+/** A skill course's weekly time when none is set. */
+export const DEFAULT_SKILL_WEEKLY_MINUTES = 120
+
 /** `done`: minutes already studied per topic (from finished plan blocks); they come off the estimate. */
 export function toPlannerStudy(
   subjects: Subject[],
@@ -19,7 +22,12 @@ export function toPlannerStudy(
   const open = topics.filter((topic) => topic.parent_id !== null && !LEARNED.has(topic.status))
   const openIds = new Set(open.map((topic) => topic.id))
   return {
-    subjects: subjects.map((subject) => ({ id: subject.id, name: subject.name, examDate: subject.exam_date })),
+    subjects: subjects.map((subject) => ({
+      id: subject.id,
+      name: subject.name,
+      examDate: subject.exam_date,
+      weeklyMinutes: subject.kind === 'skill_course' ? (subject.weekly_minutes_limit ?? DEFAULT_SKILL_WEEKLY_MINUTES) : null,
+    })),
     topics: open.map((topic) => ({
       id: topic.id,
       subjectId: topic.subject_id,

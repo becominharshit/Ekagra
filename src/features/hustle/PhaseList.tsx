@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Plus, X } from 'lucide-react'
+import { GraduationCap, Plus, X } from 'lucide-react'
+import { Link } from 'react-router'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -8,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { addStep, currentPhaseIndex, deleteStep, phaseStatus, setStepDone, useHustleMutation, type HustleStep, type PhaseWithSteps } from './hustles'
 import { PHASE_STATUS_LABEL } from './labels'
+import { LearnThisDialog } from './LearnThisDialog'
 
 /** A thin bar showing how much is done. */
 export function ProgressBar({ value, max, label }: { value: number; max: number; label: string }) {
@@ -22,16 +24,28 @@ export function ProgressBar({ value, max, label }: { value: number; max: number;
 /** A hustle's phases in order, each with its checkable steps. The phase to work on now stands out. */
 export function PhaseList({ phases }: { phases: PhaseWithSteps[] }) {
   const current = currentPhaseIndex(phases)
+  const [learning, setLearning] = useState<HustleStep | null>(null)
   return (
-    <ol className="grid gap-3">
-      {phases.map((phase, index) => (
-        <PhaseCard key={phase.id} phase={phase} number={index + 1} isCurrent={index === current && phase.status !== 'done'} />
-      ))}
-    </ol>
+    <>
+      <ol className="grid gap-3">
+        {phases.map((phase, index) => (
+          <PhaseCard key={phase.id} phase={phase} number={index + 1} isCurrent={index === current && phase.status !== 'done'} onLearn={setLearning} />
+        ))}
+      </ol>
+      <LearnThisDialog step={learning} onClose={() => setLearning(null)} />
+    </>
   )
 }
 
-function PhaseCard({ phase, number, isCurrent }: { phase: PhaseWithSteps; number: number; isCurrent: boolean }) {
+interface PhaseCardProps {
+  phase: PhaseWithSteps
+  number: number
+  isCurrent: boolean
+  /** "Learn this" on a step that needs a skill (Skill Bridge). */
+  onLearn: (step: HustleStep) => void
+}
+
+function PhaseCard({ phase, number, isCurrent, onLearn }: PhaseCardProps) {
   // Finished phases start folded up; the others start open.
   const [open, setOpen] = useState(phase.status !== 'done')
   const [newStep, setNewStep] = useState('')
@@ -72,14 +86,30 @@ function PhaseCard({ phase, number, isCurrent }: { phase: PhaseWithSteps; number
                     checked={step.done}
                     onCheckedChange={(value) => toggle.mutate({ step, done: value === true, phase })}
                   />
-                  <label htmlFor={`step-${step.id}`} className={cn('min-w-0 flex-1 text-sm', step.done && 'text-muted-foreground line-through')}>
-                    {step.title}
-                    {step.skill_name && (
-                      <Badge variant="outline" className="ml-2 align-middle">
-                        Skill: {step.skill_name}
-                      </Badge>
-                    )}
-                  </label>
+                  <div className="grid min-w-0 flex-1 gap-1">
+                    <label htmlFor={`step-${step.id}`} className={cn('text-sm', step.done && 'text-muted-foreground line-through')}>
+                      {step.title}
+                      {step.skill_name && (
+                        <Badge variant="outline" className="ml-2 align-middle">
+                          Skill: {step.skill_name}
+                        </Badge>
+                      )}
+                    </label>
+                    {step.skill_name &&
+                      (step.skill_topic_id ? (
+                        <Button asChild variant="link" size="xs" className="h-auto justify-self-start p-0">
+                          <Link to={`/academics/topics/${step.skill_topic_id}`}>
+                            <GraduationCap aria-hidden />
+                            Learning in Academics
+                          </Link>
+                        </Button>
+                      ) : (
+                        <Button variant="outline" size="xs" className="justify-self-start" onClick={() => onLearn(step)}>
+                          <GraduationCap aria-hidden />
+                          Learn this
+                        </Button>
+                      ))}
+                  </div>
                   <Button variant="ghost" size="icon-xs" aria-label={`Remove the step "${step.title}"`} disabled={remove.isPending} onClick={() => remove.mutate({ step, phase })}>
                     <X aria-hidden />
                   </Button>

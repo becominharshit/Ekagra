@@ -6,7 +6,7 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { countLabel, examLabel } from '@/features/academics/labels'
+import { countLabel, examLabel, minutesLabel } from '@/features/academics/labels'
 import { useStudy } from '@/features/academics/roadmap'
 import { addSampleSubjects } from '@/features/academics/sampleSubjects'
 import { SubjectDialog } from '@/features/academics/SubjectDialog'
@@ -14,6 +14,7 @@ import { useAcademicsMutation, useSubjects } from '@/features/academics/subjects
 import { priorityLabels } from '@/features/academics/topicTree'
 import { PracticeCard } from '@/features/academics/PracticeCard'
 import { useAuthStore } from '@/features/auth/authStore'
+import { DEFAULT_SKILL_WEEKLY_MINUTES } from '@/features/planner/studyData'
 import { useNow } from '@/hooks/useNow'
 
 export function AcademicsPage() {
@@ -105,11 +106,14 @@ export function AcademicsPage() {
                   <CardTitle className="flex items-center gap-2">
                     <span className="min-w-0 flex-1 truncate">{subject.name}</span>
                     {subject.code && <Badge variant="outline">{subject.code}</Badge>}
+                    {subject.kind === 'skill_course' && <Badge variant="secondary">Skill course</Badge>}
                     <ChevronRight className="size-4 text-muted-foreground" aria-hidden />
                   </CardTitle>
                   <CardDescription>
-                    {examLabel(subject.exam_date, today)} ·{' '}
-                    {topics.length === 0 ? 'No roadmap yet' : `${countLabel(topics.length, 'topic')}${high > 0 ? `, ${high} high priority` : ''}`}
+                    {subject.kind === 'skill_course'
+                      ? `${minutesLabel(subject.weekly_minutes_limit ?? DEFAULT_SKILL_WEEKLY_MINUTES)} a week`
+                      : examLabel(subject.exam_date, today)}{' '}
+                    · {topics.length === 0 ? 'No roadmap yet' : `${countLabel(topics.length, 'topic')}${high > 0 ? `, ${high} high priority` : ''}`}
                   </CardDescription>
                 </CardHeader>
               </Card>

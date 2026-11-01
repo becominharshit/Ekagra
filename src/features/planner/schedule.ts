@@ -83,6 +83,17 @@ export function workDone(blocks: WorkRow[], today: LocalDate): WorkDone {
   return result
 }
 
+/** Minutes studied per subject on the days from `from` to `to` (both included). */
+export function minutesBySubject(blocks: WorkRow[], from: LocalDate, to: LocalDate): Map<string, number> {
+  const result = new Map<string, number>()
+  for (const block of blocks) {
+    if (!block.subject_id || !block.topic_id || block.date < from || block.date > to) continue
+    const minutes = minutesDone(block)
+    if (minutes > 0) result.set(block.subject_id, (result.get(block.subject_id) ?? 0) + minutes)
+  }
+  return result
+}
+
 /**
  * What's left of an estimate after the work done. A topic or task that isn't finished keeps at
  * least 30 minutes (or its whole estimate if that's less): it leaves the plan when it's finished,

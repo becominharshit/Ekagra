@@ -41,6 +41,8 @@ export interface PlannerSubject {
   id: string
   name: string
   examDate: LocalDate | null
+  /** A skill course (e.g. from the Hustle Skill Bridge): its topics get this many minutes a week, and no more. */
+  weeklyMinutes?: number | null
 }
 
 export interface PlannerTopic {
@@ -194,6 +196,8 @@ export interface PlannerInput {
   doneTodayBySubject?: Record<string, number>
   /** The hustle that gets the general hustle time ("Hustle work" otherwise). */
   hustle?: { id: string; name: string } | null
+  /** Minutes of each skill course already studied in the plan's first week, before the plan starts. */
+  skillMinutesThisWeek?: Record<string, number>
   settings?: Partial<PlannerSettings>
 }
 

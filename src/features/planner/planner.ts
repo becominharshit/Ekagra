@@ -1,4 +1,4 @@
-import { addDays, daysBetween, freeIntervals, MINUTES_PER_DAY, subtractIntervals, totalMinutes } from './time'
+import { addDays, daysBetween, freeIntervals, MINUTES_PER_DAY, subtractIntervals, totalMinutes, weekStart } from './time'
 import type {
   Area,
   AtRiskItem,
@@ -202,7 +202,13 @@ interface DayContext {
   settings: PlannerSettings
   tasksByDeadline: PlannerTask[]
   subjectsById: Map<string, PlannerSubject>
+  /** Skill courses (subjects with weekly minutes), and the minutes each has had in each week so far. */
+  skillCourses: PlannerSubject[]
+  skillUsed: Map<string, number>
 }
+
+/** Key for a skill course's minutes in one week. */
+const skillWeekKey = (subjectId: string, date: LocalDate) => `${subjectId}|${weekStart(date)}`
 
 export function buildPlan(input: PlannerInput): Plan {
   const settings = resolveSettings(input.settings)
@@ -214,6 +220,9 @@ export function buildPlan(input: PlannerInput): Plan {
   }
   const tasksByDeadline = [...input.tasks].sort(byDeadline)
   const subjectsById = new Map(input.subjects.map((subject) => [subject.id, subject]))
+  const skillCourses = input.subjects.filter((subject) => (subject.weeklyMinutes ?? 0) > 0).sort((a, b) => a.id.localeCompare(b.id))
+  // What each skill course already had this week, before the plan starts.
+  const skillUsed = new Map(Object.entries(input.skillMinutesThisWeek ?? {}).map(([subjectId, minutes]) => [skillWeekKey(subjectId, input.today), minutes]))
   const crashedToday = input.checkIns.some((checkIn) => checkIn.date === input.today && checkIn.minimumDay)
   let carry: WorkItem[] = (input.carryOver ?? [])
     .filter((item) => item.minutes > 0)
@@ -237,6 +246,8 @@ export function buildPlan(input: PlannerInput): Plan {
       settings,
       tasksByDeadline,
       subjectsById,
+      skillCourses,
+      skillUsed,
     }
 
     // A dry run without carry-over gives the day's normal plan: the base for the +20% growth cap.
@@ -249,6 +260,13 @@ export function buildPlan(input: PlannerInput): Plan {
       const { keep, moved } = minimumDayWork(work, settings)
       work = keep
       carry = [...carry, ...moved.map((item) => ({ ...item, recovered: true }))]
+    }
+    // Count the day's skill course minutes toward their week.
+    for (const item of work) {
+      if (item.subjectId && skillCourses.some((course) => course.id === item.subjectId)) {
+        const key = skillWeekKey(item.subjectId, date)
+        skillUsed.set(key, (skillUsed.get(key) ?? 0) + item.minutes)
+      }
     }
 
     // Tasks due at a set time this day that is still ahead (an overdue one is simply done first).
@@ -348,7 +366,8 @@ function isTopicEligible(
 
 /**
  * Fills one day, most important first:
- *   Academics: reviews → assignments (earliest due first) → each subject's pace → carry-over → getting ahead
+ *   Academics: reviews → assignments (earliest due first) → each subject's pace → carry-over →
+ *              skill courses' weekly share → getting ahead (not on skill courses)
  *   Hustle:    hustle tasks → carry-over → general "Hustle work" time
  *   Life:      life and personal tasks → carry-over → general "Life time"
  * Carry-over first uses its area's own time (taking it from "getting ahead" and the general
@@ -387,7 +406,17 @@ function allocateDay(ctx: DayContext, pool: Pool, carry: WorkItem[], growth: num
   const eligibleIds = new Set(eligible.map((topic) => topic.id))
   academics -= takePace(ctx, pool, items, eligible, eligibleIds, academics)
   academics = Math.max(0, academics - takeCarry('academics', academics))
-  takeTopics(eligible, eligibleIds, academics, pool, items, settings)
+  academics -= takeSkillCourses(ctx, pool, items, eligible, eligibleIds, academics)
+  // Getting ahead: skill courses already had their weekly share, so they're left out.
+  const skillCourseIds = new Set(ctx.skillCourses.map((course) => course.id))
+  takeTopics(
+    eligible.filter((topic) => !skillCourseIds.has(topic.subjectId)),
+    eligibleIds,
+    academics,
+    pool,
+    items,
+    settings,
+  )
 
   // Hustle
   let hustle = ctx.areaMinutes.hustle
@@ -461,6 +490,35 @@ function takePace(
   let used = 0
   for (const { topics, pace } of paces) {
     const share = Math.min(budget - used, scale < 1 ? floorTo5(pace * scale) : pace)
+    used += takeTopics(topics, eligibleIds, share, pool, items, settings)
+  }
+  return used
+}
+
+/**
+ * Skill courses get their weekly minutes (never more), early in the week and in useful blocks:
+ * about a third of the week's minutes a day (at least a block, at most 50 minutes, or a seventh of
+ * the week when that's more), until the week's share is used. Exam season pauses them (their
+ * topics aren't eligible then).
+ */
+function takeSkillCourses(
+  ctx: DayContext,
+  pool: Pool,
+  items: WorkItem[],
+  eligible: PlannerTopic[],
+  eligibleIds: Set<string>,
+  budget: number,
+): number {
+  const { date, settings } = ctx
+  let used = 0
+  for (const course of ctx.skillCourses) {
+    const weekly = course.weeklyMinutes ?? 0
+    const left = weekly - (ctx.skillUsed.get(skillWeekKey(course.id, date)) ?? 0)
+    if (left <= 0 || budget - used <= 0) continue
+    const block = Math.max(settings.minBlockMinutes, Math.min(settings.maxBlockMinutes, roundTo5(weekly / 3)))
+    const share = Math.min(left, budget - used, Math.max(block, ceilTo5(weekly / 7)))
+    if (share < settings.minBlockMinutes && share < left) continue
+    const topics = eligible.filter((topic) => topic.subjectId === course.id)
     used += takeTopics(topics, eligibleIds, share, pool, items, settings)
   }
   return used
