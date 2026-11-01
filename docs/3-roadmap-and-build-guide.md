@@ -61,6 +61,27 @@ The current milestone is the first unchecked one.
   4. Code-splitting: every page loads when it's first opened; React, the router, Supabase, TanStack Query and Radix get files of their own (`vite.config.ts`); the first download went from 536 kB to 154 kB and no file is over 500 kB
   5. Docs: putting the web app online, a signed APK for friends, reading feedback and AI spend (docs/4)
 
+### Phase 2 milestones (decided 2026-11-01)
+Built in this order (M12 comes first: attendance helps students in the middle of a semester). The current milestone is the first unchecked one. Each milestone has one migration, numbered in the order they are applied. Every new table also goes into Demo Mode (`demoDb` and its parity test) and into `supabase/functions/_shared/userTables.ts`, so the export and account deletion include it.
+
+- [ ] **M12 Attendance and grades, in 5 steps** (migration `004_attendance_grades.sql`)
+  1. Tables `attendance`, `marks` and `semester_results`; `subjects.credits` and `subjects.grade`; `routine_blocks.subject_id`, so a class block in the routine can name its subject
+  2. Attendance maths (pure, tested): percentage, safe bunks `⌊A / r − T⌋`, classes needed to recover `⌈(rT − A) / (1 − r)⌉` (A = attended, T = held, r = the minimum, 75% by default) and what the rest of the semester allows
+  3. Marking: "Classes today" on Today (one tap: present, absent, cancelled) for class blocks linked to a subject, warnings before a subject drops under the minimum, an attendance card on each subject and an overview page; the routine editor links class blocks to subjects
+  4. Marks per subject, an editable grade scale (10-point: O = 10, A+ = 9, A = 8, B+ = 7, B = 6, C = 5, P = 4, F = 0), credit-weighted SGPA and CGPA (earlier semesters typed in), and the SGPA needed for a target CGPA
+  5. Docs
+- [ ] **M11 Adaptive practice, learning metrics, mock tests and exam readiness, in 7 steps** (migration `005_adaptive.sql`, Edge Function `ai-grade`)
+  1. Elo engine (pure, tested; docs/2 §9): student rating per subject (`subject_ratings`) and question ratings; the next question is picked for about 70% success
+  2. Adaptive practice session per subject; wrong answers go to the mistake notebook
+  3. The 4 learning metrics (memory, learning speed, processing speed, problem solving), saved once a week (`metric_snapshots`; `topics.mastered_at` for learning speed)
+  4. `ai-grade` (Fast): short and long answers marked against key points; Demo Mode marks by comparing with the model answer
+  5. Timed mock tests in the exam pattern from past papers (`quizzes.kind = 'mock'`), submitted when time runs out, results per topic
+  6. Exam readiness (0.4 coverage + 0.4 mastery + 0.2 latest mock) and the weekly challenge (`challenges`); a Progress page with hand-drawn SVG charts (no chart library)
+  7. Docs
+- [ ] **M13 Sunday AI weekly review, in 5 steps** (migration `006_weekly_review.sql`, Edge Function `ai-review`, Smart): the week's numbers, a fixed list of changes the app can apply in one tap (and the planner settings they need), 3 insights and 3 changes from the AI (Demo Mode: rules on the device), the review screen from Sunday with a reminder, docs
+- [ ] **M14 Full Life, in 7 steps** (migration `007_life.sql`, Edge Functions `ai-meal` and `ai-speak`, Fast): tables and Life tabs; habits; workout planner and logger (templates for hostel, dumbbells and gym, no AI); meals from a photo (`ai-meal`; the photo is analysed and not stored) and hostel/mess quick-add; speaking partner (microphone, `ai-speak`; only the transcript and scores are kept; words per minute and filler words such as "um", "like", "basically" and Hinglish "matlab" are counted in code); Health Connect sleep and steps (Kotlin plugin with `androidx.health.connect:connect-client`, approved); privacy page and docs
+- [ ] **M15 Partner, groups and the Studio Bridge, in 6 steps** (migration `008_social.sql`): sharing only the numbers each student picks (RLS, `shared_stats_view`); accountability partner with in-app and local-notification nudges (no push service yet); study groups with "studying now" and group focus (Supabase Realtime); the Studio Bridge to App #2 (`ekagra-studio`): `BroadcastChannel` for same-origin `/studio` tabs, Supabase Realtime sync of `ai_anchors`, and handoff by link (`http://localhost:5174/?bridge=<encoded payload>` in development) or deep link (`ekagra-studio://anchor`); docs
+
 The 12-week plan in §3 and the phases in §1 and §4 are kept for reference only.
 
 ## 1. Phases
