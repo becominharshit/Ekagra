@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { DEFAULT_AI_LIMITS } from './schemas.ts'
 
 // The plain parts of the AI gateway: reading the settings, the quota rules and the cost.
 // No network and no Deno in here, so Vitest tests it like any other function.
@@ -49,21 +50,26 @@ const secretsSchema = z.object({
   AI_PRICE_SMART_OUTPUT: number,
   AI_PRICE_FAST_INPUT: number,
   AI_PRICE_FAST_OUTPUT: number,
-  AI_MONTHLY_BUDGET_USD: z.preprocess(blankToMissing, z.coerce.number().positive().default(10)),
-  AI_USER_DAILY_REQUESTS: z.preprocess(blankToMissing, z.coerce.number().int().positive().default(150)),
+  AI_MONTHLY_BUDGET_USD: z.preprocess(blankToMissing, z.coerce.number().positive().default(DEFAULT_AI_LIMITS.monthlyBudgetUsd)),
+  AI_USER_DAILY_REQUESTS: z.preprocess(blankToMissing, z.coerce.number().int().positive().default(DEFAULT_AI_LIMITS.userDailyRequests)),
 })
+
+const limitsSchema = secretsSchema.pick({ AI_MONTHLY_BUDGET_USD: true, AI_USER_DAILY_REQUESTS: true })
+
+/** One error that names every missing or wrong secret. */
+function notConfigured(error: z.ZodError): AiError {
+  const names = [...new Set(error.issues.map((issue) => String(issue.path[0])))]
+  return new AiError(
+    500,
+    'not_configured',
+    `AI is not set up on the server yet. Check these Edge Function secrets: ${names.join(', ')} (docs/4-setup-guide.md, step 6).`,
+  )
+}
 
 /** Reads the AI secrets. If any are missing or wrong, one error names all of them. */
 export function readAiConfig(env: Record<string, string | undefined>): AiConfig {
   const parsed = secretsSchema.safeParse(env)
-  if (!parsed.success) {
-    const names = [...new Set(parsed.error.issues.map((issue) => String(issue.path[0])))]
-    throw new AiError(
-      500,
-      'not_configured',
-      `AI is not set up on the server yet. Check these Edge Function secrets: ${names.join(', ')} (docs/4-setup-guide.md, step 6).`,
-    )
-  }
+  if (!parsed.success) throw notConfigured(parsed.error)
   const secrets = parsed.data
   return {
     provider: secrets.AI_PROVIDER,
@@ -78,6 +84,20 @@ export function readAiConfig(env: Record<string, string | undefined>): AiConfig 
   }
 }
 
+export type UsageLimits = Pick<AiConfig, 'monthlyBudgetUsd' | 'userDailyRequests'>
+
+/** Only the two limits, with the same defaults: the AI usage dashboard works before the AI is set up. */
+export function readUsageLimits(env: Record<string, string | undefined>): UsageLimits {
+  const parsed = limitsSchema.safeParse(env)
+  if (!parsed.success) throw notConfigured(parsed.error)
+  return { monthlyBudgetUsd: parsed.data.AI_MONTHLY_BUDGET_USD, userDailyRequests: parsed.data.AI_USER_DAILY_REQUESTS }
+}
+
+/** Whether every AI secret is set (and right). */
+export function isAiConfigured(env: Record<string, string | undefined>): boolean {
+  return secretsSchema.safeParse(env).success
+}
+
 const DAY_MS = 24 * 60 * 60 * 1000
 
 /** The start of the 24-hour window the limits count. */
@@ -86,7 +106,7 @@ export function dayBefore(now: Date): Date {
 }
 
 /** The monthly budget, spread evenly: at most 1/30 of it can be spent in any 24 hours. */
-export function dailyBudgetUsd(config: AiConfig): number {
+export function dailyBudgetUsd(config: Pick<AiConfig, 'monthlyBudgetUsd'>): number {
   return config.monthlyBudgetUsd / 30
 }
 

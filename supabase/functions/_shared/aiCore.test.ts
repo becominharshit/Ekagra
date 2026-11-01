@@ -1,6 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import { AiError, checkQuota, costUsd, dailyBudgetUsd, dayBefore, readAiConfig } from './aiCore.ts'
+import { AiError, checkQuota, costUsd, dailyBudgetUsd, dayBefore, isAiConfigured, readAiConfig, readUsageLimits } from './aiCore.ts'
 import { TEST_SECRETS } from './testing.ts'
+
+describe('readUsageLimits', () => {
+  it('reads the two limits with the same defaults, without the other AI secrets', () => {
+    expect(readUsageLimits({})).toEqual({ monthlyBudgetUsd: 10, userDailyRequests: 150 })
+    expect(readUsageLimits({ AI_MONTHLY_BUDGET_USD: '25', AI_USER_DAILY_REQUESTS: ' ' })).toEqual({ monthlyBudgetUsd: 25, userDailyRequests: 150 })
+    expect(() => readUsageLimits({ AI_USER_DAILY_REQUESTS: 'lots' })).toThrow(/AI_USER_DAILY_REQUESTS/)
+  })
+
+  it('knows whether the AI itself is set up', () => {
+    expect(isAiConfigured(TEST_SECRETS)).toBe(true)
+    expect(isAiConfigured({ ...TEST_SECRETS, AI_API_KEY: '' })).toBe(false)
+  })
+})
 
 describe('readAiConfig', () => {
   it('reads the secrets, with defaults for the provider, budget and daily requests', () => {

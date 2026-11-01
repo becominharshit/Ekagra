@@ -9,6 +9,12 @@ import { requireSupabase } from '@/lib/supabase'
 /** The AI Edge Functions. */
 export type AiFunction = 'ai-syllabus' | 'ai-papers' | 'ai-tutor' | 'ai-generate' | 'ai-capture' | 'ai-brief' | 'ai-hustle'
 
+/** Every Edge Function the app calls: the AI ones, and ai-usage (the AI usage dashboard, no AI call). */
+export type EdgeFunction = AiFunction | 'ai-usage'
+
+/** The Edge Functions that don't call the AI. */
+const NOT_AI = new Set<EdgeFunction>(['ai-usage'])
+
 /** An AI request that failed. `message` is written for the student. */
 export class AiRequestError extends Error {
   readonly code: string
@@ -22,15 +28,15 @@ export class AiRequestError extends Error {
 
 type FunctionsClient = Pick<SupabaseClient, 'functions'>
 
-/** Calls an AI Edge Function and checks that the answer has the expected shape. */
+/** Calls an Edge Function and checks that the answer has the expected shape. */
 export async function callAiFunction<T>(
-  name: AiFunction,
+  name: EdgeFunction,
   body: Record<string, unknown>,
   schema: z.ZodType<T>,
   client: FunctionsClient = requireSupabase(),
 ): Promise<T> {
   const { data, error } = await client.functions.invoke(name, { body })
-  if (error) throw await toAiRequestError(error)
+  if (error) throw await toAiRequestError(error, name)
   const parsed = schema.safeParse(data)
   if (!parsed.success) {
     throw new AiRequestError('invalid_answer', "The AI's answer didn't have the right shape. Please try again.")
@@ -52,16 +58,14 @@ function hasCodeAndMessage(value: unknown): value is { code: string; message: st
   return typeof code === 'string' && typeof message === 'string'
 }
 
-async function toAiRequestError(error: unknown): Promise<AiRequestError> {
+async function toAiRequestError(error: unknown, name: EdgeFunction): Promise<AiRequestError> {
   if (error instanceof FunctionsHttpError) {
     const response: unknown = error.context
     if (!(response instanceof Response)) return new AiRequestError('server_error', 'The AI server sent an error. Please try again.')
     // Our functions never answer 404, so a 404 means the function isn't deployed yet.
     if (response.status === 404) {
-      return new AiRequestError(
-        'not_deployed',
-        "The AI features aren't on the server yet. Deploy the Edge Functions (docs/4-setup-guide.md, step 6).",
-      )
+      const what = NOT_AI.has(name) ? `The ${name} function isn't` : "The AI features aren't"
+      return new AiRequestError('not_deployed', `${what} on the server yet. Deploy the Edge Functions (docs/4-setup-guide.md, step 6).`)
     }
     const body = await readJson(response)
     if (hasCodeAndMessage(body)) return new AiRequestError(body.code, body.message)

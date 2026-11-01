@@ -7,6 +7,29 @@ import type { UsageStore } from './ai.ts'
 const PAGE_SIZE = 1000
 const MAX_PAGES = 10
 
+/**
+ * What every student's AI requests since `since` cost (USD). Supabase's API can't add up a column,
+ * so the rows are added up here, one page of 1000 at a time. More than `maxPages` pages gives
+ * Infinity: for one day that is far over any budget, so the quota check can stop there.
+ */
+export async function spendSince(admin: SupabaseClient, since: Date, maxPages = MAX_PAGES): Promise<number> {
+  let total = 0
+  for (let page = 0; page < maxPages; page++) {
+    const from = page * PAGE_SIZE
+    const { data, error } = await admin
+      .from('ai_usage')
+      .select('cost_usd')
+      .gte('created_at', since.toISOString())
+      .order('created_at')
+      .range(from, from + PAGE_SIZE - 1)
+    if (error) throw error
+    const rows: { cost_usd: number | string }[] = data
+    total += rows.reduce((sum, row) => sum + Number(row.cost_usd), 0)
+    if (rows.length < PAGE_SIZE) return total
+  }
+  return Number.POSITIVE_INFINITY
+}
+
 export function supabaseUsageStore(admin: SupabaseClient): UsageStore {
   return {
     async requestsSince(userId, since) {
@@ -19,25 +42,7 @@ export function supabaseUsageStore(admin: SupabaseClient): UsageStore {
       return count ?? 0
     },
 
-    async spentSince(since) {
-      // Supabase's API can't add up a column, so the rows are added up here, one page at a time.
-      let total = 0
-      for (let page = 0; page < MAX_PAGES; page++) {
-        const from = page * PAGE_SIZE
-        const { data, error } = await admin
-          .from('ai_usage')
-          .select('cost_usd')
-          .gte('created_at', since.toISOString())
-          .order('created_at')
-          .range(from, from + PAGE_SIZE - 1)
-        if (error) throw error
-        const rows: { cost_usd: number | string }[] = data
-        total += rows.reduce((sum, row) => sum + Number(row.cost_usd), 0)
-        if (rows.length < PAGE_SIZE) return total
-      }
-      // More requests than we can add up in one go: far over any daily budget, so stop here.
-      return Number.POSITIVE_INFINITY
-    },
+    spentSince: (since) => spendSince(admin, since),
 
     async log(entry) {
       const { error } = await admin.from('ai_usage').insert({

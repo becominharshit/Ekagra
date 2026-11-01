@@ -16,6 +16,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { signOut } from '@/features/auth/auth'
+import { AiUsageCard } from '@/features/ai/AiUsageCard'
 import { useAuthStore } from '@/features/auth/authStore'
 import { FeedbackCard } from '@/features/feedback/FeedbackCard'
 import { blockedPackages, useBlockedApps } from '@/features/focus/blockedApps'
@@ -37,6 +38,7 @@ export function MePage() {
         <AccountCard />
         <PlanSettingsCard />
         <FocusCard />
+        <AiUsageCard />
         <FeedbackCard />
       </div>
     </>

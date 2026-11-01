@@ -370,3 +370,38 @@ export type HustlePlanAnswer = z.infer<typeof HustlePlanAnswerSchema>
 /** What ai-hustle returns. Nothing is saved until the student starts the hustle. */
 export const HustlePlanResponseSchema = HustlePlanAnswerSchema.safeExtend({ model: z.string(), promptVersion: z.string() })
 export type HustlePlanResponse = z.infer<typeof HustlePlanResponseSchema>
+
+// ---------------------------------------------------------------------------
+// AI usage dashboard: the limits and what the whole app spent (ai-usage, no AI call)
+// ---------------------------------------------------------------------------
+
+/** The limits when the secrets AI_USER_DAILY_REQUESTS and AI_MONTHLY_BUDGET_USD aren't set. */
+export const DEFAULT_AI_LIMITS = { userDailyRequests: 150, monthlyBudgetUsd: 10 } as const
+
+export const AiUsageRequestSchema = z
+  .object({
+    /** When "this month" began for the student (midnight on the 1st, their time), e.g. 2026-10-31T18:30:00.000Z. */
+    monthStart: z.iso.datetime({ offset: true }).optional(),
+  })
+  .optional()
+export type AiUsageRequest = z.infer<typeof AiUsageRequestSchema>
+
+export const AiUsageResponseSchema = z.object({
+  limits: z.object({
+    /** AI requests per student in any 24 hours. */
+    userDailyRequests: z.number().int().positive(),
+    /** The app's AI budget per month (USD), shared by all students. */
+    monthlyBudgetUsd: z.number().positive(),
+    /** The most the app may spend in any 24 hours: 1/30 of the monthly budget. */
+    dailyBudgetUsd: z.number().positive(),
+  }),
+  app: z.object({
+    /** What all students' AI requests cost in the last 24 hours (USD). Null: too many to add up. */
+    spentLast24hUsd: z.number().min(0).nullable(),
+    /** The same since monthStart. */
+    spentThisMonthUsd: z.number().min(0).nullable(),
+  }),
+  /** False while the AI secrets (key, models, prices) aren't set on the server. */
+  aiConfigured: z.boolean(),
+})
+export type AiUsageResponse = z.infer<typeof AiUsageResponseSchema>
