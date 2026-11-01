@@ -64,6 +64,7 @@ const SCREENS: [path: string, name: string][] = [
   ['/life', 'Life'],
   ['/me', 'Me'],
   ['/me/focus', 'Focus setup'],
+  ['/me/review', 'Weekly review'],
   ['/onboarding', 'Setup'],
 ]
 

@@ -1,19 +1,21 @@
 import { ReviewResponseSchema } from '@shared/schemas.ts'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { addDays, format } from 'date-fns'
-import { listSubjects, type Subject } from '@/features/academics/subjects'
+import { addDays, format, parseISO } from 'date-fns'
+import { academicsKey, listSubjects, updateSubject, type Subject } from '@/features/academics/subjects'
 import { callAiFunction } from '@/features/ai/aiClient'
 import { toMetric, weekMetrics, weekValues } from '@/features/metrics/metrics'
-import { listChallenges, loadMetricInputs } from '@/features/metrics/metricsData'
+import { listChallenges, loadMetricInputs, metricsKey, setWeekChallenge } from '@/features/metrics/metricsData'
 import { DEFAULT_SKILL_WEEKLY_MINUTES } from '@/features/planner/studyData'
 import type { Budget } from '@/features/planner/types'
+import { useSaveSettings } from '@/features/profile/queries'
 import type { MentorTone, Settings } from '@/features/profile/settings'
 import { dbError, need, readAll, useDataSource, type DataSource } from '@/lib/dataSource'
 import { demoDb } from '@/lib/demoDb'
 import type { Tables, TablesInsert, TablesUpdate } from '@/types/database'
+import { readReviewChanges, settingsPatch, type Change, type ChangeStatus, type ReviewChange } from './changes'
 import { localReview } from './localReview'
 import { readReviewAnswer, toReviewRequest, type ReviewContext } from './review'
-import { WINDOW_DAYS, weekStats, type WeekStats, type WeekStatsInputs } from './weekStats'
+import { readWeekStats, WINDOW_DAYS, weekStats, type WeekStats, type WeekStatsInputs } from './weekStats'
 
 // The weekly review's data, from Supabase or (Demo Mode) the device: the week's rows, and the
 // saved reviews (made once a week; the student then applies or skips each change).
@@ -230,6 +232,42 @@ export function useMakeReview() {
     mutationFn: ({ weekStart, setup }: { weekStart: Date; setup: ReviewSetup }) => makeReview(need(source), weekStart, setup),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: reviewKey(owner) })
+    },
+  })
+}
+
+/** The review's changes with one of them replaced (edited by the student, applied or skipped). */
+export function withChange(review: Pick<WeeklyReview, 'changes'>, index: number, change: Change, status: ChangeStatus): ReviewChange[] {
+  return readReviewChanges(review.changes).map((saved, at) => (at === index ? { ...change, reason: saved.reason, status } : saved))
+}
+
+/**
+ * Applies one of a review's changes - a setting (the plan is then made again by itself), a skill
+ * course's weekly time or next week's challenge - and marks it applied.
+ */
+export function useApplyReviewChange() {
+  const { source, owner } = useDataSource()
+  const queryClient = useQueryClient()
+  const saveSettings = useSaveSettings()
+  return useMutation({
+    mutationFn: async ({ review, index, change, settings }: { review: WeeklyReview; index: number; change: Change; settings: Settings }) => {
+      const data = need(source)
+      const patch = settingsPatch(change, settings)
+      if (patch) await saveSettings.mutateAsync(patch)
+      else if (change.type === 'set_skill_minutes') await updateSubject(data, change.subjectId, { weekly_minutes_limit: change.value })
+      else if (change.type === 'challenge_metric') {
+        const baseline = readWeekStats(review.stats)?.metrics?.[change.metric]
+        if (baseline == null) throw new Error("There wasn't enough practice this week to set that target.")
+        await setWeekChallenge(data, { weekStart: format(addDays(parseISO(review.week_start), 7), 'yyyy-MM-dd'), metric: change.metric, baseline })
+      }
+      await updateReview(data, { id: review.id, patch: { changes: withChange(review, index, change, 'applied') } })
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: reviewKey(owner) }),
+        queryClient.invalidateQueries({ queryKey: academicsKey(owner) }),
+        queryClient.invalidateQueries({ queryKey: metricsKey(owner) }),
+      ])
     },
   })
 }

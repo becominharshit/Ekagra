@@ -217,6 +217,16 @@ export async function changeChallenge(source: DataSource, { id, metric, baseline
   await updateChallenge(source, id, { metric, baseline, target: startTarget(metric, baseline) })
 }
 
+/** Every challenge, oldest first (the weekly review shows next week's). */
+export function useChallenges() {
+  const { source, owner } = useDataSource()
+  return useQuery({
+    queryKey: [...metricsKey(owner), 'challenges'],
+    queryFn: () => listChallenges(need(source)),
+    enabled: source !== null,
+  })
+}
+
 export function useChangeChallenge() {
   const { source, owner } = useDataSource()
   const queryClient = useQueryClient()

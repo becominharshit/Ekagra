@@ -153,6 +153,10 @@ export const router = createBrowserRouter([
                 path: 'me/account',
                 lazy: async () => ({ Component: (await import('@/pages/AccountPage')).AccountPage }),
               },
+              {
+                path: 'me/review',
+                lazy: async () => ({ Component: (await import('@/pages/WeeklyReviewPage')).WeeklyReviewPage }),
+              },
               { path: '*', element: <Navigate to="/today" replace /> },
             ],
           },

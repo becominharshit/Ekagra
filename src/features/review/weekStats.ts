@@ -221,6 +221,24 @@ export function weekStats(inputs: WeekStatsInputs): WeekStats {
   }
 }
 
+/** A saved review's numbers (weekly_reviews.stats), or null when they're missing or broken. */
+export function readWeekStats(json: unknown): WeekStats | null {
+  if (typeof json !== 'object' || json === null || Array.isArray(json)) return null
+  const value = json as Partial<WeekStats>
+  return typeof value.weekStart === 'string' && value.areas && value.blocks && value.reviews && value.distractions ? (json as WeekStats) : null
+}
+
+/** The reminder's time on the review day. */
+export const REMINDER_HOUR = 18
+
+/** When the next review reminder should come: the review day at 18:00 (next week's when today's has passed or is done). */
+export function nextReviewAt(now: Date, reviewDay: number, { doneThisWeek = false }: { doneThisWeek?: boolean } = {}): Date {
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), REMINDER_HOUR)
+  const daysAhead = (reviewDay - now.getDay() + 7) % 7
+  const candidate = addDays(today, daysAhead)
+  return candidate.getTime() <= now.getTime() || (daysAhead === 0 && doneThisWeek) ? addDays(candidate, 7) : candidate
+}
+
 /** Days from a week's Monday to its review day (0 = Sunday … 6 = Saturday): Sunday is day 6; a Monday review is the next Monday. */
 export function reviewOffset(reviewDay: number): number {
   return reviewDay === 1 ? 7 : (reviewDay + 6) % 7

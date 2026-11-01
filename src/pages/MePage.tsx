@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { LockKeyhole, LogOut, ShieldCheck, SlidersHorizontal, UserRound } from 'lucide-react'
+import { CalendarCheck2, LockKeyhole, LogOut, ShieldCheck, SlidersHorizontal, UserRound } from 'lucide-react'
 import { Link, useNavigate } from 'react-router'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/button'
@@ -25,12 +25,33 @@ export function MePage() {
       <PageHeader title="Me" subtitle="Your profile and settings." />
       <div className="grid gap-4">
         <AccountCard />
+        <ReviewCard />
         <PlanSettingsCard />
         <FocusCard />
         <AiUsageCard />
         <FeedbackCard />
       </div>
     </>
+  )
+}
+
+/** The weekly review: every Sunday (or the day picked), 5 minutes. */
+function ReviewCard() {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Weekly review</CardTitle>
+        <CardDescription>Every Sunday (or the day you pick): your week in numbers, 3 insights and up to 3 changes for next week, in 5 minutes.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Button asChild variant="outline">
+          <Link to="/me/review">
+            <CalendarCheck2 aria-hidden />
+            Open the weekly review
+          </Link>
+        </Button>
+      </CardContent>
+    </Card>
   )
 }
 

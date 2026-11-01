@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { dayWindowOf, reviewOffset, reviewWeekStart, weekStats, type WeekStatsInputs } from './weekStats'
+import { dayWindowOf, nextReviewAt, readWeekStats, reviewOffset, reviewWeekStart, weekStats, type WeekStatsInputs } from './weekStats'
 
 // The week of Monday 2 November 2026 (local time).
 const WEEK = new Date(2026, 10, 2)
@@ -147,6 +147,23 @@ describe('weekStats', () => {
     expect(stats.checkIns).toEqual({ days: 2, energy: 3, mood: 3, crashedDays: 1 })
     expect(stats.tasks).toEqual({ completed: 1, overdue: 1 })
     expect(stats.hustle).toEqual({ minutes: 90, income: [{ currency: 'INR', amount: 2000.5 }] })
+  })
+})
+
+describe('reminders and saved numbers', () => {
+  it('reminds on the review day at 18:00, next week once it has passed or the review is done', () => {
+    const sunday = (hour: number) => new Date(2026, 10, 8, hour)
+    expect(nextReviewAt(sunday(10), 0)).toEqual(new Date(2026, 10, 8, 18))
+    expect(nextReviewAt(sunday(19), 0)).toEqual(new Date(2026, 10, 15, 18))
+    expect(nextReviewAt(sunday(10), 0, { doneThisWeek: true })).toEqual(new Date(2026, 10, 15, 18))
+    expect(nextReviewAt(new Date(2026, 10, 4, 9), 6)).toEqual(new Date(2026, 10, 7, 18)) // Wednesday → Saturday
+  })
+
+  it('reads saved numbers back, and nothing from broken ones', () => {
+    const stats = weekStats(empty)
+    expect(readWeekStats(JSON.parse(JSON.stringify(stats)))).toEqual(stats)
+    expect(readWeekStats({ weekStart: '2026-11-02' })).toBeNull()
+    expect(readWeekStats([])).toBeNull()
   })
 })
 

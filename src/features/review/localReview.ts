@@ -122,7 +122,7 @@ function ideas(stats: WeekStats, ctx: ReviewContext): Idea[] {
     const longer = exam.inDays > 14 && settings.planner.revisionDays < 14
     found.push({
       score: 68,
-      insight: `${exam.name}'s exam is in ${exam.inDays} days.`,
+      insight: `The ${exam.name} exam is in ${exam.inDays} days.`,
       change: longer ? { type: 'set_revision_days', value: 14 } : undefined,
       reason: 'Finishing topics two weeks before the exam leaves time to revise.',
     })

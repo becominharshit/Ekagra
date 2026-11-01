@@ -39,7 +39,7 @@ describe('localReview', () => {
   it('suggests finishing topics two weeks before an exam 15–30 days away, and next week’s challenge', () => {
     const week = quietWeek({ metrics: { memory: 0.7, learning_speed: null, processing_speed: 25, problem_solving: 0.5 } })
     const review = localReview(week, reviewContext({ metrics: week.metrics, challenge: { metric: 'problem_solving', target: 0.6 } }))
-    expect(review.insights).toEqual(["DBMS's exam is in 20 days."])
+    expect(review.insights).toEqual(['The DBMS exam is in 20 days.'])
     expect(review.changes.map((change) => change.type)).toEqual(['set_revision_days', 'challenge_metric'])
     expect(review.changes[1]).toMatchObject({ metric: 'memory', reason: 'Memory has the most room to grow (70% this week).' })
   })
