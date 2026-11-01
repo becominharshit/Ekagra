@@ -355,4 +355,41 @@ describe('Phase 1 migration (001_phase1_core.sql)', () => {
     // Nobody else sees Bob's routine.
     expect(await as(ALICE, (tx) => count(tx, 'routine_blocks'))).toBe(0)
   })
+
+  it('saves a roadmap the way the app does: one insert for units and topics, an upsert for changes', async () => {
+    // Like src/features/academics/roadmap.ts: ids are made in the app so links can be sent together.
+    const subject = 'dddddddd-0000-4000-8000-000000000001'
+    const unit = 'dddddddd-0000-4000-8000-000000000002'
+    const er = 'dddddddd-0000-4000-8000-000000000003'
+    const sql = 'dddddddd-0000-4000-8000-000000000004'
+    await as(BOB, async (tx) => {
+      await tx.query(`insert into public.subjects (id, name) values ($1, 'DBMS')`, [subject])
+      // The unit and the topics inside it arrive in the same request.
+      await tx.query(
+        `insert into public.topics (id, subject_id, parent_id, title, order_index, est_minutes) values
+           ($1, $2, null, 'Unit 1', 0, null), ($3, $2, $1, 'ER model', 0, 90), ($4, $2, $1, 'SQL', 1, 120)`,
+        [unit, subject, er, sql],
+      )
+      await tx.query(`insert into public.topic_prereqs (topic_id, prereq_topic_id) values ($1, $2)`, [sql, er])
+      // Changed values of whole rows in one request (what supabase-js upsert sends).
+      await tx.query(
+        `insert into public.topics (id, subject_id, parent_id, title, order_index, priority_score, pyq_count)
+         values ($1, $2, $3, 'SQL queries', 1, 0.9, 2)
+         on conflict (id) do update set title = excluded.title, priority_score = excluded.priority_score, pyq_count = excluded.pyq_count`,
+        [sql, subject, unit],
+      )
+      const { rows } = await tx.query('select title, priority_score, pyq_count from public.topics where id = $1', [sql])
+      expect(rows).toEqual([{ title: 'SQL queries', priority_score: '0.9000', pyq_count: 2 }])
+
+      // Deleting the unit deletes its topics and their links too.
+      await tx.query('delete from public.topics where id = $1', [unit])
+      expect(await count(tx, 'topics')).toBe(0)
+      expect(await count(tx, 'topic_prereqs')).toBe(0)
+    })
+
+    // Alice can't put her topic into Bob's subject.
+    await expect(
+      as(ALICE, (tx) => tx.query(`insert into public.topics (subject_id, title) values ($1, 'Sneaky')`, [subject])),
+    ).rejects.toThrow()
+  })
 })

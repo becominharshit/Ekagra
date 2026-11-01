@@ -3,15 +3,14 @@ import { addDays as addCalendarDays, format } from 'date-fns'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { useAuthStore } from '@/features/auth/authStore'
 import { MODE_TONE, type Mode } from '@/features/mode/modes'
 import { toPlannerRoutine } from '@/features/onboarding/routineDraft'
 import { useProfile, useRoutine } from '@/features/profile/queries'
 import { plannerSettingsFor, readSettings, toChronotype } from '@/features/profile/settings'
 import { useNow } from '@/hooks/useNow'
 import { cn } from '@/lib/utils'
-import { demoStudyData } from './demoData'
 import { buildPlan, minutesByArea, plannedMinutes } from './planner'
+import { useStudyData } from './studyData'
 import { formatTime } from './time'
 import type { Area } from './types'
 
@@ -31,30 +30,32 @@ function duration(minutes: number): string {
  */
 export function PlanPreview() {
   const now = useNow(60_000)
-  const isDemo = useAuthStore((state) => state.status === 'demo')
   const profile = useProfile()
   const routine = useRoutine()
+  const study = useStudyData()
   const [showTomorrow, setShowTomorrow] = useState(false)
 
   const today = format(now, 'yyyy-MM-dd')
   const nowMinute = now.getHours() * 60 + now.getMinutes()
 
   const plan = useMemo(() => {
-    if (!profile.data || !routine.data) return null
+    if (!profile.data || !routine.data || !study.data) return null
     const chronotype = toChronotype(profile.data.chronotype)
-    const study = isDemo ? demoStudyData(today) : { subjects: [], topics: [], tasks: [] }
     return buildPlan({
       today,
       nowMinute,
       horizonDays: 14,
       routine: toPlannerRoutine(routine.data),
-      ...study,
+      subjects: study.data.subjects,
+      topics: study.data.topics,
+      tasks: [],
       checkIns: [],
       settings: plannerSettingsFor(readSettings(profile.data.settings), chronotype),
     })
-  }, [profile.data, routine.data, isDemo, today, nowMinute])
+  }, [profile.data, routine.data, study.data, today, nowMinute])
 
   if (!plan) return null
+  const hasTopics = (study.data?.topics.length ?? 0) > 0
   const day = plan.days[showTomorrow ? 1 : 0]
   if (!day) return null
   const areas = minutesByArea(day)
@@ -65,8 +66,8 @@ export function PlanPreview() {
       <CardHeader>
         <CardTitle>Your plan (preview)</CardTitle>
         <CardDescription>
-          Made by the planner from your routine and time budget.
-          {isDemo ? ' Study blocks use sample subjects (DBMS and Python).' : ' Study blocks appear once you add subjects (Milestone 3).'}
+          Made by the planner from your routine, time budget and roadmaps.
+          {hasTopics ? '' : ' Study blocks appear once a subject has a roadmap (Academics → import its syllabus).'}
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4">

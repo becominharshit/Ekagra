@@ -8,8 +8,12 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
-    // "@/..." means "src/..." (shorter imports, used by shadcn/ui too)
-    alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
+    // "@/..." means "src/..." (shorter imports, used by shadcn/ui too).
+    // "@shared/..." is the AI request/answer shapes the app shares with the Edge Functions.
+    alias: {
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
+      '@shared': fileURLToPath(new URL('./supabase/functions/_shared', import.meta.url)),
+    },
   },
   test: {
     // src/** = app logic tests, tests/** = database (migration + RLS) tests,

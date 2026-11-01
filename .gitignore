@@ -20,6 +20,8 @@ dist-ssr
 # Supabase CLI local files
 supabase/.temp
 supabase/.branches
+# Deno lock files (made by `deno check`; Supabase's Edge Runtime may not read newer ones)
+supabase/functions/**/deno.lock
 
 # Editor directories and files
 .vscode/*

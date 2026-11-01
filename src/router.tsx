@@ -29,6 +29,23 @@ export const router = createBrowserRouter([
           { index: true, element: <Navigate to="/today" replace /> },
           { path: 'today', element: <TodayPage /> },
           { path: 'academics', element: <AcademicsPage /> },
+          // Loaded only when opened (lazy), so the first screen of the app stays small.
+          {
+            path: 'academics/subjects/:subjectId',
+            lazy: async () => ({ Component: (await import('@/pages/SubjectPage')).SubjectPage }),
+          },
+          {
+            path: 'academics/subjects/:subjectId/import',
+            lazy: async () => ({ Component: (await import('@/pages/RoadmapEditorPage')).SyllabusImportPage }),
+          },
+          {
+            path: 'academics/subjects/:subjectId/edit',
+            lazy: async () => ({ Component: (await import('@/pages/RoadmapEditorPage')).RoadmapEditPage }),
+          },
+          {
+            path: 'academics/subjects/:subjectId/papers',
+            lazy: async () => ({ Component: (await import('@/pages/PastPapersPage')).PastPapersPage }),
+          },
           { path: 'hustle', element: <HustlePage /> },
           { path: 'life', element: <LifePage /> },
           { path: 'me', element: <MePage /> },

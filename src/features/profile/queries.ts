@@ -1,6 +1,6 @@
-import type { PostgrestError } from '@supabase/supabase-js'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '@/features/auth/authStore'
+import { dbError } from '@/lib/dataSource'
 import { requireSupabase } from '@/lib/supabase'
 import type { Tables, TablesInsert, TablesUpdate } from '@/types/database'
 import { clearDemoData, demoProfileRepo } from './localStore'
@@ -20,45 +20,36 @@ export interface ProfileRepo {
   replaceRoutine(rows: RoutineInsert[]): Promise<void>
 }
 
-function friendlyError(error: PostgrestError): Error {
-  if (error.code === 'PGRST205' || error.code === '42P01') {
-    return new Error(
-      "The database tables don't exist yet. Run `npm run db:push` (docs/4-setup-guide.md, step 2), then try again.",
-    )
-  }
-  return new Error(error.message)
-}
-
 function supabaseRepo(userId: string): ProfileRepo {
   const client = requireSupabase()
   return {
     async getProfile() {
       const { data, error } = await client.from('profiles').select('*').eq('id', userId).maybeSingle()
-      if (error) throw friendlyError(error)
+      if (error) throw dbError(error)
       return data
     },
     async saveProfile(patch) {
       const { error } = await client.from('profiles').update(patch).eq('id', userId)
-      if (error) throw friendlyError(error)
+      if (error) throw dbError(error)
     },
     async getRoutine() {
       const { data, error } = await client.from('routine_blocks').select('*').eq('user_id', userId).order('start_time')
-      if (error) throw friendlyError(error)
+      if (error) throw dbError(error)
       return data
     },
     async replaceRoutine(rows) {
       // Save the new routine first and only then remove the old one,
       // so a failure halfway never leaves the student with no routine at all.
       const { data: old, error: readError } = await client.from('routine_blocks').select('id').eq('user_id', userId)
-      if (readError) throw friendlyError(readError)
+      if (readError) throw dbError(readError)
       if (rows.length > 0) {
         const { error } = await client.from('routine_blocks').insert(rows)
-        if (error) throw friendlyError(error)
+        if (error) throw dbError(error)
       }
       const oldIds = old.map((row) => row.id)
       if (oldIds.length > 0) {
         const { error } = await client.from('routine_blocks').delete().in('id', oldIds)
-        if (error) throw friendlyError(error)
+        if (error) throw dbError(error)
       }
     },
   }

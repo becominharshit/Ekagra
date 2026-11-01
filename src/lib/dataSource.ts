@@ -1,0 +1,37 @@
+import type { PostgrestError, SupabaseClient } from '@supabase/supabase-js'
+import { useAuthStore } from '@/features/auth/authStore'
+import { requireSupabase } from '@/lib/supabase'
+import type { Database } from '@/types/database'
+
+// Where the student's data lives: this device in Demo Mode (src/lib/demoDb.ts), Supabase when
+// signed in. Every feature's data functions take a DataSource and work the same way with both,
+// so screens never care which one it is (AGENTS.md: every feature works in both modes).
+
+export type DataSource =
+  | { kind: 'demo' }
+  | { kind: 'supabase'; client: SupabaseClient<Database>; userId: string }
+
+/** The data source of whoever uses the app right now, and an `owner` key for query keys. */
+export function useDataSource(): { source: DataSource | null; owner: string | null } {
+  const status = useAuthStore((state) => state.status)
+  const userId = useAuthStore((state) => state.user?.id ?? null)
+  if (status === 'demo') return { source: { kind: 'demo' }, owner: 'demo' }
+  if (status === 'signed_in' && userId) return { source: { kind: 'supabase', client: requireSupabase(), userId }, owner: userId }
+  return { source: null, owner: null }
+}
+
+/** For query functions: the source, or a clear error if the person was signed out meanwhile. */
+export function need(source: DataSource | null): DataSource {
+  if (!source) throw new Error('Please sign in again.')
+  return source
+}
+
+/** A database error in plain words. */
+export function dbError(error: PostgrestError): Error {
+  if (error.code === 'PGRST205' || error.code === '42P01') {
+    return new Error(
+      "The database tables don't exist yet. Run `npm run db:push` (docs/4-setup-guide.md, step 2), then try again.",
+    )
+  }
+  return new Error(error.message)
+}

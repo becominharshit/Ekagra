@@ -16,9 +16,10 @@
     "noEmit": true,
     "jsx": "react-jsx",
 
-    /* "@/..." = "src/..." */
+    /* "@/..." = "src/...", "@shared/..." = what the app shares with the Edge Functions */
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@shared/*": ["./supabase/functions/_shared/*"]
     },
 
     /* Linting */
