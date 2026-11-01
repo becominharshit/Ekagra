@@ -5,7 +5,7 @@ import { DAY_WINDOWS, WINDOW_HOURS, type DayWindow } from '@/features/planner/pl
 import { formatTime } from '@/features/planner/time'
 import type { Area } from '@/features/planner/types'
 import type { Settings, SettingsPatch } from '@/features/profile/settings'
-import { WINDOW_LABEL } from './weekStats'
+import { WINDOW_NAME, WINDOW_PHRASE } from './weekStats'
 
 // The changes a weekly review can suggest: a fixed list, each one something the app can do in one
 // tap. Most are planner settings (the plan is then made again by itself); one picks next week's
@@ -88,7 +88,7 @@ export function readReviewChanges(json: unknown): ReviewChange[] {
 
 export interface ChangeContext {
   settings: Settings
-  subjects: ReadonlyMap<string, { name: string; kind: string; weeklyMinutes: number | null }>
+  subjects: ReadonlyMap<string, { name: string; kind: string; weeklyMinutes: number | null; examDate?: string | null }>
   /** The reviewed week's metrics: next week's challenge needs a value to aim from. */
   metrics: MetricValues | null
   /** The best focus hours used now ('HH:MM'). */
@@ -129,7 +129,7 @@ export function changeProblem(change: Change, ctx: ChangeContext): string | null
     case 'move_subject_to_window': {
       const subject = ctx.subjects.get(change.subjectId)
       if (!subject || subject.kind !== 'course') return 'That subject is no longer here.'
-      return ctx.settings.planner.subjectWindows[change.subjectId] === change.window ? `${subject.name} is already in the ${WINDOW_LABEL[change.window]}.` : null
+      return ctx.settings.planner.subjectWindows[change.subjectId] === change.window ? `${subject.name} is already studied ${WINDOW_PHRASE[change.window]}.` : null
     }
     case 'shift_budget': {
       if (change.from === change.to) return 'Pick two different areas.'
@@ -161,7 +161,7 @@ export function describeChange(change: Change, ctx: ChangeContext): { title: str
     case 'move_subject_to_window': {
       const name = ctx.subjects.get(change.subjectId)?.name ?? 'This subject'
       const [start, end] = WINDOW_HOURS[change.window]
-      return { title: `Study ${name} in the ${WINDOW_LABEL[change.window]}`, detail: `Its study blocks go between ${formatTime(start * 60)} and ${formatTime(Math.min(end * 60, 1439))} first.` }
+      return { title: `Study ${name} ${WINDOW_PHRASE[change.window]}`, detail: `Its study blocks go between ${formatTime(start * 60)} and ${formatTime(Math.min(end * 60, 1439))} first.` }
     }
     case 'shift_budget': {
       const budget = ctx.settings.budget
@@ -180,7 +180,7 @@ export function describeChange(change: Change, ctx: ChangeContext): { title: str
       return { title: `Study in blocks of up to ${change.value} minutes`, detail: `Now ${planner.maxBlockMinutes} minutes.` }
     case 'set_peak_window': {
       const wanted = peakFor(change.window)
-      return { title: `Make the ${WINDOW_LABEL[change.window]} your best focus hours`, detail: `Hard topics go ${wanted.start}–${wanted.end} first. Now ${ctx.peak.start}–${ctx.peak.end}.` }
+      return { title: `Make ${WINDOW_NAME[change.window]} your best focus hours`, detail: `Hard topics go ${wanted.start}–${wanted.end} first. Now ${ctx.peak.start}–${ctx.peak.end}.` }
     }
     case 'set_revision_days':
       return { title: `Finish topics ${change.value} days before each exam`, detail: `Now ${planner.revisionDays} days. The rest is time to revise.` }

@@ -1,13 +1,22 @@
+import { ReviewResponseSchema } from '@shared/schemas.ts'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { addDays, format } from 'date-fns'
-import { listSubjects } from '@/features/academics/subjects'
-import { weekMetrics, weekValues } from '@/features/metrics/metrics'
-import { loadMetricInputs } from '@/features/metrics/metricsData'
+import { listSubjects, type Subject } from '@/features/academics/subjects'
+import { callAiFunction } from '@/features/ai/aiClient'
+import { toMetric, weekMetrics, weekValues } from '@/features/metrics/metrics'
+import { listChallenges, loadMetricInputs } from '@/features/metrics/metricsData'
+import { DEFAULT_SKILL_WEEKLY_MINUTES } from '@/features/planner/studyData'
 import type { Budget } from '@/features/planner/types'
-import { dbError, readAll, type DataSource } from '@/lib/dataSource'
+import type { MentorTone, Settings } from '@/features/profile/settings'
+import { dbError, need, readAll, useDataSource, type DataSource } from '@/lib/dataSource'
 import { demoDb } from '@/lib/demoDb'
+import type { Tables, TablesInsert, TablesUpdate } from '@/types/database'
+import { localReview } from './localReview'
+import { readReviewAnswer, toReviewRequest, type ReviewContext } from './review'
 import { WINDOW_DAYS, weekStats, type WeekStats, type WeekStatsInputs } from './weekStats'
 
-// The weekly review's data, from Supabase or (Demo Mode) the device.
+// The weekly review's data, from Supabase or (Demo Mode) the device: the week's rows, and the
+// saved reviews (made once a week; the student then applies or skips each change).
 
 const CHUNK = 100
 
@@ -110,4 +119,128 @@ export async function loadWeekInputs(source: DataSource, weekStart: Date, budget
 
 export async function loadWeekStats(source: DataSource, weekStart: Date, budget: Budget): Promise<WeekStats> {
   return weekStats(await loadWeekInputs(source, weekStart, budget))
+}
+
+// ---------------------------------------------------------------------------
+// Saved reviews (weekly_reviews): made once a week, then the student applies or skips the changes
+// ---------------------------------------------------------------------------
+
+export type WeeklyReview = Tables<'weekly_reviews'>
+
+export const reviewKey = (owner: string | null) => ['review', owner] as const
+
+export async function loadReview(source: DataSource, weekStart: string): Promise<WeeklyReview | null> {
+  if (source.kind === 'demo') return demoDb.list('weekly_reviews').find((review) => review.week_start === weekStart) ?? null
+  const { data, error } = await source.client.from('weekly_reviews').select('*').eq('user_id', source.userId).eq('week_start', weekStart).maybeSingle()
+  if (error) throw dbError(error)
+  return data
+}
+
+type ReviewRow = Required<Pick<TablesInsert<'weekly_reviews'>, 'week_start' | 'stats' | 'insights' | 'changes' | 'source' | 'model' | 'prompt_version'>>
+
+/** One review per week: making it again replaces the old one. */
+async function saveReview(source: DataSource, row: ReviewRow): Promise<WeeklyReview> {
+  if (source.kind === 'demo') {
+    const existing = demoDb.list('weekly_reviews').find((review) => review.week_start === row.week_start)
+    if (existing) return demoDb.update('weekly_reviews', existing.id, { ...row, completed_at: null })
+    const [inserted] = demoDb.insert('weekly_reviews', [row])
+    if (!inserted) throw new Error('The review was not saved.')
+    return inserted
+  }
+  const { data, error } = await source.client
+    .from('weekly_reviews')
+    .upsert({ ...row, completed_at: null, user_id: source.userId }, { onConflict: 'user_id,week_start' })
+    .select()
+    .single()
+  if (error) throw dbError(error)
+  return data
+}
+
+export async function updateReview(source: DataSource, { id, patch }: { id: string; patch: Pick<TablesUpdate<'weekly_reviews'>, 'changes' | 'completed_at'> }): Promise<void> {
+  if (source.kind === 'demo') {
+    demoDb.update('weekly_reviews', id, patch)
+    return
+  }
+  const { error } = await source.client.from('weekly_reviews').update(patch).eq('id', id)
+  if (error) throw dbError(error)
+}
+
+/** What a review needs besides the week's rows. */
+export interface ReviewSetup {
+  settings: Settings
+  subjects: Subject[]
+  mentorTone: MentorTone
+  /** The best focus hours used now. */
+  peak: { start: string; end: string }
+  /** 'YYYY-MM-DD' */
+  today: string
+}
+
+/**
+ * Makes and saves the review of a week: its numbers, then 3 insights and up to 3 changes from
+ * ai-review (signed in) or from the rules on the device (Demo Mode, and when the AI can't).
+ */
+export async function makeReview(source: DataSource, weekStart: Date, setup: ReviewSetup): Promise<{ review: WeeklyReview; aiError: string | null }> {
+  const [stats, challenges] = await Promise.all([loadWeekStats(source, weekStart, setup.settings.budget), listChallenges(source)])
+  const challenge = challenges.find((row) => row.week_start === stats.weekStart)
+  const ctx: ReviewContext = {
+    settings: setup.settings,
+    subjects: new Map(setup.subjects.map((subject) => [subject.id, { name: subject.name, kind: subject.kind, weeklyMinutes: subject.weekly_minutes_limit, examDate: subject.exam_date }])),
+    metrics: stats.metrics,
+    peak: setup.peak,
+    defaultSkillMinutes: DEFAULT_SKILL_WEEKLY_MINUTES,
+    mentorTone: setup.mentorTone,
+    today: setup.today,
+    challenge: challenge ? { metric: toMetric(challenge.metric), target: Number(challenge.target) } : null,
+  }
+  let written = localReview(stats, ctx)
+  let by: 'ai' | 'device' = 'device'
+  let model: string | null = null
+  let promptVersion: string | null = null
+  let aiError: string | null = null
+  if (source.kind === 'supabase') {
+    try {
+      const { request, subjectIdByKey } = toReviewRequest(stats, ctx)
+      const answer = await callAiFunction('ai-review', request, ReviewResponseSchema, source.client)
+      written = readReviewAnswer(answer, ctx, subjectIdByKey)
+      by = 'ai'
+      model = answer.model
+      promptVersion = answer.promptVersion
+    } catch (error) {
+      aiError = error instanceof Error ? error.message : 'The AI could not write the review.'
+    }
+  }
+  const review = await saveReview(source, { week_start: stats.weekStart, stats, insights: written.insights, changes: written.changes, source: by, model, prompt_version: promptVersion })
+  return { review, aiError }
+}
+
+export function useReview(weekStart: string) {
+  const { source, owner } = useDataSource()
+  return useQuery({
+    queryKey: [...reviewKey(owner), weekStart],
+    queryFn: () => loadReview(need(source), weekStart),
+    enabled: source !== null,
+  })
+}
+
+export function useMakeReview() {
+  const { source, owner } = useDataSource()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ weekStart, setup }: { weekStart: Date; setup: ReviewSetup }) => makeReview(need(source), weekStart, setup),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: reviewKey(owner) })
+    },
+  })
+}
+
+export function useUpdateReview() {
+  const { source, owner } = useDataSource()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (update: Parameters<typeof updateReview>[1]) => updateReview(need(source), update),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: reviewKey(owner) })
+    },
+  })
 }

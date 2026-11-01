@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
+import type { Subject } from '@/features/academics/subjects'
+import { readSettings } from '@/features/profile/settings'
 import type { DataSource } from '@/lib/dataSource'
 import { demoDb } from '@/lib/demoDb'
 import { stubLocalStorage } from '@/test/memoryStorage'
-import { loadWeekStats } from './reviewData'
+import { readReviewChanges } from './changes'
+import { loadReview, loadWeekStats, makeReview, updateReview, type ReviewSetup } from './reviewData'
 
 stubLocalStorage()
 
@@ -33,5 +36,46 @@ describe("a week's numbers in Demo Mode", () => {
     expect(stats.focus).toEqual({ minutes: 25, sessions: 1, completed: 1 })
     expect(stats.checkIns).toMatchObject({ days: 1, energy: 4 })
     expect(stats.hustle.income).toEqual([{ currency: 'INR', amount: 800 }])
+  })
+})
+
+describe('weekly reviews in Demo Mode', () => {
+  const setup = (subjects: Subject[]): ReviewSetup => ({ settings: readSettings({}), subjects, mentorTone: 'balanced', peak: { start: '09:00', end: '13:00' }, today: '2026-11-08' })
+
+  it('writes the review on the device from the rules, saves it once per week, and keeps what the student did', async () => {
+    const [subject] = demoDb.insert('subjects', [{ name: 'DBMS' }])
+    const subjectId = subject?.id ?? ''
+    // A week with many missed blocks.
+    demoDb.insert(
+      'plan_blocks',
+      [2, 3, 4, 5, 6, 7].map((day) => ({
+        date: `2026-11-0${day}`,
+        start_at: at(day, 9),
+        end_at: at(day, 10),
+        area: 'academics',
+        kind: 'learn',
+        title: 'Joins',
+        subject_id: subjectId,
+        planned_minutes: 50,
+        status: day < 4 ? 'done' : 'missed',
+        actual_minutes: day < 4 ? 50 : null,
+      })),
+    )
+    const { review, aiError } = await makeReview(DEMO, WEEK, setup(demoDb.list('subjects')))
+    expect(aiError).toBeNull()
+    expect(review).toMatchObject({ week_start: '2026-11-02', source: 'device', model: null, completed_at: null })
+    expect(review.insights).toEqual(['You finished 2 of 6 study blocks (33%): 4 were missed and 0 ended early.'])
+    const changes = readReviewChanges(review.changes)
+    expect(changes).toEqual([expect.objectContaining({ type: 'set_buffer', value: 17, status: 'open' })])
+
+    await updateReview(DEMO, { id: review.id, patch: { changes: changes.map((change) => ({ ...change, status: 'applied' as const })), completed_at: '2026-11-08T12:00:00.000Z' } })
+    const saved = await loadReview(DEMO, '2026-11-02')
+    expect(readReviewChanges(saved?.changes)[0]?.status).toBe('applied')
+    expect(saved?.completed_at).toBe('2026-11-08T12:00:00.000Z')
+
+    // Making it again replaces the week's review (still one row).
+    await makeReview(DEMO, WEEK, setup(demoDb.list('subjects')))
+    expect(demoDb.list('weekly_reviews')).toHaveLength(1)
+    expect(await loadReview(DEMO, '2026-10-26')).toBeNull()
   })
 })

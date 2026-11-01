@@ -18,6 +18,7 @@ export const AI_FUNCTIONS: { name: AiFunction; label: string; features: string[]
   { name: 'ai-brief', label: 'Morning brief', features: ['brief'] },
   { name: 'ai-hustle', label: 'Custom hustle plans', features: ['hustle'] },
   { name: 'ai-grade', label: 'Marking mock tests', features: ['grade'] },
+  { name: 'ai-review', label: 'Weekly reviews', features: ['review'] },
 ]
 
 export interface UsageRow {

@@ -424,6 +424,135 @@ export const GradeResponseSchema = z.object({ grades: z.array(gradeSchema), mode
 export type GradeResponse = z.infer<typeof GradeResponseSchema>
 
 // ---------------------------------------------------------------------------
+// Sunday weekly review: the week's numbers → 3 insights and up to 3 changes (ai-review)
+// The change types, parts of the day and metrics match src/features/review/changes.ts.
+// ---------------------------------------------------------------------------
+
+export const REVIEW_CHANGE_TYPES = [
+  'move_subject_to_window',
+  'shift_budget',
+  'set_buffer',
+  'set_review_cap',
+  'set_new_cards',
+  'set_block_length',
+  'set_peak_window',
+  'set_revision_days',
+  'block_apps_in_study',
+  'challenge_metric',
+  'set_skill_minutes',
+] as const
+export const REVIEW_WINDOWS = ['morning', 'afternoon', 'evening', 'night'] as const
+export const REVIEW_AREAS = ['academics', 'hustle', 'life'] as const
+export const REVIEW_METRICS = ['memory', 'learning_speed', 'processing_speed', 'problem_solving'] as const
+
+const count = z.number().int().min(0).max(1_000_000)
+const minutes = z.number().min(0).max(100_000)
+const shareOrNull = z.number().min(0).max(1).nullable()
+const accuracy = z.object({ attempts: count, accuracy: shareOrNull })
+const areaTime = z.object({ planned: minutes, done: minutes, budgetPct: z.number().min(0).max(100), sharePct: z.number().min(0).max(100) })
+
+export const ReviewStatsSchema = z.object({
+  areas: z.object({ academics: areaTime, hustle: areaTime, life: areaTime }),
+  blocks: z.object({ planned: count, done: count, partial: count, missed: count, open: count }),
+  subjects: z
+    .array(
+      z.object({
+        key: z.string().min(1).max(10),
+        name: z.string().trim().min(1).max(120),
+        kind: z.enum(['course', 'skill_course']),
+        planned: minutes,
+        done: minutes,
+        attempts: count,
+        accuracy: shareOrNull,
+        examInDays: z.number().int().nullable(),
+        weeklyMinutes: z.number().int().min(0).max(10_000).nullable(),
+      }),
+    )
+    .max(30),
+  topicsLearned: z.array(z.object({ title: z.string().trim().min(1).max(200), subjectKey: z.string().max(10) })).max(50),
+  quiz: accuracy,
+  accuracyByWindow: z.object({ morning: accuracy, afternoon: accuracy, evening: accuracy, night: accuracy }),
+  reviews: z.object({ count, retention: shareOrNull }),
+  focus: z.object({ minutes, sessions: count, completed: count }),
+  distractions: z.object({
+    total: count,
+    unlocks: count,
+    topApps: z.array(z.object({ app: z.string().max(120), count })).max(3),
+    topHours: z.array(z.object({ hour: z.number().int().min(0).max(23), count })).max(3),
+    reasons: z.array(z.object({ reason: z.string().max(40), count })).max(4),
+  }),
+  checkIns: z.object({ days: count, energy: z.number().min(1).max(5).nullable(), mood: z.number().min(1).max(5).nullable(), crashedDays: count }),
+  tasks: z.object({ completed: count, overdue: count }),
+  hustle: z.object({ minutes, income: z.array(z.object({ currency: z.string().max(8), amount: z.number() })).max(5) }),
+  metrics: z.object({ memory: shareOrNull, learning_speed: z.number().min(0).nullable(), processing_speed: z.number().min(0).nullable(), problem_solving: shareOrNull }).nullable(),
+})
+
+export const ReviewRequestSchema = z.object({
+  weekStart: z.iso.date(),
+  mentorTone: z.enum(['strict', 'balanced', 'friendly']),
+  stats: ReviewStatsSchema,
+  /** What's set now, so the AI doesn't suggest what's already there. */
+  settings: z.object({
+    budget: z.object({ academics: z.number().min(0).max(100), hustle: z.number().min(0).max(100), life: z.number().min(0).max(100) }),
+    bufferPct: z.number().min(0).max(50),
+    maxReviewMinutes: z.number().min(0).max(120),
+    newCardsPerDay: z.number().min(0).max(200),
+    maxBlockMinutes: z.number().min(20).max(90),
+    revisionDays: z.number().min(0).max(60),
+    peak: z.object({ start: z.string().max(5), end: z.string().max(5) }),
+    blockAppsInStudy: z.boolean(),
+    subjectWindows: z.record(z.string().max(10), z.enum(REVIEW_WINDOWS)),
+  }),
+  /** This week's challenge and whether it's on target so far. */
+  challenge: z.object({ metric: z.enum(REVIEW_METRICS), target: z.number(), onTarget: z.boolean() }).nullable(),
+})
+export type ReviewRequest = z.infer<typeof ReviewRequestSchema>
+
+const flatChangeSchema = z.object({
+  type: z.enum(REVIEW_CHANGE_TYPES),
+  subjectKey: z.string().nullable().describe('move_subject_to_window (a course) and set_skill_minutes (a skill course): the subject key, e.g. s1; otherwise null'),
+  window: z.enum(REVIEW_WINDOWS).nullable().describe('move_subject_to_window and set_peak_window: the part of the day; otherwise null'),
+  from: z.enum(REVIEW_AREAS).nullable().describe('shift_budget: the area that gives time; otherwise null'),
+  to: z.enum(REVIEW_AREAS).nullable().describe('shift_budget: the area that gets it; otherwise null'),
+  value: z.number().nullable().describe('the new number: buffer %, review minutes a day, new cards a day, block minutes, revision days, skill minutes a week, or budget points to move (5-20); otherwise null'),
+  metric: z.enum(REVIEW_METRICS).nullable().describe('challenge_metric: the metric for next week; otherwise null'),
+  reason: z.string().trim().min(1).max(220).describe('Why, from the numbers, in one sentence'),
+})
+export type FlatReviewChange = z.infer<typeof flatChangeSchema>
+
+const NEEDS_VALUE = new Set(['set_buffer', 'set_review_cap', 'set_new_cards', 'set_block_length', 'set_revision_days', 'set_skill_minutes'])
+
+/** The answer the model must give for this request: every change complete, with subject keys of the right kind. */
+export function reviewAnswerSchemaFor(request: Pick<ReviewRequest, 'stats'>) {
+  const kinds = new Map(request.stats.subjects.map((subject) => [subject.key, subject.kind]))
+  return z
+    .object({
+      insights: z.array(z.string().trim().min(1).max(240)).min(1).max(3),
+      changes: z.array(flatChangeSchema).max(3),
+    })
+    .superRefine((answer, context) => {
+      answer.changes.forEach((change, index) => {
+        const problem = (message: string) => context.addIssue({ code: 'custom', message, path: ['changes', index] })
+        if (change.type === 'move_subject_to_window' && (kinds.get(change.subjectKey ?? '') !== 'course' || !change.window)) problem('move_subject_to_window needs the key of a course and a window')
+        if (change.type === 'set_skill_minutes' && kinds.get(change.subjectKey ?? '') !== 'skill_course') problem('set_skill_minutes needs the key of a skill course')
+        if (change.type === 'set_peak_window' && !change.window) problem('set_peak_window needs a window')
+        if (change.type === 'shift_budget' && (!change.from || !change.to || change.from === change.to)) problem('shift_budget needs two different areas')
+        if (change.type === 'challenge_metric' && !change.metric) problem('challenge_metric needs a metric')
+        if (NEEDS_VALUE.has(change.type) && change.value === null) problem(`${change.type} needs a value`)
+      })
+    })
+}
+export type ReviewAnswer = { insights: string[]; changes: FlatReviewChange[] }
+
+export const ReviewResponseSchema = z.object({
+  insights: z.array(z.string()),
+  changes: z.array(flatChangeSchema),
+  model: z.string(),
+  promptVersion: z.string(),
+})
+export type ReviewResponse = z.infer<typeof ReviewResponseSchema>
+
+// ---------------------------------------------------------------------------
 // AI usage dashboard: the limits and what the whole app spent (ai-usage, no AI call)
 // ---------------------------------------------------------------------------
 

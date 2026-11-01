@@ -8,7 +8,10 @@ import type { Area, Budget } from '@/features/planner/types'
 // over the last 4 weeks), flashcard retention, focus, distractions, check-ins, tasks, hustle and
 // the 4 learning metrics. Pure functions, tested on their own.
 
-export const WINDOW_LABEL: Record<DayWindow, string> = { morning: 'mornings', afternoon: 'afternoons', evening: 'evenings', night: 'nights' }
+/** "Study DBMS in the mornings", "more accurate at night". */
+export const WINDOW_PHRASE: Record<DayWindow, string> = { morning: 'in the mornings', afternoon: 'in the afternoons', evening: 'in the evenings', night: 'at night' }
+/** "Make evenings your best focus hours". */
+export const WINDOW_NAME: Record<DayWindow, string> = { morning: 'mornings', afternoon: 'afternoons', evening: 'evenings', night: 'nights' }
 
 export function dayWindowOf(date: Date): DayWindow {
   const hour = date.getHours()
