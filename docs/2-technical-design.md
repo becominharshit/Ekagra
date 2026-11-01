@@ -247,11 +247,27 @@ time_entries        user_id, hustle_id, started_at, ended_at, minutes, source (f
                     (focus = hustle focus sessions, for a block or on their own, and 10-minute
                     Launchpad sessions)
 
-── Social (P2) ───────────────────────────────────────────────────────────────
-groups              name, owner_id, invite_code
-group_members       group_id, user_id, role
-partner_links       user_id, partner_id, status, shared_stats text[]
-shared_stats_view   only the numbers a user chose to share (focus minutes, streak, plan %)
+── Social (migration 008_social.sql, M15) ──────────────────────────────────────
+shared_stats        user_id (one row each), display_name, share_focus, share_streak,
+                    share_plan, share_studying, on_leaderboard, week_start, focus_minutes,
+                    streak_days, plan_pct, studying_until; checks make an unshared number
+                    impossible to store, so partners and group mates may read the row
+                    (is_connected); the app publishes it (SocialSync)
+shared_stats_view   the same with studying_now worked out (security_invoker)
+partner_invites     user_id, code (10 characters from a random UUID), expires_at (7 days)
+partner_links       user_id, partner_id; one row each way, made by accept_partner_invite;
+                    removing either removes both (trigger); at most 5 partners
+study_groups        user_id (owner), name, invite_code; the owner becomes the first member
+group_members       group_id, user_id, role (owner|member); joined through join_group
+                    (at most 30); leave_group passes the group on (the last one out deletes it)
+group_sessions      group focus: group_id, user_id (who started it), mode, minutes,
+                    starts_at, ends_at
+nudges              user_id (sender), to_user_id, kind (study|cheer|checkin), message,
+                    seen_at; only to a partner or group mate, 3 a day to the same friend;
+                    the receiver can change only seen_at
+Functions (security definer): is_connected, is_group_member (used by the rules),
+accept_partner_invite, join_group, leave_group. Realtime: shared_stats, nudges,
+group_sessions, group_members and ai_anchors are in the supabase_realtime publication.
 
 ── System ────────────────────────────────────────────────────────────────────
 integrations        user_id, provider, status, scopes, external_account, vault_secret_id,
@@ -534,6 +550,19 @@ interface FocusGuardPlugin {
   - a package query for the Health Connect app (Android 9–13);
   - the privacy links Health Connect requires before it shows its permission screen: `ACTION_SHOW_PERMISSIONS_RATIONALE` on MainActivity and the Android 14+ `VIEW_PERMISSION_USAGE` activity-alias. MainActivity opens `/privacy` for both.
 - **Play Store:** publishing needs Google's Health Connect declaration form.
+
+**Partners, groups and Realtime (built in M15):** `src/features/social/`.
+- **What's shared:** the student starts sharing on Me → Partner and groups, and picks the numbers. The numbers are worked out on the device: focus minutes this week, the streak of days with 15+ focus minutes, and plan blocks done %. `SocialSync` publishes them every few minutes and as focus starts and ends ("studying until" = a running session's planned end).
+- **Realtime:** one channel per student listens to `shared_stats`, their own `nudges`, `group_sessions` and `group_members`. Realtime applies the same rules, and a burst of changes reloads the affected views once.
+- **Phone notifications:** nudges and a group mate's group focus give a notification only when the app is in the background on Android, through FocusGuard's reminder (no push service and no new library). Polling every minute is the fallback.
+- **Demo Mode:** the student's own sharing row is kept on the device. The partner and the group are clearly marked samples, so codes say they need an account.
+
+**Studio Bridge (built in M15):** `src/features/bridge/`, between Ekagra (App #1, http://localhost:5173) and Ekagra Studio (App #2, http://localhost:5174 or `VITE_STUDIO_URL`).
+- **Payload, version 2 (`protocol.ts`):** an AI Anchor (id, material id and title, page, action, selected text, question, answer, topic). Long texts are cut to fit a link and marked `truncated`; the other app can read the whole anchor from Supabase by id. It is checked with Zod and encoded as base64url of UTF-8 JSON.
+- **To Studio:** **Open in Ekagra Studio** opens `<VITE_STUDIO_URL>/?bridge_payload=<payload>` in a reused `ekagra-studio` tab. On Android it uses `ekagra-studio://anchor?bridge_payload=…`, falling back to the web version after 1.5 s when Studio's app isn't installed.
+- **From Studio:** `?bridge_payload=…` on Ekagra's address is read by `launch.ts` before the router starts, so the app opens at the anchor's PDF page with the anchor shown. On Android it's `ekagra://anchor?bridge_payload=…`.
+- **Same address:** `BroadcastChannel('ekagra_app2_studio_bridge_v2')` carries `upsert`, `delete` and `open` messages between tabs, for example Studio served at `/studio`. Each app uses one channel object, so it never hears itself.
+- **Signed in:** Realtime on `ai_anchors` (the student's own rows) shows anchors saved in either app in the other at once.
 
 **Google OAuth in the beta:** keep the consent screen in *Testing* (up to 100 test users, added by email). In testing mode, refresh tokens expire after 7 days, so users reconnect weekly. Fine for a beta; verify the app before a public launch.
 

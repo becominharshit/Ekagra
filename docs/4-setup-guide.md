@@ -46,7 +46,7 @@ npm run db:types
 
 - `login` opens your browser to allow the Supabase command-line tool.
 - `link` asks for the database password from step 1.
-- `db:push` creates every table, security rule (RLS) and storage bucket from the files in `supabase/migrations/` (`001_phase1_core.sql`, then `002_hustle_mode.sql`, `003_beta.sql` (feedback), `004_attendance_grades.sql`, `005_adaptive.sql` (practice ratings, weekly metrics and challenges), `006_weekly_review.sql`, `007_life.sql` (habits, workouts, meals, sleep, steps and speaking practice) and any later ones). Run it again whenever a new migration file appears; it only applies the new ones.
+- `db:push` creates every table, security rule (RLS) and storage bucket from the files in `supabase/migrations/` (`001_phase1_core.sql`, then `002_hustle_mode.sql`, `003_beta.sql` (feedback), `004_attendance_grades.sql`, `005_adaptive.sql` (practice ratings, weekly metrics and challenges), `006_weekly_review.sql`, `007_life.sql` (habits, workouts, meals, sleep, steps and speaking practice), `008_social.sql` (partners, study groups, nudges; it also turns on Realtime for them and for AI Anchors) and any later ones). Run it again whenever a new migration file appears; it only applies the new ones.
 - `db:types` writes `src/types/database.ts` from your real database. Run it again after every new migration.
 
 **Check:** Supabase → **Table Editor** lists tables such as `profiles`, `subjects`, `hustles`, and each one says RLS is enabled.
@@ -90,6 +90,30 @@ Supabase → **Authentication → URL Configuration**:
 2. Open http://localhost:5173, click **Continue with Google** and pick one of your test-user accounts.
 3. The first time, you land on the 4-step setup (about you, routine, rhythm, time budget). Finish it to reach **Today**, which shows a preview of your plan. **Me** shows your name and photo.
 4. In Supabase → **Table Editor**: `profiles` has your row (with `onboarded_at` filled in), and `routine_blocks` has your routine.
+
+### Partner, groups and Realtime: test with two accounts
+
+Partners and groups need two people, so use two test-user accounts: one in a normal window and one in a private (incognito) window or another browser.
+
+1. Both: Me → **Partner and groups** → **Start sharing**.
+2. **Partner:** A taps **Get a code** and copies it; B pastes it under "Have a friend's code?" → **Become partners**. Both now see each other with their numbers.
+3. **Nudges:** A taps **Cheer** on B. Within a second or two (Realtime), B's Partner and groups page and Today show the nudge; **Got it** hides it. A fourth nudge on the same day says 3 is the limit.
+4. **Groups:** A makes a group; B joins with its code. Both turn on "Show me on group leaderboards": the leaderboard lists them by this week's focus minutes.
+5. **Studying now and group focus:** A starts a group focus (25 min). B's group shows "A until …" and Today shows **Group focus now** → **Join** starts B's own focus for the minutes left.
+6. In Supabase → **Database → Publications → supabase_realtime**, the tables `shared_stats`, `nudges`, `group_sessions`, `group_members` and `ai_anchors` are listed (migration 008 adds them). If changes only show after a minute, check that Realtime is on for the project.
+
+### Ekagra Studio (the Studio Bridge)
+
+Ekagra Studio (App #2) is a separate app. AI Anchors pass between the two apps:
+- **By link:** Studio is opened with `?bridge_payload=…`, the anchor as URL-safe base64 JSON.
+- **On Android:** by the `ekagra-studio://anchor` deep link (and back: `ekagra://anchor`).
+- **Same address:** if Studio runs at the same address (for example under `/studio`), tabs also talk on `BroadcastChannel('ekagra_app2_studio_bridge_v2')`.
+- **Signed in:** when both apps use the same Supabase account, Realtime on `ai_anchors` shows each app's anchors in the other at once.
+
+1. In development, run Studio on http://localhost:5174 (its own project) next to Ekagra on http://localhost:5173.
+2. Elsewhere, add `VITE_STUDIO_URL` to `.env` (for example `VITE_STUDIO_URL=https://studio.example.com` or `https://example.com/studio`) and restart `npm run dev`. This setting is only described here, not in `.env.example`. Without it, the app uses http://localhost:5174.
+3. Try it: open a PDF in the Library → an AI Anchor → **Open in Ekagra Studio**. A Studio tab opens with the anchor.
+4. Studio can open an anchor in Ekagra with `http://localhost:5173/?bridge_payload=…`: Ekagra opens that PDF at the anchor's page, with the anchor shown.
 
 ## 5. Run the Android app on your phone
 
@@ -162,7 +186,7 @@ Any static host works. These steps use Netlify; Vercel and Cloudflare Pages are 
 2. Netlify → **Add new site → Import an existing project** → pick the repo:
    - Build command: `npm run build`
    - Publish directory: `dist`
-   - Environment variables: `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` (the same values as your `.env`), and optionally `VITE_CONTACT_EMAIL` (the contact address on the privacy page; without it, the page points to the feedback button).
+   - Environment variables: `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` (the same values as your `.env`), and optionally `VITE_CONTACT_EMAIL` (the contact address on the privacy page; without it, the page points to the feedback button) and `VITE_STUDIO_URL` (where Ekagra Studio runs online, for **Open in Ekagra Studio**; step 4).
 3. The app has its own addresses (`/academics`, `/privacy`, …), so the host must answer every address with `index.html`:
    - Netlify: a file `public/_redirects` with the line `/* /index.html 200` (Vite copies it into `dist`).
    - Vercel: a `vercel.json` with `{ "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }] }`.

@@ -84,7 +84,10 @@ Built in this order (M12 comes first: attendance helps students in the middle of
   2. `npm run functions:deploy` (now 13 functions: the 11 AI ones with the new `ai-meal` and `ai-speak`, `ai-usage` and `account-delete`).
   3. On an Android phone: build and install the APK, then try Life → Speaking (allow the microphone) and Life → Sleep & steps (docs/4).
   4. Before the Play Store: fill in Google's Health Connect declaration form.
-- [ ] **M15 Partner, groups and the Studio Bridge, in 6 steps** (migration `008_social.sql`): sharing only the numbers each student picks (RLS, `shared_stats_view`); accountability partner with in-app and local-notification nudges (no push service yet); study groups with "studying now" and group focus (Supabase Realtime); the Studio Bridge to App #2 (`ekagra-studio`): `BroadcastChannel` for same-origin `/studio` tabs, Supabase Realtime sync of `ai_anchors`, and handoff by link (`http://localhost:5174/?bridge=<encoded payload>` in development) or deep link (`ekagra-studio://anchor`); docs
+- [x] **M15 Partner, groups and the Studio Bridge, in 6 steps** (migration `008_social.sql`): sharing only the numbers each student picks (RLS, `shared_stats_view`); accountability partner with in-app and local-notification nudges (no push service yet); study groups with "studying now", group focus and an opt-in leaderboard (Supabase Realtime); the Studio Bridge to App #2 (`ekagra-studio`): `BroadcastChannel('ekagra_app2_studio_bridge_v2')` for same-origin `/studio` tabs, Supabase Realtime sync of `ai_anchors`, and handoff by link (`http://localhost:5174/?bridge_payload=<base64url JSON>` in development, `VITE_STUDIO_URL` elsewhere) or deep link (`ekagra-studio://anchor`, and back `ekagra://anchor`); docs. Done 2026-11-02; in Demo Mode the partner (Aarav) and the study group are clearly marked samples, while the student's own sharing, group focus and the Studio Bridge work for real. **Your steps:**
+  1. `npm run db:push` (migration 008; it also adds the social tables and `ai_anchors` to Realtime), then `npm run db:types`.
+  2. Test with two accounts (docs/4, "Partner, groups and Realtime").
+  3. Set `VITE_STUDIO_URL` once Ekagra Studio is online (docs/4, "Ekagra Studio").
 
 The 12-week plan in §3 and the phases in §1 and §4 are kept for reference only.
 
@@ -221,7 +224,7 @@ Move these to Phase 2, in this order: YouTube processing → tutor Socratic/Exam
 - [ ] Four learning metrics + weekly challenge
 - [ ] Mock tests in the exam pattern; exam readiness score
 - [ ] Weekly AI review (`ai-review`)
-- [ ] Accountability partner, friend groups, group focus sessions
+- [x] Accountability partner, friend groups, group focus sessions (M15)
 - [ ] Attendance and marks/CGPA
 - [ ] Gmail capture for college emails; Google Drive import; timetable from a photo
 - [ ] Screen-time reports

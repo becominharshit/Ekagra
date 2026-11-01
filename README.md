@@ -122,3 +122,30 @@ Add a dated line whenever an important decision is made or changed.
   - The privacy links Health Connect requires open `/privacy` (MainActivity).
 
   **Not done yet:** sleep in the weekly review. The Life tabs load on demand.
+- 2026-11-02: M15 done (migration `008_social.sql`). **Sharing:**
+  - One `shared_stats` row per student, holding their choices and the published numbers. Check constraints make an unshared number impossible to store, so the table itself can be readable by partners and group mates (`is_connected`).
+  - `shared_stats_view` is `security_invoker` and only works out "studying now".
+  - The numbers are computed on the device and published by `SocialSync`, rather than computed in SQL (timezones, streaks).
+  - Sharing starts only when the student taps Start sharing.
+
+  **Joining:**
+  - Partner and group codes are checked by `security definer` functions (`accept_partner_invite`, `join_group`, `leave_group`), because students can't read others' codes.
+  - Partners are two mirrored rows, and a trigger removes the mirror; only a link both ways counts.
+  - The owner leaving passes the group to the earliest member.
+  - Every social table has `user_id` (sender or owner), so wipe and export cover it; groups you made go with your data.
+
+  **Nudges:** 3 a day per friend (a trigger); the receiver can change only `seen_at` (a column grant).
+
+  **Realtime:**
+  - Postgres changes on `shared_stats`, own `nudges`, `group_sessions` and `group_members`; a burst of changes reloads once.
+  - Android notifications only when the app is in the background, through FocusGuard's reminder (no push service, no new library); polling every minute stays as the fallback.
+
+  **Group focus:** joining starts the student's own focus session for the minutes left.
+
+  **Demo Mode:** a sample partner and group, clearly marked; the student's own sharing is real.
+
+  **Studio Bridge:**
+  - Names as asked: `?bridge_payload=<base64url JSON>`, replacing the earlier `?bridge=`. Also `BroadcastChannel('ekagra_app2_studio_bridge_v2')`, `ekagra-studio://anchor` (and back `ekagra://anchor`), and `VITE_STUDIO_URL` (default http://localhost:5174), which is documented in docs/4 only, not in `.env.example`.
+  - The payload is version 2, checked with Zod; long texts are cut to fit a link.
+  - An incoming link is turned into the anchor's address before the router starts (`launch.ts`). Otherwise the index redirect to /today wins the race.
+  - Realtime on `ai_anchors` syncs anchors between the two apps when both are signed in to the same account.

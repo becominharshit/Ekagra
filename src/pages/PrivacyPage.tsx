@@ -57,7 +57,7 @@ export function PrivacyPage() {
 
         <Section title="In short">
           <List>
-            <li>Your data is private to your account. It is never sold or used for ads.</li>
+            <li>Your data is private to your account. It is never sold or used for ads. Partners and groups see only the few numbers you pick.</li>
             <li>AI features send only what a request needs to Google's Gemini, through Ekagra's server.</li>
             <li>Meal photos and voice recordings are used once for feedback and never stored.</li>
             <li>FocusGuard's app checks stay on your phone. Health Connect is only read, and only sleep and steps, when you allow it.</li>
@@ -83,6 +83,10 @@ export function PrivacyPage() {
             <li>
               Your progress: attendance, marks and semester results, mock tests and how they were marked, your weekly learning metrics and
               challenges, and your weekly reviews with the changes you applied.
+            </li>
+            <li>
+              Friends, if you use them: what you chose to share (see below), your partner and group links, groups you made, group focus sessions
+              you started, and nudges you sent.
             </li>
             <li>
               Life: your habits and the days you did them; workouts with their sets; meals as you describe them, with estimated calories, protein,
@@ -140,6 +144,25 @@ export function PrivacyPage() {
           </List>
         </Section>
 
+        <Section title="Partners and study groups">
+          <List>
+            <li>
+              Nothing is shared until you tap Start sharing (Me → Partner and groups). Then only your partners and the people in your groups see
+              the name you pick and the numbers you tick: focus minutes this week, study streak, plan done %, whether you're studying now, and
+              (if you choose) your place on group leaderboards. Your plan, notes, PDFs, answers and everything else stay private.
+            </li>
+            <li>You connect only with a code someone gives you. Removing a partner or leaving a group stops the sharing at once.</li>
+            <li>Nudges you send are saved so they can reach your friend; they can see who sent them.</li>
+          </List>
+        </Section>
+
+        <Section title="Ekagra Studio">
+          <p>
+            "Open in Ekagra Studio" puts that AI Anchor (its text, your question and the answer, cut to fit) into the link it opens, so the other
+            app can show it. Nothing else is sent. If you're signed in to both apps with the same account, your anchors show in both.
+          </p>
+        </Section>
+
         <Section title="Health features are not medical advice">
           <p>
             Calorie and protein estimates, sleep and step numbers, workout programs and speaking scores are there to guide you. They are not medical,
@@ -157,7 +180,7 @@ export function PrivacyPage() {
         <Section title="Where it is kept and who can see it">
           <p>
             Your data is stored with Supabase (a database and private file storage). Every row and file is locked to your account, so nobody else
-            using Ekagra can see it. Connections are encrypted (HTTPS). As the app's operator, the founder has administrator access to the
+            using Ekagra can see it, except the numbers you chose to share with your partners and groups. Connections are encrypted (HTTPS). As the app's operator, the founder has administrator access to the
             database; it is used to run the app (for example to read feedback or fix a problem), not to browse your data.
           </p>
         </Section>
@@ -186,8 +209,8 @@ export function PrivacyPage() {
               <strong>Display over other apps</strong>: shows the blocker screen on top of a blocked app.
             </li>
             <li>
-              <strong>Notifications</strong>: FocusGuard's "focus is on" notification, the Launchpad's time's-up reminder and the weekly review
-              reminder.
+              <strong>Notifications</strong>: FocusGuard's "focus is on" notification, the Launchpad's time's-up reminder, the weekly review
+              reminder, and nudges and group focus from friends while the app is in the background.
             </li>
             <li>
               <strong>Microphone</strong>: records your answer during speaking practice, only after you tap Start speaking.

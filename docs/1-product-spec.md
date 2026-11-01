@@ -296,9 +296,20 @@ Each hustle has a goal (e.g. "first ₹10,000 by January"), phases with steps fr
 - **Burnout guard:** several low-energy days in a row → lighter plan and a check-in message.
 - Health features are not medical advice, and the app says so.
 
-## 15. Accountability and friends (P2)
+## 15. Accountability and friends (P2; built in M15)
 - **Accountability partner:** share chosen stats (focus hours, streak, plan completion), send nudges, weekly check-in.
+  - As built (Me → Partner and groups):
+    - Sharing starts only when the student taps Start sharing. They pick a name and which numbers: focus minutes this week, study streak (days with 15+ focus minutes), plan done %, and studying now.
+    - Partners connect with a one-time code (7 days; up to 5 partners) and see each other's numbers.
+    - Nudges are Time to study, Cheer and Check in; 3 a day to each friend. They show on Today, and as an Android notification when the app is in the background.
 - **Friend groups:** see who's studying now, start group focus sessions, opt-in weekly leaderboard of focus minutes.
+  - As built:
+    - Groups are joined with a code (up to 30 students) and show who's studying now (until when).
+    - A group focus of 25, 50 or 90 minutes can be joined for the minutes left, from the group or a Today card.
+    - The leaderboard of this week's focus minutes shows only members who opted in.
+    - Changes arrive at once through Supabase Realtime.
+  - Demo Mode shows a sample partner and a sample group.
+- **Studio Bridge to Ekagra Studio** (M15): an AI Anchor opens in Ekagra Studio (App #2) in one tap, and Studio can hand anchors back. Links, an Android deep link, a BroadcastChannel and Realtime are described in docs/2.
 - Share notes and flashcard decks with the group, not uploaded books (copyright).
 
 ## 16. Me: progress, settings and customization
