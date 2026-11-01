@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { DataSource } from '@/lib/dataSource'
 import { demoDb } from '@/lib/demoDb'
 import { stubLocalStorage } from '@/test/memoryStorage'
-import { listSnapshots, syncMetrics } from './metricsData'
+import { changeChallenge, listChallenges, listSnapshots, syncMetrics } from './metricsData'
 
 stubLocalStorage()
 
@@ -32,9 +32,33 @@ describe('weekly metric snapshots in Demo Mode', () => {
     expect(await listSnapshots(DEMO)).toHaveLength(1)
   })
 
-  it('saves nothing for weeks without any practice', async () => {
+  it('saves nothing for weeks without any practice (and has no challenge to set yet)', async () => {
     const view = await syncMetrics(DEMO, NOW)
     expect(view.snapshots).toEqual([])
     expect(view.thisWeek.focusMinutes).toBe(0)
+    expect(view.challenge).toBeNull()
+  })
+})
+
+describe('the weekly challenge in Demo Mode', () => {
+  it('starts on the first measured metric and is settled once its week is over', async () => {
+    practiseLastWeek()
+    const first = await syncMetrics(DEMO, NOW)
+    expect(first.challenge).toMatchObject({ week_start: '2026-11-09', metric: 'memory', baseline: 0.8, target: 0.84, achieved: null })
+
+    // A week later: that week had a focus session but no reviews, so memory couldn't be measured (missed).
+    const next = await syncMetrics(DEMO, new Date(2026, 10, 18, 18))
+    expect(next.challenges).toEqual([expect.objectContaining({ week_start: '2026-11-09', achieved: false })])
+    expect(next.challenge).toMatchObject({ week_start: '2026-11-16', metric: 'memory', target: 0.84, baseline: null })
+
+    await syncMetrics(DEMO, new Date(2026, 10, 18, 19))
+    expect(await listChallenges(DEMO)).toHaveLength(2)
+  })
+
+  it('can challenge another metric, with a new target 5% better than its last value', async () => {
+    practiseLastWeek()
+    const view = await syncMetrics(DEMO, NOW)
+    await changeChallenge(DEMO, { id: view.challenge?.id ?? '', metric: 'processing_speed', baseline: 20 })
+    expect(await listChallenges(DEMO)).toEqual([expect.objectContaining({ metric: 'processing_speed', baseline: 20, target: 19 })])
   })
 })

@@ -1,4 +1,4 @@
-import { addDays, format, startOfWeek } from 'date-fns'
+import { addDays, format, parseISO, startOfWeek } from 'date-fns'
 
 // The 4 learning metrics of a week (docs/2-technical-design.md §9), worked out from what the
 // student did. Pure functions, tested on their own.
@@ -21,6 +21,13 @@ export const METRIC_LABEL: Record<Metric, string> = {
 
 /** Only processing speed (seconds per answer) is better when it goes down. */
 export const LOWER_IS_BETTER: Record<Metric, boolean> = { memory: false, learning_speed: false, processing_speed: true, problem_solving: false }
+
+export function toMetric(value: string): Metric {
+  return (METRICS as readonly string[]).includes(value) ? (value as Metric) : 'memory'
+}
+
+/** The 4 metrics of a week by name; null = not enough practice to say. */
+export type MetricValues = Record<Metric, number | null>
 
 /** Fewer answers than this say nothing yet. */
 const MIN_MEMORY = 5
@@ -140,6 +147,56 @@ export function weekMetrics(inputs: MetricInputs, weekStart: Date): WeekMetrics 
 export function hasActivity(metrics: WeekMetrics): boolean {
   const { reviews, retests, timedAnswers, firstTries, learnedTopics } = metrics.details
   return metrics.focusMinutes > 0 || reviews + retests + timedAnswers + firstTries + learnedTopics > 0
+}
+
+/** This week's (live) metrics by name. */
+export function weekValues(week: Pick<WeekMetrics, 'memory' | 'learningSpeed' | 'processingSpeed' | 'problemSolving'>): MetricValues {
+  return { memory: week.memory, learning_speed: week.learningSpeed, processing_speed: week.processingSpeed, problem_solving: week.problemSolving }
+}
+
+const numberOrNull = (value: number | string | null) => (value === null ? null : Number(value))
+
+/** A saved week's metrics by name (the database may send numbers as text). */
+export function snapshotValues(row: Record<Metric, number | string | null>): MetricValues {
+  return {
+    memory: numberOrNull(row.memory),
+    learning_speed: numberOrNull(row.learning_speed),
+    processing_speed: numberOrNull(row.processing_speed),
+    problem_solving: numberOrNull(row.problem_solving),
+  }
+}
+
+export interface WeekPoint {
+  weekStart: string
+  values: MetricValues
+  focusMinutes: number
+  /** This week, still going. */
+  live: boolean
+}
+
+const NO_VALUES: MetricValues = { memory: null, learning_speed: null, processing_speed: null, problem_solving: null }
+
+/** The last `weeks` weeks up to this one, oldest first: saved weeks, weeks without practice (gaps) and this week so far. */
+export function weekPoints(
+  snapshots: (Record<Metric, number | string | null> & { week_start: string; focus_minutes: number })[],
+  thisWeek: WeekMetrics,
+  weeks = 9,
+): WeekPoint[] {
+  const byWeek = new Map(snapshots.map((snapshot) => [snapshot.week_start, snapshot]))
+  const start = parseISO(thisWeek.weekStart)
+  return Array.from({ length: weeks }, (_, index): WeekPoint => {
+    const weekStart = format(addDays(start, -7 * (weeks - 1 - index)), 'yyyy-MM-dd')
+    if (index === weeks - 1) return { weekStart, values: weekValues(thisWeek), focusMinutes: thisWeek.focusMinutes, live: true }
+    const saved = byWeek.get(weekStart)
+    return { weekStart, values: saved ? snapshotValues(saved) : NO_VALUES, focusMinutes: saved?.focus_minutes ?? 0, live: false }
+  })
+}
+
+/** Short, for chart axes: "86%", "1.2×", "14 s". */
+export function metricShortLabel(metric: Metric, value: number): string {
+  if (metric === 'learning_speed') return `${value.toFixed(1)}×`
+  if (metric === 'processing_speed') return `${Math.round(value)} s`
+  return `${Math.round(value * 100)}%`
 }
 
 /** A metric's value in words, e.g. "86%", "1.2× the plan", "14 s". */

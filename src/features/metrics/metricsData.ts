@@ -1,14 +1,15 @@
 import type { PostgrestError } from '@supabase/supabase-js'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { addDays, format } from 'date-fns'
 import { dbError, need, useDataSource, type DataSource } from '@/lib/dataSource'
 import { demoDb } from '@/lib/demoDb'
-import type { Tables } from '@/types/database'
-import { hasActivity, weekMetrics, weekStartOf, type MetricInputs, type WeekMetrics } from './metrics'
+import type { Tables, TablesUpdate } from '@/types/database'
+import { isOnTarget, planChallenge, startTarget, type ChallengeWeek } from './challenge'
+import { hasActivity, snapshotValues, toMetric, weekMetrics, weekStartOf, type Metric, type MetricInputs, type WeekMetrics } from './metrics'
 
 // The learning metrics over time: each finished week is saved once (metric_snapshots), so the
-// Progress screen and the weekly challenge can compare weeks; this week is worked out live.
-// Supabase or (Demo Mode) the device.
+// Progress screen and the weekly challenge (challenges, one per week) can compare weeks; this
+// week is worked out live. Supabase or (Demo Mode) the device.
 
 export type Snapshot = Tables<'metric_snapshots'>
 
@@ -100,14 +101,87 @@ export async function saveSnapshot(source: DataSource, metrics: WeekMetrics): Pr
   if (error) throw dbError(error)
 }
 
+export type ChallengeRow = Tables<'challenges'>
+
+export async function listChallenges(source: DataSource): Promise<ChallengeRow[]> {
+  const byWeek = (a: ChallengeRow, b: ChallengeRow) => a.week_start.localeCompare(b.week_start)
+  if (source.kind === 'demo') return demoDb.list('challenges').sort(byWeek)
+  const { data, error } = await source.client.from('challenges').select('*').eq('user_id', source.userId).order('week_start')
+  if (error) throw dbError(error)
+  return data.sort(byWeek)
+}
+
+async function updateChallenge(source: DataSource, id: string, patch: TablesUpdate<'challenges'>): Promise<void> {
+  if (source.kind === 'demo') {
+    demoDb.update('challenges', id, patch)
+    return
+  }
+  const { error } = await source.client.from('challenges').update(patch).eq('id', id)
+  if (error) throw dbError(error)
+}
+
+/** Adds this week's challenge (one per week: if another device just added it, that one stays). */
+async function addChallenge(source: DataSource, row: { week_start: string; metric: Metric; baseline: number | null; target: number }): Promise<void> {
+  if (source.kind === 'demo') {
+    if (!demoDb.list('challenges').some((challenge) => challenge.week_start === row.week_start)) demoDb.insert('challenges', [row])
+    return
+  }
+  const { error } = await source.client.from('challenges').upsert({ ...row, user_id: source.userId }, { onConflict: 'user_id,week_start', ignoreDuplicates: true })
+  if (error) throw dbError(error)
+}
+
+/**
+ * Settles the challenges of finished weeks (on target or not, from their snapshot; no snapshot =
+ * no practice = missed) and sets this week's when there's none yet.
+ */
+export async function syncChallenges(source: DataSource, snapshots: Snapshot[], thisWeek: string): Promise<{ challenge: ChallengeRow | null; challenges: ChallengeRow[] }> {
+  const measured = new Map(snapshots.map((snapshot) => [snapshot.week_start, snapshotValues(snapshot)]))
+  const saved = await listChallenges(source)
+  let changed = false
+  const settled: ChallengeRow[] = []
+  for (const row of saved) {
+    if (row.achieved !== null || row.week_start >= thisWeek) {
+      settled.push(row)
+      continue
+    }
+    const metric = toMetric(row.metric)
+    const achieved = isOnTarget(metric, measured.get(row.week_start)?.[metric] ?? null, Number(row.target))
+    await updateChallenge(source, row.id, { achieved })
+    settled.push({ ...row, achieved })
+    changed = true
+  }
+  if (!settled.some((row) => row.week_start === thisWeek)) {
+    const finished: ChallengeWeek[] = settled.map((row) => {
+      const metric = toMetric(row.metric)
+      return { metric, target: Number(row.target), achieved: row.achieved, value: measured.get(row.week_start)?.[metric] ?? null }
+    })
+    const latest = snapshots[snapshots.length - 1]
+    const plan = planChallenge(finished, latest ? snapshotValues(latest) : null)
+    if (plan) {
+      await addChallenge(source, { week_start: thisWeek, ...plan })
+      changed = true
+    }
+  }
+  const rows = changed ? await listChallenges(source) : settled
+  return { challenge: rows.find((row) => row.week_start === thisWeek) ?? null, challenges: rows.filter((row) => row.week_start < thisWeek) }
+}
+
 export interface MetricsView {
   /** Finished weeks, oldest first. */
   snapshots: Snapshot[]
   /** This week so far (not saved until it's over). */
   thisWeek: WeekMetrics
+  /** This week's challenge; null while nothing could be measured yet. */
+  challenge: ChallengeRow | null
+  /** Earlier challenges, oldest first. */
+  challenges: ChallengeRow[]
 }
 
-/** Saves the snapshots missing for the last finished weeks (only weeks with some practice) and works out this week. */
+/**
+ * Saves the snapshots missing for the last finished weeks (only weeks with some practice), works
+ * out this week, then settles and sets the weekly challenge (in that order, so a challenge is only
+ * judged once its week is saved).
+ */
 export async function syncMetrics(source: DataSource, now = new Date()): Promise<MetricsView> {
   const thisWeekStart = weekStartOf(now)
   const [inputs, saved] = await Promise.all([loadMetricInputs(source, addDays(thisWeekStart, -7 * WEEKS_BACK)), listSnapshots(source)])
@@ -121,7 +195,9 @@ export async function syncMetrics(source: DataSource, now = new Date()): Promise
     await saveSnapshot(source, metrics)
     added = true
   }
-  return { snapshots: added ? await listSnapshots(source) : saved, thisWeek: weekMetrics(inputs, thisWeekStart) }
+  const snapshots = added ? await listSnapshots(source) : saved
+  const thisWeek = weekMetrics(inputs, thisWeekStart)
+  return { snapshots, thisWeek, ...(await syncChallenges(source, snapshots, thisWeek.weekStart)) }
 }
 
 export function useMetrics() {
@@ -130,5 +206,21 @@ export function useMetrics() {
     queryKey: metricsKey(owner),
     queryFn: () => syncMetrics(need(source)),
     enabled: source !== null,
+  })
+}
+
+/** Challenges another metric this week; its target starts 5% better than its last measured value. */
+export async function changeChallenge(source: DataSource, { id, metric, baseline }: { id: string; metric: Metric; baseline: number }): Promise<void> {
+  await updateChallenge(source, id, { metric, baseline, target: startTarget(metric, baseline) })
+}
+
+export function useChangeChallenge() {
+  const { source, owner } = useDataSource()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (change: { id: string; metric: Metric; baseline: number }) => changeChallenge(need(source), change),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: metricsKey(owner) })
+    },
   })
 }

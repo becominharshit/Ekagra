@@ -50,6 +50,7 @@ const SCREENS: [path: string, name: string][] = [
   ['/academics/subjects/:subjectId/mock', 'Mock test'],
   ['/academics/attendance', 'Attendance'],
   ['/academics/grades', 'Grades'],
+  ['/academics/progress', 'Progress'],
   ['/academics/library', 'PDF library'],
   ['/academics/library/:materialId', 'PDF viewer'],
   ['/academics/review', 'Review'],

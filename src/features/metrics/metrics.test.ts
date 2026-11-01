@@ -1,5 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { hasActivity, median, metricValueLabel, weekMetrics, weekStartOf, type MetricInputs } from './metrics'
+import {
+  hasActivity,
+  median,
+  metricShortLabel,
+  metricValueLabel,
+  toMetric,
+  weekMetrics,
+  weekPoints,
+  weekStartOf,
+  weekValues,
+  type Metric,
+  type MetricInputs,
+} from './metrics'
 
 // The week of Monday 2 November 2026 (local time).
 const WEEK = new Date(2026, 10, 2)
@@ -93,6 +105,27 @@ describe('weekMetrics', () => {
     const metrics = weekMetrics({ ...empty, focus: [{ started_at: at(3), actual_minutes: 50 }, { started_at: at(8, 20), actual_minutes: 25 }, { started_at: at(9), actual_minutes: 30 }] }, WEEK)
     expect(metrics.focusMinutes).toBe(75)
     expect(hasActivity(metrics)).toBe(true)
+  })
+})
+
+describe('weeks for charts', () => {
+  it('lines up saved weeks, weeks without practice and this week so far, oldest first', () => {
+    const thisWeek = weekMetrics({ ...empty, focus: [{ started_at: at(10), actual_minutes: 40 }] }, new Date(2026, 10, 9))
+    const saved = { week_start: '2026-10-26', memory: '0.8500', learning_speed: null, processing_speed: 21.5, problem_solving: null, focus_minutes: 120 }
+    const points = weekPoints([saved], thisWeek, 3)
+    expect(points.map((point) => [point.weekStart, point.values.memory, point.focusMinutes, point.live])).toEqual([
+      ['2026-10-26', 0.85, 120, false],
+      ['2026-11-02', null, 0, false],
+      ['2026-11-09', null, 40, true],
+    ])
+    expect(points[0]?.values.processing_speed).toBe(21.5)
+  })
+
+  it('reads metric names and writes short labels', () => {
+    expect(toMetric('problem_solving')).toBe('problem_solving')
+    expect(toMetric('iq')).toBe('memory')
+    expect(weekValues({ memory: 0.9, learningSpeed: 1.2, processingSpeed: null, problemSolving: 0.5 })).toEqual({ memory: 0.9, learning_speed: 1.2, processing_speed: null, problem_solving: 0.5 })
+    expect(['memory', 'learning_speed', 'processing_speed'].map((metric, index) => metricShortLabel(metric as Metric, [0.864, 1.25, 14.4][index] ?? 0))).toEqual(['86%', '1.3×', '14 s'])
   })
 })
 
