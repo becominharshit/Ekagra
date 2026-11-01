@@ -29,9 +29,16 @@ const plannerSchema = z.looseObject({
   peakEnd: timeOfDay.optional().catch(undefined),
 })
 
+const learningSchema = z.looseObject({
+  newCardsPerDay: z.number().int().min(0).max(200).catch(20),
+  /** How many flashcards you should still remember when they come back (FSRS), 80–95%. */
+  targetRetention: z.number().min(0.8).max(0.95).catch(0.9),
+})
+
 export const settingsSchema = z.looseObject({
   budget: budgetSchema.catch(() => ({ ...STANDARD_BUDGET })),
   planner: plannerSchema.catch(() => plannerSchema.parse({})),
+  learning: learningSchema.catch(() => learningSchema.parse({})),
 })
 
 export type Settings = z.infer<typeof settingsSchema>

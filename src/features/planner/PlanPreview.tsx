@@ -3,6 +3,8 @@ import { addDays as addCalendarDays, format } from 'date-fns'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { useFlashcards } from '@/features/flashcards/flashcards'
+import { reviewMinutesByDay } from '@/features/flashcards/fsrs'
 import { MODE_TONE, type Mode } from '@/features/mode/modes'
 import { toPlannerRoutine } from '@/features/onboarding/routineDraft'
 import { useProfile, useRoutine } from '@/features/profile/queries'
@@ -33,6 +35,7 @@ export function PlanPreview() {
   const profile = useProfile()
   const routine = useRoutine()
   const study = useStudyData()
+  const cards = useFlashcards()
   const [showTomorrow, setShowTomorrow] = useState(false)
 
   const today = format(now, 'yyyy-MM-dd')
@@ -41,6 +44,7 @@ export function PlanPreview() {
   const plan = useMemo(() => {
     if (!profile.data || !routine.data || !study.data) return null
     const chronotype = toChronotype(profile.data.chronotype)
+    const settings = readSettings(profile.data.settings)
     return buildPlan({
       today,
       nowMinute,
@@ -49,10 +53,12 @@ export function PlanPreview() {
       subjects: study.data.subjects,
       topics: study.data.topics,
       tasks: [],
+      // Flashcards due each day (and new ones at the daily limit) become a review block.
+      reviewMinutes: cards.data ? reviewMinutesByDay(cards.data, today, 14, settings.learning.newCardsPerDay) : undefined,
       checkIns: [],
-      settings: plannerSettingsFor(readSettings(profile.data.settings), chronotype),
+      settings: plannerSettingsFor(settings, chronotype),
     })
-  }, [profile.data, routine.data, study.data, today, nowMinute])
+  }, [profile.data, routine.data, study.data, cards.data, today, nowMinute])
 
   if (!plan) return null
   const hasTopics = (study.data?.topics.length ?? 0) > 0

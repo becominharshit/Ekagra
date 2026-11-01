@@ -54,6 +54,14 @@ export const router = createBrowserRouter([
             path: 'academics/library/:materialId',
             lazy: async () => ({ Component: (await import('@/pages/PdfViewerPage')).PdfViewerPage }),
           },
+          {
+            path: 'academics/review',
+            lazy: async () => ({ Component: (await import('@/pages/ReviewPage')).ReviewPage }),
+          },
+          {
+            path: 'academics/cards',
+            lazy: async () => ({ Component: (await import('@/pages/FlashcardsPage')).FlashcardsPage }),
+          },
           { path: 'hustle', element: <HustlePage /> },
           { path: 'life', element: <LifePage /> },
           { path: 'me', element: <MePage /> },

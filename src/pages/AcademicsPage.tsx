@@ -13,10 +13,10 @@ import { SubjectDialog } from '@/features/academics/SubjectDialog'
 import { useAcademicsMutation, useSubjects } from '@/features/academics/subjects'
 import { priorityLabels } from '@/features/academics/topicTree'
 import { useAuthStore } from '@/features/auth/authStore'
+import { FlashcardsCard } from '@/features/flashcards/FlashcardsCard'
 import { useNow } from '@/hooks/useNow'
 
 const COMING = [
-  { title: 'Flashcard reviews (FSRS)', when: 'M3' },
   { title: 'Mistake notebook (1 → 3 → 7 days)', when: 'M3' },
   { title: 'Python Coding Lab', when: 'M3' },
   { title: 'Lessons and check quizzes', when: 'M3' },
@@ -28,7 +28,8 @@ export function AcademicsPage() {
   const subjects = useSubjects()
   const study = useStudy()
   const [adding, setAdding] = useState(false)
-  const today = format(useNow(60_000), 'yyyy-MM-dd')
+  const now = useNow(60_000)
+  const today = format(now, 'yyyy-MM-dd')
   const samples = useAcademicsMutation<void, void>((source) => addSampleSubjects(source, today))
 
   const topicsOf = (subjectId: string) =>
@@ -50,6 +51,8 @@ export function AcademicsPage() {
             </Link>
           </Button>
         </div>
+
+        <FlashcardsCard now={now} />
 
         {subjects.isPending && (
           <p className="flex items-center gap-2 text-sm text-muted-foreground">

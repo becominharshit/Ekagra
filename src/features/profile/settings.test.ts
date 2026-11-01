@@ -21,10 +21,20 @@ describe('readSettings', () => {
     }
   })
 
+  it('reads the flashcard settings, with 20 new cards a day and 90% retention by default', () => {
+    expect(readSettings({}).learning).toEqual({ newCardsPerDay: 20, targetRetention: 0.9 })
+    expect(readSettings({ learning: { newCardsPerDay: 10, targetRetention: 0.99, language: 'en' } }).learning).toEqual({
+      newCardsPerDay: 10,
+      targetRetention: 0.9, // 99% is outside 80–95%
+      language: 'en',
+    })
+  })
+
   it('keeps settings it does not know about yet (focus, tollbooth, theme …)', () => {
     const saved = {
       budget: { academics: 55, hustle: 25, life: 20 },
       planner: PLANNER_DEFAULTS,
+      learning: { newCardsPerDay: 20, targetRetention: 0.9, language: 'en' },
       focus: { pomodoro: { work: 25, break: 5 } },
       tollbooth: { questions: 3 },
       theme: 'dark',
