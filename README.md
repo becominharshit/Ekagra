@@ -28,6 +28,7 @@ An AI mentor app for college students. It turns your syllabus, books and lecture
 | College portal | No API → capture tasks by typing, screenshot, share or email |
 | Distraction control | Block chosen apps during focus sessions (Android); emergency unlock only through the Academic Tollbooth (3 quick questions → 3 minutes) |
 | AI features | All six: syllabus → roadmap, PDF/video → lessons and quizzes, AI tutor, coding practice, past-paper patterns, adaptive challenge |
+| AI provider | Claude (Anthropic) only: Claude Sonnet 5.5 for Smart tasks, Claude Haiku 5.5 for Fast ones (since 2026-11-02; Gemini before) |
 | Life section | Phase 1: routine blocks and the evening energy check-in; habits and the full section (gym, diet, sleep, communication) in Phase 2 |
 | Side hustles | Phase 1 templates: freelancing, content creation, startup, part-time / tutoring, custom |
 | Integrations | Google Calendar/Gmail/Drive, YouTube/Instagram, payments, GitHub/Notion, freelance platforms |
@@ -166,3 +167,21 @@ Add a dated line whenever an important decision is made or changed.
   - The student checks the words in one box (typed answers use the same box), then picks **Get feedback** (AI) or **Count my pace and fillers** (device).
 
   **The request:** the words (`captured: 'speech' | 'typed'`), the length, and the pace and fillers counted on the device. The prompt says the model can't hear the voice, that speech-to-text drops um/uh and mishears words (never marked down), and never to comment on accent. The privacy page says so too.
+- 2026-11-02: This repo uses **Claude only** (Anthropic), through `@ai-sdk/anthropic` 4.0.94 (approved), which replaces `@ai-sdk/google`. `AI_PROVIDER` takes only `anthropic`, and only the API key must be set. **Models:**
+  - Smart = `claude-sonnet-5-5` ($2/$10 per million tokens), Fast = `claude-haiku-5-5` ($0.10/$0.50).
+  - Not the 4.5 models: `claude-sonnet-4-5` retires on 30 November 2026, and Haiku 5.5 costs a tenth of Haiku 4.5.
+  - A model name that isn't Claude is a setup error that names the secret.
+  - Prices of the current models are built in (`KNOWN_PRICES`, with Haiku 5.5's higher price for prompts over 100,000 tokens). Each try is priced on its own; other models need `AI_PRICE_*`.
+
+  **Thinking:** `AI_REASONING_SMART=low` and `AI_REASONING_FAST=none` (the AI SDK's `reasoning`). Sonnet 5.5 would otherwise think at high effort by default: slower, and paid as output. Answers can be up to 32,000 tokens.
+
+  **Answers:**
+  - They come as Anthropic structured output. The provider drops what Anthropic refuses (min/max, lengths, item counts) and Zod still checks them.
+  - `anthropic.test.ts` runs the real provider without a network: images go as `image` blocks, PDFs as `document` blocks, speaking as text only, and every answer shape fits (no refused keywords; at most 16 nullable and 10 optional fields).
+
+  **Errors:**
+  - A refused key (401/403) says to check `AI_API_KEY`.
+  - Busy or limits (429, 529, and the 400 for a Console spend limit, also after the SDK's own retries) say "busy or has reached its spending limit".
+  - Only the status and Anthropic's message are logged, never the prompt.
+
+  **Privacy:** the Privacy and Account pages name Anthropic's Claude and its Commercial Terms (no training on API data by default).

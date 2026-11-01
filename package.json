@@ -46,7 +46,7 @@
     "zustand": "^5.0.16"
   },
   "devDependencies": {
-    "@ai-sdk/google": "4.0.109",
+    "@ai-sdk/anthropic": "4.0.94",
     "@capacitor/cli": "^8.6.0",
     "@electric-sql/pglite": "^0.5.14",
     "@tailwindcss/vite": "^4.3.3",

@@ -37,10 +37,10 @@ describe('ai-speak', () => {
       scores: { clarity: 7, structure: 6, vocabulary: 7, confidence: 5 },
       strength: 'You named a clear goal.',
       tips: ['Pause instead of saying basically.', 'End with why you fit the role.'],
-      model: 'fast-model',
+      model: 'claude-fast-test',
       promptVersion: 'speak-v2',
     })
-    expect(usage.logged).toEqual([expect.objectContaining({ feature: 'speak', model: 'fast-model' })])
+    expect(usage.logged).toEqual([expect.objectContaining({ feature: 'speak', model: 'claude-fast-test' })])
   })
 
   it("sends the words as text with the app's counts, the kind of speech and the question (never obeyed)", async () => {

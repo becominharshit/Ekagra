@@ -71,8 +71,8 @@ describe('ai-review', () => {
   it('writes 3 insights and up to 3 changes on the Smart tier, and logs the usage', async () => {
     const { response, usage } = await call(REQUEST, ANSWER)
     expect(response.status).toBe(200)
-    expect(await response.json()).toEqual({ ...ANSWER, model: 'smart-model', promptVersion: 'review-v2' })
-    expect(usage.logged).toEqual([expect.objectContaining({ feature: 'review', model: 'smart-model' })])
+    expect(await response.json()).toEqual({ ...ANSWER, model: 'claude-smart-test', promptVersion: 'review-v2' })
+    expect(usage.logged).toEqual([expect.objectContaining({ feature: 'review', model: 'claude-smart-test' })])
   })
 
   it('gives the model the numbers, the settings, the challenge and the list of changes it may use', async () => {

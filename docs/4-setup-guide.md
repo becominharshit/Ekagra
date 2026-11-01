@@ -162,14 +162,19 @@ Health Connect, the microphone and the camera only work on a phone. Try Android 
 4. **Microphone:** Life → **Speaking** → **Start speaking**. Android asks once for the microphone; allow it. Speak for 20 seconds, **Stop** and play it back. The Android app usually can't turn speech into text (the WebView has no speech-to-text), so type what you said in the box, then **Get feedback** (signed in) or **Count my pace and fillers**.
 5. **Camera:** Life → **Meals** → **Take a photo** opens Android's camera; take a photo of food. The estimate appears (a marked sample in Demo Mode).
 
-## 6. AI features (Gemini)
+## 6. AI features (Claude, by Anthropic)
 
 Demo Mode never uses this: there, AI features give sample answers made on the device. Signed-in students get real answers once these steps are done.
 
-1. Get a Gemini API key at https://aistudio.google.com/apikey (**Create API key**).
-2. Copy `supabase/functions/.env.example` to `supabase/functions/.env` (it is git-ignored) and paste the key after `AI_API_KEY=`. Model names and prices are already filled in; the file links to Google's pages to check them.
+1. Get an Anthropic API key. Sign in at https://platform.claude.com and open **API keys** (https://platform.claude.com/settings/keys) → **Create key**.
+   - Pick a long expiration: when the key expires, the AI stops until you set a new one.
+   - Copy the key now: it starts with `sk-ant-` and is shown only once.
+   - Under **Billing** (https://platform.claude.com/settings/billing), add credits; the API is pay-as-you-go. You can also set a monthly spend limit there, a second safety net next to the app's own budget.
+2. Copy `supabase/functions/.env.example` to `supabase/functions/.env` (it is git-ignored) and paste the key after `AI_API_KEY=`. Everything else is already filled in: Claude Sonnet 5.5 for Smart tasks, Claude Haiku 5.5 for Fast ones, and how much each thinks first. The app knows their prices; the file links to Anthropic's pages to check them.
 3. Send the secrets to Supabase: `npm run functions:secrets`
 4. Deploy the functions: `npm run functions:deploy` (no Docker needed). Run it again whenever something in `supabase/functions/` changes.
+
+**Had Gemini secrets in Supabase before?** Remove the old model names and prices, then do step 3 again: `npx supabase secrets unset AI_MODEL_SMART AI_MODEL_FAST AI_PRICE_SMART_INPUT AI_PRICE_SMART_OUTPUT AI_PRICE_FAST_INPUT AI_PRICE_FAST_OUTPUT`. A model name that isn't Claude stops the AI with "Check these Edge Function secrets: AI_MODEL_…", and a refused key says "Anthropic refused the AI key".
 
 **Check:** Supabase → **Edge Functions** lists the 11 AI functions (`ai-syllabus`, `ai-papers`, `ai-tutor`, `ai-generate`, `ai-capture`, `ai-brief`, `ai-hustle`, `ai-grade`, `ai-review`, `ai-meal`, `ai-speak`) and 2 without AI: `ai-usage` (the AI usage card on Me) and `account-delete` (wiping data and deleting accounts). Those 2 need no AI secrets, but they must be deployed. **Edge Functions → Secrets** lists the `AI_…` names. Then, signed in: import a syllabus (Academics → a subject → Import syllabus), open a topic → **Make my lesson**, add a screenshot of the portal with the **+** button, and tap refresh on Today's **Morning brief** (it should say "Written by the AI"). **Me → AI usage** then shows those requests, today and this month, with their cost. To try `ai-grade`: Academics → a subject with a past paper → **Mock test** → Start, write an answer or two, **Hand in**: the written answers should say "Marked by the AI". To try `ai-review`: Me → **Weekly review** → **Make my review**; the card should say "written by the AI". To try `ai-meal`: Life → **Meals** → **Choose a photo** (any food photo); the estimate should say "AI estimate". To try `ai-speak`: in Chrome or Edge, Life → **Speaking** → **Start speaking**, answer for 30 seconds (your words show as you speak), **Stop**, check the words, **Get feedback**; the session should say "feedback from the AI", with scores.
 

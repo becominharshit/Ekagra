@@ -29,7 +29,7 @@ describe('ai-syllabus', () => {
     const answer = await response
     expect(answer.status).toBe(200)
     expect(await answer.json()).toEqual(TREE)
-    expect(usage.logged).toEqual([expect.objectContaining({ feature: 'syllabus', model: 'smart-model' })])
+    expect(usage.logged).toEqual([expect.objectContaining({ feature: 'syllabus', model: 'claude-smart-test' })])
   })
 
   it('tells the model about the student and gives it the syllabus text', async () => {

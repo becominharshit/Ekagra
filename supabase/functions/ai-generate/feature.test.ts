@@ -64,8 +64,8 @@ describe('ai-generate', () => {
   it('returns the lesson, check questions and flashcards, made with the Fast model', async () => {
     const { response, usage } = await call(REQUEST, JSON.stringify(GOOD))
     expect(response.status).toBe(200)
-    expect(await response.json()).toEqual({ ...GOOD, model: 'fast-model', promptVersion: 'generate-v1' })
-    expect(usage.logged).toEqual([expect.objectContaining({ feature: 'generate', model: 'fast-model' })])
+    expect(await response.json()).toEqual({ ...GOOD, model: 'claude-fast-test', promptVersion: 'generate-v1' })
+    expect(usage.logged).toEqual([expect.objectContaining({ feature: 'generate', model: 'claude-fast-test' })])
   })
 
   it('tells the model about the topic, what came before and how it was asked in past papers', async () => {

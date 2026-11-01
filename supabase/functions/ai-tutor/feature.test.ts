@@ -26,10 +26,10 @@ describe('ai-tutor', () => {
     expect(await response.json()).toEqual({
       answerMd: 'BCNF means **every** determinant is a superkey [p. 42].',
       flashcards: [], // only the flashcards action keeps cards
-      model: 'fast-model',
+      model: 'claude-fast-test',
       promptVersion: 'tutor-v1',
     })
-    expect(usage.logged[0]).toMatchObject({ feature: 'anchor', model: 'fast-model' })
+    expect(usage.logged[0]).toMatchObject({ feature: 'anchor', model: 'claude-fast-test' })
     const prompt = JSON.stringify(model.doGenerateCalls[0]?.prompt)
     expect(prompt).toContain('Page 42 of \\"DBMS notes\\" (DBMS)')
     expect(prompt).toContain('Selected text')

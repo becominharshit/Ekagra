@@ -31,7 +31,7 @@ describe('ai-grade', () => {
       ['a2', 1.5],
     ])
     expect(body.promptVersion).toBe('grade-v1')
-    expect(usage.logged).toEqual([expect.objectContaining({ feature: 'grade', model: 'fast-model' })])
+    expect(usage.logged).toEqual([expect.objectContaining({ feature: 'grade', model: 'claude-fast-test' })])
   })
 
   it('asks again when a grade is missing or above the marks', async () => {

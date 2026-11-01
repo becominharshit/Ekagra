@@ -103,12 +103,15 @@ VITE_SUPABASE_URL=
 VITE_SUPABASE_PUBLISHABLE_KEY=      # called "anon key" in older Supabase projects
 VITE_CONTACT_EMAIL=                 # optional: the contact on the privacy page (M10)
 
-# Edge Function secrets (set with the Supabase CLI or dashboard)
-AI_PROVIDER=                        # e.g. google
-AI_API_KEY=
-AI_MODEL_SMART=                     # top model: syllabus, past papers, weekly review
-AI_MODEL_FAST=                      # cheap model: lessons, quizzes, capture, tutor, OCR
-AI_MODEL_EMBED=                     # embedding model
+# Edge Function secrets (supabase/functions/.env → npm run functions:secrets; template in .env.example)
+AI_PROVIDER=anthropic               # Claude only (2026-11-02)
+AI_API_KEY=                         # Anthropic API key, sk-ant-…
+AI_MODEL_SMART=claude-sonnet-5-5    # top model: syllabus, past papers, weekly review, hustle plans
+AI_MODEL_FAST=claude-haiku-5-5      # cheap model: lessons, quizzes, capture, tutor, brief, marking, meals, speaking
+AI_REASONING_SMART=low              # how much the model thinks first: none, low, medium, high
+AI_REASONING_FAST=none
+AI_PRICE_SMART_INPUT=               # …and the other 3 prices: only for a model the app doesn't know
+AI_MODEL_EMBED=                     # embedding model (not built yet; Anthropic has none, so another provider)
 AI_MONTHLY_BUDGET_USD=10
 AI_USER_DAILY_REQUESTS=150
 YOUTUBE_API_KEY=
@@ -295,9 +298,14 @@ Model names change often, so the code only knows **tiers**; real model IDs live 
 | **Fast** (cheap model) | Lessons, quizzes, flashcards, task capture, OCR, tutor, grading, hints, morning brief | High |
 | **Embedding** | Search inside materials (tutor, topic mapping) | High but very cheap |
 
-**Starting suggestion for $10/month:** use one provider at first. Google's Gemini models fit well: a free tier for development, cheap fast models, and they read PDFs, images, audio and YouTube links directly. Keep the code provider-agnostic so the Smart tier can later switch to Claude, GPT or another top model. Check current models and prices before choosing.
+**As built (2026-11-02): Claude only**, through `@ai-sdk/anthropic` (Gemini was used before). The defaults:
+- **Smart:** `claude-sonnet-5-5` ($2 / $10 per million tokens), thinking a little first (`reasoning: 'low'`).
+- **Fast:** `claude-haiku-5-5` ($0.10 / $0.50, and $0.50 / $2.50 for a prompt over 100,000 tokens), answering straight away (`reasoning: 'none'`). Sonnet 5.5 can't switch thinking off; 'none' gives it no thinking before the answer.
+- **What Claude reads:** text, images (JPEG, PNG, WebP; up to 10 MB of base64 each, shrunk past 2,576 px) and PDFs (up to 600 pages). It doesn't read audio or video, so speaking practice sends the words as text (§7.3 n).
+- **Answer shapes:** answers come as Anthropic structured output (`output_config.format`). The provider removes what Anthropic can't take (minimum and maximum, lengths, item counts) and Zod still checks them; Anthropic allows at most 16 nullable and 24 optional fields. `_shared/anthropic.test.ts` checks every answer shape against that, and what each function sends, with the real provider and no network.
+- **Settings:** models, thinking and prices are secrets with these defaults; the known prices are in `_shared/aiCore.ts`. Answers can be up to 32,000 tokens (only what's used is paid).
 
-**Data use:** some free tiers may use your prompts to improve the provider's models. Enable billing (paid tier) before friends upload their material, and read the provider's data terms.
+**Data use:** Anthropic's API doesn't use requests to train its models by default (Commercial Terms). It is paid only (no free tier); set a spend limit in the Claude Console next to the app's own budget.
 
 ### 7.2 Rules for every AI call
 - Goes through `supabase/functions/_shared/ai.ts`, which picks the tier → checks the user's quota → calls the model → validates the JSON with Zod (one retry) → logs tokens and cost in `ai_usage`.
@@ -417,7 +425,7 @@ const TopicTree = z.object({
 - Free text extraction on the device; OCR only for scanned pages.
 - Quotas per user: AI requests per day, OCR pages and video minutes per month. Start strict, loosen with real data.
 - **Me → AI usage** (M10): each student sees their requests in the last 24 hours against the daily limit and this month's cost per AI function (read from their own `ai_usage` rows), next to the whole app's spend over 24 hours and this month (the `ai-usage` Edge Function, which adds it up with the secret key and makes no AI call). Spend per student: a SQL query in the Supabase dashboard (docs/4, step 9).
-- Provider budget alerts usually **don't stop** spending. The app's own quota check is the real limit.
+- The app's own quota check is the first limit (per student, and per 24 hours for the whole app). A spend limit set in the Claude Console is a second one: Anthropic then refuses requests, and the app says the AI service has reached its spending limit.
 
 ## 8. Planner algorithm (P1)
 

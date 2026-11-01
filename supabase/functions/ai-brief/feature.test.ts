@@ -33,8 +33,8 @@ describe('ai-brief', () => {
   it('returns the 3 lines and logs the usage', async () => {
     const { response, usage } = await call(REQUEST, JSON.stringify(LINES))
     expect(response.status).toBe(200)
-    expect(await response.json()).toEqual({ ...LINES, model: 'fast-model', promptVersion: 'brief-v1' })
-    expect(usage.logged).toEqual([expect.objectContaining({ feature: 'brief', model: 'fast-model' })])
+    expect(await response.json()).toEqual({ ...LINES, model: 'claude-fast-test', promptVersion: 'brief-v1' })
+    expect(usage.logged).toEqual([expect.objectContaining({ feature: 'brief', model: 'claude-fast-test' })])
   })
 
   it("gives the model today's plan, deadlines, exams, reviews, the last check-in and the mentor tone", async () => {

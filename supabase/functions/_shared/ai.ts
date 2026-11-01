@@ -1,12 +1,14 @@
-import { createGoogle } from '@ai-sdk/google'
-import { generateText, NoObjectGeneratedError, Output, type LanguageModel, type LanguageModelUsage, type ModelMessage } from 'ai'
+import { createAnthropic } from '@ai-sdk/anthropic'
+import { APICallError, generateText, NoObjectGeneratedError, Output, RetryError, type LanguageModel, type LanguageModelUsage, type ModelMessage } from 'ai'
 import type { z } from 'zod'
 import { AiError, checkQuota, costUsd, dayBefore, type AiConfig, type Tier } from './aiCore.ts'
 
 // The one door every AI call goes through (AGENTS.md):
 //   1. Quota: requests per student per day, and money per day for the whole app.
-//   2. The model for the tier (Smart or Fast); the model names live in the secrets.
-//   3. The answer must match a Zod schema. If it doesn't, the model gets one more try.
+//   2. The Claude model for the tier (Smart or Fast) and how much it thinks first (aiCore.ts).
+//   3. The answer must match a Zod schema. Claude gets the schema as structured output (Anthropic's
+//      `output_config.format`; the provider leaves out the limits Anthropic can't take, such as
+//      maximum lengths, and Zod still checks them). If it doesn't match, the model gets one more try.
 //   4. Tokens and cost are written to ai_usage (one row per request).
 
 export interface UsageEntry {
@@ -59,16 +61,35 @@ export interface AiGatewayOptions {
 const RETRY_INSTRUCTION =
   'Your previous answer did not match the required JSON format. Answer again with JSON that matches the schema exactly.'
 const TIMEOUT_MS = 120_000
+/** Room for the longest answer (a whole syllabus) and the thinking before it; only the tokens used are paid for. */
+export const MAX_OUTPUT_TOKENS = 32_000
 
-function googleModels(apiKey: string): (modelId: string) => LanguageModel {
-  const google = createGoogle({ apiKey })
-  return (modelId) => google(modelId)
+function claudeModels(apiKey: string): (modelId: string) => LanguageModel {
+  const anthropic = createAnthropic({ apiKey })
+  return (modelId) => anthropic(modelId)
+}
+
+/** A failed call as an error the student can act on. Only the status and Anthropic's message are logged, never the prompt. */
+function providerError(error: unknown, modelId: string): AiError {
+  // The AI SDK tries busy and rate-limited calls again by itself, then wraps the last error.
+  const last = RetryError.isInstance(error) ? error.lastError : error
+  const status = APICallError.isInstance(last) ? last.statusCode : undefined
+  const detail = APICallError.isInstance(last) ? (last.responseBody ?? last.message) : last instanceof Error ? last.message : String(last)
+  console.error(`AI request to ${modelId} failed${status ? ` (${status})` : ''}: ${detail.slice(0, 500)}`)
+  if (status === 401 || status === 403) {
+    return new AiError(500, 'not_configured', 'Anthropic refused the AI key. Check the AI_API_KEY secret (docs/4-setup-guide.md, step 6).', { cause: error })
+  }
+  // 429: a rate limit or the plan's monthly cap; 529: overloaded; 400 "…reached your specified API usage limits": the spend limit set in the Console.
+  if (status === 429 || status === 529 || (status === 400 && /usage limits/i.test(detail))) {
+    return new AiError(503, 'provider_busy', 'The AI service is busy or has reached its spending limit. Please try again later.', { cause: error })
+  }
+  return new AiError(502, 'provider_error', 'The AI service did not answer. Please try again in a minute.', { cause: error })
 }
 
 export function createAiGateway(options: AiGatewayOptions): AiGateway {
   const { config, usage } = options
   const now = options.now ?? (() => new Date())
-  const modelFor = options.model ?? googleModels(config.apiKey)
+  const modelFor = options.model ?? claudeModels(config.apiKey)
 
   async function ensureQuota(userId: string): Promise<void> {
     const since = dayBefore(now())
@@ -88,21 +109,24 @@ export function createAiGateway(options: AiGatewayOptions): AiGateway {
       await ensureQuota(task.userId)
 
       const modelId = config.models[task.tier]
-      const tokens = { input: 0, output: 0 }
+      const spent = { input: 0, output: 0, costUsd: 0 }
+      // Each try is priced on its own (a long prompt can cost more per token).
       const count = (used: LanguageModelUsage | undefined) => {
-        tokens.input += used?.inputTokens ?? 0
-        tokens.output += used?.outputTokens ?? 0
+        const tokens = { input: used?.inputTokens ?? 0, output: used?.outputTokens ?? 0 }
+        spent.input += tokens.input
+        spent.output += tokens.output
+        spent.costUsd += costUsd(tokens, config.prices[task.tier])
       }
       // Logging must never break a request: the student already waited for the answer.
       const log = async () => {
-        if (tokens.input + tokens.output === 0) return
+        if (spent.input + spent.output === 0) return
         const entry: UsageEntry = {
           userId: task.userId,
           feature: task.feature,
           model: modelId,
-          inputTokens: tokens.input,
-          outputTokens: tokens.output,
-          costUsd: costUsd(tokens, config.prices[task.tier]),
+          inputTokens: spent.input,
+          outputTokens: spent.output,
+          costUsd: Math.round(spent.costUsd * 1_000_000) / 1_000_000,
         }
         await usage.log(entry).catch((error: unknown) => console.error('Could not log AI usage:', error))
       }
@@ -114,6 +138,8 @@ export function createAiGateway(options: AiGatewayOptions): AiGateway {
             instructions: attempt === 1 ? task.instructions : `${task.instructions}\n\n${RETRY_INSTRUCTION}`,
             prompt: task.prompt,
             output: Output.object({ schema: task.schema }),
+            reasoning: config.reasoning[task.tier],
+            maxOutputTokens: MAX_OUTPUT_TOKENS,
             abortSignal: AbortSignal.timeout(TIMEOUT_MS),
           })
           count(result.usage)
@@ -125,9 +151,7 @@ export function createAiGateway(options: AiGatewayOptions): AiGateway {
             continue
           }
           await log()
-          throw new AiError(502, 'provider_error', 'The AI service did not answer. Please try again in a minute.', {
-            cause: error,
-          })
+          throw providerError(error, modelId)
         }
       }
 

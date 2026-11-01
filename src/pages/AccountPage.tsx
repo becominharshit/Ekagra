@@ -41,7 +41,7 @@ export function AccountPage() {
           <CardHeader>
             <CardTitle>Privacy</CardTitle>
             <CardDescription>
-              Your data is private to your account. AI features send only what a request needs to Google's Gemini, through Ekagra's server. The
+              Your data is private to your account. AI features send only what a request needs to Anthropic's Claude, through Ekagra's server. The
               privacy policy explains it all, with every Android permission.
             </CardDescription>
           </CardHeader>

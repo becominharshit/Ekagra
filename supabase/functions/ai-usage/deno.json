@@ -1,6 +1,6 @@
 {
   "imports": {
-    "@ai-sdk/google": "npm:@ai-sdk/google@4.0.109",
+    "@ai-sdk/anthropic": "npm:@ai-sdk/anthropic@4.0.94",
     "@supabase/supabase-js": "npm:@supabase/supabase-js@2.118.0",
     "ai": "npm:ai@7.0.159",
     "zod": "npm:zod@4.6.7"

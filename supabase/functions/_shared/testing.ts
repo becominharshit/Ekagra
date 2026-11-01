@@ -5,8 +5,8 @@ import type { UsageEntry, UsageStore } from './ai.ts'
 
 export const TEST_SECRETS: Record<string, string> = {
   AI_API_KEY: 'test-key',
-  AI_MODEL_SMART: 'smart-model',
-  AI_MODEL_FAST: 'fast-model',
+  AI_MODEL_SMART: 'claude-smart-test',
+  AI_MODEL_FAST: 'claude-fast-test',
   AI_PRICE_SMART_INPUT: '0.75',
   AI_PRICE_SMART_OUTPUT: '3.75',
   AI_PRICE_FAST_INPUT: '0.30',
@@ -43,7 +43,7 @@ export function modelAnswer(text: string, inputTokens = 1000, outputTokens = 500
   }
 }
 
-/** A fake model that gives these answers in order (the last one repeats). */
+/** A fake model that gives these answers in order, one per call (after the last one it has none). */
 export function fakeModel(...answers: ReturnType<typeof modelAnswer>[]): MockLanguageModelV4 {
   return new MockLanguageModelV4({ doGenerate: answers })
 }

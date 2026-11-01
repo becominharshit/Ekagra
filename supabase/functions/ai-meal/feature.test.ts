@@ -31,7 +31,7 @@ describe('ai-meal', () => {
       [270, 9, 3],
     ])
     expect(body).toMatchObject({ confidence: 'medium', promptVersion: 'meal-v1' })
-    expect(usage.logged).toEqual([expect.objectContaining({ feature: 'meal', model: 'fast-model' })])
+    expect(usage.logged).toEqual([expect.objectContaining({ feature: 'meal', model: 'claude-fast-test' })])
   })
 
   it('sends the photo and the note to the model (the note is never obeyed), and works from a note alone', async () => {

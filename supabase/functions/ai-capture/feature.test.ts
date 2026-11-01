@@ -40,10 +40,10 @@ describe('ai-capture', () => {
     const { response, usage } = await call(REQUEST, JSON.stringify(TASKS))
     expect(response.status).toBe(200)
     const body = await response.json()
-    expect(body).toMatchObject({ model: 'fast-model', promptVersion: 'capture-v2' })
+    expect(body).toMatchObject({ model: 'claude-fast-test', promptVersion: 'capture-v2' })
     expect(body.tasks[0]).toEqual(TASKS.tasks[0])
     expect(body.tasks[1]).toMatchObject({ title: 'Call mom', subjectKey: null, lead: false }) // a lead needs a hustle
-    expect(usage.logged).toEqual([expect.objectContaining({ feature: 'capture', model: 'fast-model' })])
+    expect(usage.logged).toEqual([expect.objectContaining({ feature: 'capture', model: 'claude-fast-test' })])
   })
 
   it('matches hustles and leads; a hustle key that is not in the list becomes null', async () => {

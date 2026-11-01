@@ -30,8 +30,8 @@ describe('ai-hustle', () => {
   it('plans phases, steps (with the skills they need) and board columns on the Smart tier', async () => {
     const { response, usage } = await call(REQUEST, JSON.stringify(PLAN))
     expect(response.status).toBe(200)
-    expect(await response.json()).toEqual({ ...PLAN, model: 'smart-model', promptVersion: 'hustle-v1' })
-    expect(usage.logged).toEqual([expect.objectContaining({ feature: 'hustle', model: 'smart-model' })])
+    expect(await response.json()).toEqual({ ...PLAN, model: 'claude-smart-test', promptVersion: 'hustle-v1' })
+    expect(usage.logged).toEqual([expect.objectContaining({ feature: 'hustle', model: 'claude-smart-test' })])
   })
 
   it("gives the model the student's idea, skill and goal", async () => {
