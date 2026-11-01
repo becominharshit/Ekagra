@@ -124,13 +124,16 @@ Every table has `id uuid`, `created_at` and `updated_at`, and an RLS policy `use
 ── Core ──────────────────────────────────────────────────────────────────────
 profiles            id (= auth user id), full_name, college, program, year, semester,
                     timezone, currency (default INR), chronotype (early|neutral|night),
-                    mentor_tone (strict|balanced|friendly), settings jsonb
+                    mentor_tone (strict|balanced|friendly), settings jsonb (since M12 also
+                    attendance { minPercent, classesEndOn } and grades { scale })
 routine_blocks      user_id, kind (class|sleep|gym|meal|commute|custom), title,
-                    days_of_week int[], start_time, end_time, valid_from, valid_to
+                    days_of_week int[], start_time, end_time, valid_from, valid_to,
+                    subject_id (class blocks: the subject taught then, for attendance; M12)
 daily_checkins      user_id, date, energy 1–5, mood 1–5, top_distraction, note
 
 ── Academics ─────────────────────────────────────────────────────────────────
-subjects            user_id, name, code, semester, exam_date, exam_date_estimated, color
+subjects            user_id, name, code, semester, exam_date, exam_date_estimated, color,
+                    credits, grade (a letter of the grade scale in settings; M12)
 topics              user_id, subject_id, parent_id (unit → topic), title, order_index,
                     track (exam|skill), est_minutes, difficulty 1–5, exam_weight 0–1,
                     pyq_count, pyq_marks_share, priority_score,
@@ -161,8 +164,11 @@ past_papers         user_id, subject_id, material_id, year, exam_type
 tutor_threads       user_id, subject_id, material_id, title, mode (explain|socratic|exam)
 tutor_messages      thread_id, user_id, role, content, citations jsonb
 subject_ratings     user_id, subject_id, rating (Elo), attempts_count           (P2)
-attendance          user_id, subject_id, date, status                          (P2)
-marks               user_id, subject_id, assessment, max_marks, obtained, date (P2)
+attendance          user_id, subject_id, date, start_time (the routine class; null =    (M12)
+                    added by hand), status (present|absent|cancelled); unique per
+                    subject, date and start time
+marks               user_id, subject_id, assessment, max_marks, obtained, date (M12)
+semester_results    user_id, semester, sgpa (0–10), credits; one per semester (M12)
 
 ── Planning, tasks, focus ────────────────────────────────────────────────────
 tasks               user_id, area (academics|hustle|life|personal), subject_id, hustle_id,

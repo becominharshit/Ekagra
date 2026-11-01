@@ -64,7 +64,7 @@ The current milestone is the first unchecked one.
 ### Phase 2 milestones (decided 2026-11-01)
 Built in this order (M12 comes first: attendance helps students in the middle of a semester). The current milestone is the first unchecked one. Each milestone has one migration, numbered in the order they are applied. Every new table also goes into Demo Mode (`demoDb` and its parity test) and into `supabase/functions/_shared/userTables.ts`, so the export and account deletion include it.
 
-- [ ] **M12 Attendance and grades, in 5 steps** (migration `004_attendance_grades.sql`)
+- [x] **M12 Attendance and grades, in 5 steps** (migration `004_attendance_grades.sql`). Done 2026-11-02; everything works in Demo Mode too. **Your step:** `npm run db:push` (migration 004; also 002 and 003 if they aren't on the server yet), then `npm run db:types`. To use attendance, link class times to subjects: Me → Edit routine and budget → Your weekly routine (or Academics → Attendance → Set class times)
   1. Tables `attendance`, `marks` and `semester_results`; `subjects.credits` and `subjects.grade`; `routine_blocks.subject_id`, so a class block in the routine can name its subject
   2. Attendance maths (pure, tested): percentage, safe bunks `⌊A / r − T⌋`, classes needed to recover `⌈(rT − A) / (1 − r)⌉` (A = attended, T = held, r = the minimum, 75% by default) and what the rest of the semester allows
   3. Marking: "Classes today" on Today (one tap: present, absent, cancelled) for class blocks linked to a subject, warnings before a subject drops under the minimum, an attendance card on each subject and an overview page; the routine editor links class blocks to subjects

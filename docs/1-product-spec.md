@@ -156,9 +156,9 @@ Generated per topic **when the student reaches it**, not for the whole book at o
 - Questions are picked so he succeeds about 70% of the time: hard enough to grow, easy enough to keep going.
 - Weekly challenge on one metric at a time: the target rises 5–10% after two good weeks and drops 5% after two missed weeks.
 
-### 8.14 Attendance and marks (P2)
-- Attendance per subject, with a warning before it drops below the college minimum.
-- Internal/assignment marks; SGPA/CGPA calculator.
+### 8.14 Attendance and marks (P2, built in M12)
+- Attendance per subject, with a warning before it drops below the college minimum (75% unless changed): Today asks about each class time in the routine that names its subject (Present, Absent, Cancelled); each subject shows its %, how many classes can still be missed ("safe bunks"), how many in a row get it back above the minimum, and, with the last day of classes, what the rest of the semester allows.
+- Internal/assignment marks per subject; SGPA/CGPA calculator with an editable grade scale (10-point by default), credit-weighted, earlier semesters typed in, and the SGPA needed for a target CGPA.
 
 ### 8.15 Exam season mode (P3)
 Starts automatically N days before the first exam (default 21):

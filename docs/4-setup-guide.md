@@ -46,7 +46,7 @@ npm run db:types
 
 - `login` opens your browser to allow the Supabase command-line tool.
 - `link` asks for the database password from step 1.
-- `db:push` creates every table, security rule (RLS) and storage bucket from the files in `supabase/migrations/` (`001_phase1_core.sql`, then `002_hustle_mode.sql`, `003_beta.sql` (feedback) and any later ones). Run it again whenever a new migration file appears; it only applies the new ones.
+- `db:push` creates every table, security rule (RLS) and storage bucket from the files in `supabase/migrations/` (`001_phase1_core.sql`, then `002_hustle_mode.sql`, `003_beta.sql` (feedback), `004_attendance_grades.sql` and any later ones). Run it again whenever a new migration file appears; it only applies the new ones.
 - `db:types` writes `src/types/database.ts` from your real database. Run it again after every new migration.
 
 **Check:** Supabase → **Table Editor** lists tables such as `profiles`, `subjects`, `hustles`, and each one says RLS is enabled.
