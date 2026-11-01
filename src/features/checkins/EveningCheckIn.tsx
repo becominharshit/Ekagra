@@ -6,11 +6,12 @@ import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle }
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { minutesLabel } from '@/features/academics/labels'
+import { DISTRACTION_REASONS, topReason, useDistractions } from '@/features/focus/distractions'
 import { focusedMinutesNow, useTimerLengths } from '@/features/focus/focusStore'
 import { useActiveFocus, type BlockOutcome } from '@/features/focus/sessions'
 import { useBlocks } from '@/features/planner/planBlocks'
 import { usePlanner } from '@/features/planner/replan'
-import { localDateOf, minuteOf, type PlanBlock } from '@/features/planner/schedule'
+import { localDateOf, localToIso, minuteOf, type PlanBlock } from '@/features/planner/schedule'
 import { addDays } from '@/features/planner/time'
 import type { LocalDate } from '@/features/planner/types'
 import { useTodayMutation } from '@/features/today/todayMutation'
@@ -19,7 +20,8 @@ import { guardOn, saveEveningCheckIn, useCheckIns, type CheckIn } from './checki
 
 /** Checking in ends the day, so the card shows from 8 PM, or earlier once the day's last block has started. */
 const EVENING = 20 * 60
-const DISTRACTIONS = ['Phone or social media', 'YouTube or videos', 'Games', 'Friends or chats', 'Too tired', 'Noise or people', 'Nothing really']
+/** The reasons "I got distracted" offers during focus, and "Nothing really". */
+const DISTRACTIONS = [...DISTRACTION_REASONS, 'Nothing really']
 const OTHER = 'Something else'
 const OUTCOMES: { value: BlockOutcome; label: string }[] = [
   { value: 'done', label: 'Done' },
@@ -40,6 +42,8 @@ export function EveningCheckIn() {
   const today = localDateOf(now)
   const blocks = useBlocks(today, today)
   const checkIns = useCheckIns(today)
+  // What "I got distracted" noted most today: suggested as the biggest distraction.
+  const distractions = useDistractions(localToIso(today, 0))
   const [open, setOpen] = useState(false)
   if (!blocks.data || !checkIns.data) return null
 
@@ -77,7 +81,7 @@ export function EveningCheckIn() {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-h-[90dvh] overflow-y-auto">
           {/* Only exists while open, so it starts from the saved values every time. */}
-          {open && <CheckInFlow today={today} blocks={blocks.data} row={row} onClose={() => setOpen(false)} />}
+          {open && <CheckInFlow today={today} blocks={blocks.data} row={row} noted={topReason(distractions.data ?? [])} onClose={() => setOpen(false)} />}
         </DialogContent>
       </Dialog>
     </Card>
@@ -93,10 +97,12 @@ interface CheckInFlowProps {
   /** All of today's blocks: checking in ends the day. */
   blocks: PlanBlock[]
   row: CheckIn | null
+  /** The distraction noted most often today with "I got distracted", if any. */
+  noted: { reason: string; count: number } | null
   onClose: () => void
 }
 
-function CheckInFlow({ today, blocks, row, onClose }: CheckInFlowProps) {
+function CheckInFlow({ today, blocks, row, noted, onClose }: CheckInFlowProps) {
   const focus = useActiveFocus()
   const lengths = useTimerLengths()
   const save = useTodayMutation(saveEveningCheckIn)
@@ -106,8 +112,10 @@ function CheckInFlow({ today, blocks, row, onClose }: CheckInFlowProps) {
   )
   const [energy, setEnergy] = useState<number | null>(row?.energy ?? null)
   const [mood, setMood] = useState<number | null>(row?.mood ?? null)
-  const savedOther = row?.top_distraction && !DISTRACTIONS.includes(row.top_distraction) ? row.top_distraction : ''
-  const [distraction, setDistraction] = useState<string | null>(savedOther ? OTHER : (row?.top_distraction ?? null))
+  // The saved answer, else the distraction noted most often today.
+  const initial = row?.top_distraction ?? noted?.reason ?? null
+  const savedOther = initial && !DISTRACTIONS.includes(initial) ? initial : ''
+  const [distraction, setDistraction] = useState<string | null>(savedOther ? OTHER : initial)
   const [otherText, setOtherText] = useState(savedOther)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -186,6 +194,11 @@ function CheckInFlow({ today, blocks, row, onClose }: CheckInFlowProps) {
 
       <div className="grid gap-2">
         <p className="text-sm font-medium">Biggest distraction today</p>
+        {noted && !row?.top_distraction && (
+          <p className="text-xs text-muted-foreground">
+            During focus you noted “{noted.reason}” {noted.count === 1 ? 'once' : `${noted.count} times`}.
+          </p>
+        )}
         <div className="flex flex-wrap gap-1.5">
           {[...DISTRACTIONS, OTHER].map((option) => (
             <Button

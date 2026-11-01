@@ -1,17 +1,24 @@
+import { useState } from 'react'
 import { format } from 'date-fns'
 import { Check, Pause, Play, Square } from 'lucide-react'
 import { useNavigate } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { countLabel } from '@/features/academics/labels'
 import { useSubjects } from '@/features/academics/subjects'
 import { useHustles } from '@/features/hustle/hustles'
 import { MODE_LABEL } from '@/features/mode/modes'
 import { useBlocks } from '@/features/planner/planBlocks'
 import { blockMode, localDateOf } from '@/features/planner/schedule'
+import { useProfile } from '@/features/profile/queries'
+import { readSettings } from '@/features/profile/settings'
 import { useTodayMutation } from '@/features/today/todayMutation'
 import { WorkLink } from '@/features/today/WorkLink'
 import { cn } from '@/lib/utils'
+import { DistractionButton } from './DistractionButton'
+import { useDistractions } from './distractions'
 import { useFocusStore, useFocusTimer } from './focusStore'
+import { guardsSession } from './idleGuard'
 import { finishBlock, finishSession, sessionTitle, stopFocus, toFocusMode, type FocusSession } from './sessions'
 import { clockLabel, phaseLabel, TIMER_LABEL } from './timer'
 
@@ -27,6 +34,12 @@ export function RunningFocus({ session }: { session: FocusSession }) {
   const pause = useFocusStore((state) => state.pause)
   const resume = useFocusStore((state) => state.resume)
   const forget = useFocusStore((state) => state.forget)
+  const idleOff = useFocusStore((state) => state.idleOff[session.id] === true)
+  const setIdleOff = useFocusStore((state) => state.setIdleOff)
+  const profile = useProfile()
+  const guarded = guardsSession(session, readSettings(profile.data?.settings).focus.idleCheck, idleOff)
+  const distractions = useDistractions(session.started_at)
+  const [lastNoted, setLastNoted] = useState<string | null>(null)
   const navigate = useNavigate()
   const finish = useTodayMutation(finishBlock)
   const finishOwn = useTodayMutation(finishSession)
@@ -46,6 +59,12 @@ export function RunningFocus({ session }: { session: FocusSession }) {
   ].filter(Boolean)
   const planned = Math.round(view.plannedFocus / 60)
   const percent = view.plannedFocus > 0 ? Math.round((view.focused / view.plannedFocus) * 100) : 0
+  const noted = (distractions.data ?? []).filter((event) => event.focus_session_id === session.id && event.kind === 'self_report').length
+  /** Reading a book or writing on paper: the idle guard stays off for this session (an idle pause ends). */
+  const awayFromScreen = () => {
+    if (view.idle) resume(session.id, new Date())
+    setIdleOff(session.id)
+  }
   // When it ends, the timer's pauses are no longer needed, and Today shows what's next.
   const ended = {
     onSuccess: () => {
@@ -137,8 +156,34 @@ export function RunningFocus({ session }: { session: FocusSession }) {
             Stop
           </Button>
         </div>
+        {view.idle && (
+          <div className="grid justify-items-center gap-2 rounded-lg bg-amber-500/10 p-3 text-center text-sm">
+            <p>No tap, scroll or key press for 4 minutes, so the timer paused there. Resume when you're back.</p>
+            <Button variant="outline" size="sm" onClick={awayFromScreen}>
+              I'm studying away from the screen
+            </Button>
+          </div>
+        )}
+        <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
+          <DistractionButton sessionId={session.id} onNoted={setLastNoted} />
+          {noted > 0 && (
+            <span className="text-sm text-muted-foreground">
+              {lastNoted && `Noted: ${lastNoted}. `}
+              {countLabel(noted, 'distraction')} this session
+            </span>
+          )}
+        </div>
         <p className="text-center text-xs text-muted-foreground">
           Breaks and pauses don't count. {block ? 'Done and Partly give your plan the minutes you focused; Stop keeps the block to do.' : 'The minutes you focus are saved.'}
+          {guarded && !view.idle && (
+            <>
+              {' '}
+              Study pauses itself after 4 minutes without a tap, scroll or key press.{' '}
+              <button type="button" className="underline underline-offset-4 hover:text-foreground" onClick={awayFromScreen}>
+                Studying away from the screen?
+              </button>
+            </>
+          )}
         </p>
         {block && <WorkLink block={block} />}
         {error && (

@@ -22,6 +22,8 @@ export interface Pause {
   /** ISO timestamps; `to` is null while paused. */
   from: string
   to: string | null
+  /** Paused by the idle guard (no tap, scroll or key press), not by the student. */
+  idle?: boolean
 }
 
 export const DEFAULT_LENGTHS: TimerLengths = {
@@ -100,6 +102,8 @@ export interface TimerView {
   /** Seconds of focus the schedule has in all. */
   plannedFocus: number
   paused: boolean
+  /** Paused by the idle guard. */
+  idle: boolean
   done: boolean
 }
 
@@ -112,10 +116,10 @@ export function pausedMs(pauses: Pause[], now: Date): number {
   }, 0)
 }
 
-/** The pauses with a new one starting at `at` (nothing changes when already paused). */
-export function pauseAt(pauses: Pause[], at: Date): Pause[] {
+/** The pauses with a new one starting at `at` (nothing changes when already paused). `idle`: the idle guard paused it. */
+export function pauseAt(pauses: Pause[], at: Date, idle = false): Pause[] {
   if (pauses.some((pause) => pause.to === null)) return pauses
-  return [...pauses, { from: at.toISOString(), to: null }]
+  return [...pauses, { from: at.toISOString(), to: null, ...(idle ? { idle: true } : {}) }]
 }
 
 /** The pauses with the running one ended at `at`. */
@@ -128,7 +132,9 @@ export function timerAt(phases: Phase[], startedAt: string, pauses: Pause[], now
   const active = Math.max(0, (now.getTime() - Date.parse(startedAt) - pausedMs(pauses, now)) / 1000)
   const rounds = phases.filter((phase) => phase.kind === 'work').length
   const plannedFocus = phases.filter((phase) => phase.kind === 'work').reduce((sum, phase) => sum + phase.minutes * 60, 0)
-  const paused = pauses.some((pause) => pause.to === null)
+  const open = pauses.find((pause) => pause.to === null)
+  const paused = open !== undefined
+  const idle = open?.idle === true
 
   let start = 0
   let focused = 0
@@ -147,19 +153,20 @@ export function timerAt(phases: Phase[], startedAt: string, pauses: Pause[], now
         focused: Math.floor(focused),
         plannedFocus,
         paused,
+        idle,
         done: false,
       }
     }
     if (phase.kind === 'work') focused += length
     start += length
   }
-  return { phase: null, index: phases.length, round: rounds, rounds, phaseLeft: 0, focused: plannedFocus, plannedFocus, paused, done: true }
+  return { phase: null, index: phases.length, round: rounds, rounds, phaseLeft: 0, focused: plannedFocus, plannedFocus, paused, idle, done: true }
 }
 
 /** What the timer is doing, in words: "Focus 1 of 2", "Break", "Paused" or "Time's up". */
 export function phaseLabel(view: TimerView): string {
   if (view.done) return "Time's up"
-  if (view.paused) return 'Paused'
+  if (view.paused) return view.idle ? 'Paused: no activity' : 'Paused'
   if (view.phase?.kind === 'break') return 'Break'
   return view.rounds > 1 ? `Focus ${view.round} of ${view.rounds}` : 'Focus'
 }

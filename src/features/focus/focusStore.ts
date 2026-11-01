@@ -7,33 +7,48 @@ import { focusedMinutes, sessionPhases, type FocusSession } from './sessions'
 import { pauseAt, resumeAt, timerAt, type Pause, type TimerLengths } from './timer'
 
 // The focus timer on this device: the pauses of each session, kept in localStorage so a reload
-// or switching apps doesn't lose them (the session itself is in the database). Plus the hooks
-// the focus screens use.
+// or switching apps doesn't lose them (the session itself is in the database), and what the
+// idle guard needs. Plus the hooks the focus screens use.
 
-/** How many sessions' pauses are kept (old ones are dropped). */
+/** How many sessions are remembered (old ones are dropped). */
 const KEEP = 10
 const NO_PAUSES: Pause[] = []
 
 interface FocusState {
   /** Pauses of the last few focus sessions, by session id. */
   pauses: Record<string, Pause[]>
+  /** When each session last had a tap, scroll or key press (saved now and then, for after a reload). */
+  activity: Record<string, string>
+  /** Sessions with the idle guard off ("I'm studying away from the screen"). */
+  idleOff: Record<string, boolean>
   pause: (sessionId: string, at: Date) => void
+  /** The idle guard pauses a session, from the moment its 4 minutes ran out. */
+  autoPause: (sessionId: string, at: Date) => void
   resume: (sessionId: string, at: Date) => void
+  touch: (sessionId: string, at: Date) => void
+  setIdleOff: (sessionId: string) => void
   /** Drops a session that ended. */
   forget: (sessionId: string) => void
 }
 
-const keepLast = (pauses: Record<string, Pause[]>) => Object.fromEntries(Object.entries(pauses).slice(-KEEP))
+const keepLast = <T>(map: Record<string, T>) => Object.fromEntries(Object.entries(map).slice(-KEEP))
+const without = <T>(map: Record<string, T>, id: string) => Object.fromEntries(Object.entries(map).filter(([key]) => key !== id))
 
 export const useFocusStore = create<FocusState>()(
   persist(
     (set) => ({
       pauses: {},
+      activity: {},
+      idleOff: {},
       pause: (sessionId, at) => set((state) => ({ pauses: keepLast({ ...state.pauses, [sessionId]: pauseAt(state.pauses[sessionId] ?? [], at) }) })),
+      autoPause: (sessionId, at) => set((state) => ({ pauses: keepLast({ ...state.pauses, [sessionId]: pauseAt(state.pauses[sessionId] ?? [], at, true) }) })),
       resume: (sessionId, at) => set((state) => ({ pauses: { ...state.pauses, [sessionId]: resumeAt(state.pauses[sessionId] ?? [], at) } })),
-      forget: (sessionId) => set((state) => ({ pauses: Object.fromEntries(Object.entries(state.pauses).filter(([id]) => id !== sessionId)) })),
+      touch: (sessionId, at) => set((state) => ({ activity: keepLast({ ...state.activity, [sessionId]: at.toISOString() }) })),
+      setIdleOff: (sessionId) => set((state) => ({ idleOff: keepLast({ ...state.idleOff, [sessionId]: true }) })),
+      forget: (sessionId) =>
+        set((state) => ({ pauses: without(state.pauses, sessionId), activity: without(state.activity, sessionId), idleOff: without(state.idleOff, sessionId) })),
     }),
-    { name: 'ekagra-focus', partialize: (state) => ({ pauses: state.pauses }) },
+    { name: 'ekagra-focus', partialize: (state) => ({ pauses: state.pauses, activity: state.activity, idleOff: state.idleOff }) },
   ),
 )
 
@@ -51,7 +66,7 @@ export function useFocusTimer(session: FocusSession) {
   const pauses = useFocusStore((state) => state.pauses[session.id] ?? NO_PAUSES)
   const phases = sessionPhases(session, lengths)
   const view = timerAt(phases, session.started_at, pauses, now)
-  return { now, phases, view, focusedMinutes: Math.round(view.focused / 60) }
+  return { now, phases, pauses, view, focusedMinutes: Math.round(view.focused / 60) }
 }
 
 /** Minutes focused in a session right now, for code that has no timer on screen (e.g. the evening check-in). */

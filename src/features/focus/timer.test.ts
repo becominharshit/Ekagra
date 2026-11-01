@@ -71,12 +71,18 @@ describe('the timer', () => {
     expect(resumed).toEqual([{ from: at(5).toISOString(), to: at(8).toISOString() }])
     expect(pauseAt(resumed, at(12))).toHaveLength(2)
     expect(resumeAt(resumed, at(9))).toEqual(resumed)
+    // The idle guard's pauses say so.
+    const idle = pauseAt(resumed, at(20), true)
+    expect(idle.at(-1)).toEqual({ from: at(20).toISOString(), to: null, idle: true })
+    expect(timerAt(phases, START, idle, at(22))).toMatchObject({ paused: true, idle: true })
+    expect(timerAt(phases, START, resumeAt(idle, at(23)), at(24))).toMatchObject({ paused: false, idle: false })
   })
 
   it('says what the timer is doing, and writes the clock as minutes and seconds', () => {
     expect(phaseLabel(timerAt(phases, START, [], at(10)))).toBe('Focus 1 of 2')
     expect(phaseLabel(timerAt(phases, START, [], at(27)))).toBe('Break')
     expect(phaseLabel(timerAt(phases, START, [{ from: at(2).toISOString(), to: null }], at(10)))).toBe('Paused')
+    expect(phaseLabel(timerAt(phases, START, [{ from: at(2).toISOString(), to: null, idle: true }], at(10)))).toBe('Paused: no activity')
     expect(phaseLabel(timerAt(phases, START, [], at(50)))).toBe("Time's up")
     expect(phaseLabel(timerAt(scheduleFor('custom', 30), START, [], at(10)))).toBe('Focus')
     expect([clockLabel(605), clockLabel(59.2), clockLabel(4500), clockLabel(-3)]).toEqual(['10:05', '1:00', '75:00', '0:00'])

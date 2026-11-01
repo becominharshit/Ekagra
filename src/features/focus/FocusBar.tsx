@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { usePhaseChime } from './chime'
 import { useFocusStore, useFocusTimer } from './focusStore'
+import { useIdleGuard } from './idleGuard'
 import { useActiveFocus, type FocusSession } from './sessions'
 import { clockLabel, phaseLabel } from './timer'
 
@@ -13,16 +14,19 @@ const SHOWS_TIMER = new Set(['/today', '/today/focus'])
 /** A running focus session on every screen, e.g. while reading the topic's lesson: time left and pause. */
 export function FocusBar() {
   const focus = useActiveFocus()
-  return focus.data ? <RunningBar session={focus.data} /> : null
+  // A new session starts with a fresh bar (its chime and idle guard start over).
+  return focus.data ? <RunningBar key={focus.data.id} session={focus.data} /> : null
 }
 
 function RunningBar({ session }: { session: FocusSession }) {
   const { pathname } = useLocation()
-  const { view } = useFocusTimer(session)
+  const { now, phases, pauses, view } = useFocusTimer(session)
   const pause = useFocusStore((state) => state.pause)
   const resume = useFocusStore((state) => state.resume)
-  // This bar is always there while a session runs (even when hidden), so the chime plays on any screen.
+  // This bar is always there while a session runs (even when hidden), so the chime and the idle
+  // guard work on every screen: while reading the lesson, coding or reviewing flashcards.
   usePhaseChime(view.index)
+  useIdleGuard({ session, phases, pauses, view, now })
   if (SHOWS_TIMER.has(pathname)) return null
 
   return (
