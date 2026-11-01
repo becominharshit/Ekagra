@@ -26,6 +26,11 @@ export const DEMO_TABLES = [
   'flashcard_reviews',
   'code_snippets',
   'mistakes',
+  'tasks',
+  'plan_blocks',
+  'daily_checkins',
+  'focus_sessions',
+  'distraction_events',
 ] as const satisfies readonly (keyof PublicTables)[]
 
 export type DemoTable = (typeof DEMO_TABLES)[number]
@@ -144,6 +149,58 @@ const DEFAULTS: { [T in DemoTable]: (now: Date) => Partial<DemoRow<T>> } = {
     last_correct_on: null,
     next_review_at: new Date(now.getTime() + DAY_MS).toISOString(),
   }),
+  tasks: () => ({
+    area: 'personal',
+    subject_id: null,
+    hustle_id: null,
+    notes: null,
+    due_at: null,
+    est_minutes: null,
+    priority: 2,
+    status: 'todo',
+    source: 'manual',
+    source_ref: null,
+    completed_at: null,
+  }),
+  plan_blocks: () => ({
+    subject_id: null,
+    topic_id: null,
+    task_id: null,
+    hustle_id: null,
+    actual_minutes: null,
+    status: 'planned',
+    at_risk: false,
+    plan_version: 1,
+  }),
+  daily_checkins: () => ({
+    minimum_day: false,
+    crashed_at: null,
+    energy: null,
+    mood: null,
+    top_distraction: null,
+    note: null,
+    checked_in_at: null,
+  }),
+  focus_sessions: (now) => ({
+    plan_block_id: null,
+    subject_id: null,
+    hustle_id: null,
+    started_at: now.toISOString(),
+    ended_at: null,
+    actual_minutes: null,
+    outcome: null,
+    completed: false,
+  }),
+  distraction_events: (now) => ({
+    focus_session_id: null,
+    at: now.toISOString(),
+    app_package: null,
+    reason: null,
+    from_mode: null,
+    to_mode: null,
+    quiz_id: null,
+    unlock_until: null,
+  }),
 }
 
 interface ForeignKey {
@@ -183,6 +240,14 @@ const FOREIGN_KEYS: ForeignKey[] = [
   { table: 'mistakes', column: 'question_id', references: 'questions', onDelete: 'set null' },
   { table: 'mistakes', column: 'flashcard_id', references: 'flashcards', onDelete: 'set null' },
   { table: 'mistakes', column: 'code_snippet_id', references: 'code_snippets', onDelete: 'set null' },
+  { table: 'tasks', column: 'subject_id', references: 'subjects', onDelete: 'set null' },
+  { table: 'plan_blocks', column: 'subject_id', references: 'subjects', onDelete: 'set null' },
+  { table: 'plan_blocks', column: 'topic_id', references: 'topics', onDelete: 'set null' },
+  { table: 'plan_blocks', column: 'task_id', references: 'tasks', onDelete: 'set null' },
+  { table: 'focus_sessions', column: 'plan_block_id', references: 'plan_blocks', onDelete: 'set null' },
+  { table: 'focus_sessions', column: 'subject_id', references: 'subjects', onDelete: 'set null' },
+  { table: 'distraction_events', column: 'focus_session_id', references: 'focus_sessions', onDelete: 'set null' },
+  { table: 'distraction_events', column: 'quiz_id', references: 'quizzes', onDelete: 'set null' },
 ]
 
 /** Inside this file rows are plain objects; the public functions below give them their table's type. */

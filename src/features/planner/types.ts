@@ -183,6 +183,9 @@ export interface PlannerInput {
   /** Missed or moved work from earlier days, caught up by auto-recovery.
    *  Don't also count these minutes in the topics' or tasks' remainingMinutes. */
   carryOver?: WorkItem[]
+  /** Re-planning in the middle of the day: minutes of each subject already studied today.
+   *  They count toward today's pace, so the rest of the day doesn't repeat them. */
+  doneTodayBySubject?: Record<string, number>
   settings?: Partial<PlannerSettings>
 }
 

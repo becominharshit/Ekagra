@@ -1,7 +1,6 @@
-import { useMemo } from 'react'
-import { useStudy } from '@/features/academics/roadmap'
 import type { Subject } from '@/features/academics/subjects'
 import type { Topic, TopicPrereq } from '@/features/academics/topicTree'
+import { remainingMinutes as minutesLeft } from './schedule'
 import type { PlannerSubject, PlannerTopic } from './types'
 
 // The student's subjects and topics in the shape the planner needs.
@@ -9,10 +8,12 @@ import type { PlannerSubject, PlannerTopic } from './types'
 /** Topics in these states are already learned; the planner leaves them out. */
 const LEARNED = new Set(['review', 'mastered'])
 
+/** `done`: minutes already studied per topic (from finished plan blocks); they come off the estimate. */
 export function toPlannerStudy(
   subjects: Subject[],
   topics: Topic[],
   prereqs: TopicPrereq[],
+  done: ReadonlyMap<string, number> = new Map(),
 ): { subjects: PlannerSubject[]; topics: PlannerTopic[] } {
   const unitOrder = new Map(topics.filter((topic) => topic.parent_id === null).map((unit) => [unit.id, unit.order_index]))
   const open = topics.filter((topic) => topic.parent_id !== null && !LEARNED.has(topic.status))
@@ -24,7 +25,7 @@ export function toPlannerStudy(
       subjectId: topic.subject_id,
       title: topic.title,
       track: topic.track === 'skill' ? 'skill' : 'exam',
-      remainingMinutes: topic.est_minutes ?? 60,
+      remainingMinutes: minutesLeft(topic.est_minutes ?? 60, done.get(topic.id) ?? 0),
       difficulty: topic.difficulty ?? 3,
       priority: Number(topic.priority_score),
       // Prerequisites that are already learned don't hold anything back.
@@ -34,14 +35,4 @@ export function toPlannerStudy(
       orderIndex: (unitOrder.get(topic.parent_id ?? '') ?? 0) * 1000 + topic.order_index,
     })),
   }
-}
-
-/** The planner's study input for whoever uses the app (Supabase or Demo Mode). */
-export function useStudyData() {
-  const study = useStudy()
-  const data = useMemo(
-    () => (study.data ? toPlannerStudy(study.data.subjects, study.data.topics, study.data.prereqs) : null),
-    [study.data],
-  )
-  return { ...study, data }
 }

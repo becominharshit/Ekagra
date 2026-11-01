@@ -4,13 +4,14 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { activeBlock, MODE_LABEL } from '@/features/mode/modes'
 import { useModeStore } from '@/features/mode/modeStore'
-import { PlanPreview } from '@/features/planner/PlanPreview'
+import { DayTimeline } from '@/features/planner/DayTimeline'
 import { useNow } from '@/hooks/useNow'
 
 const COMING = [
-  { title: 'Now card from your real 14-day plan', when: 'M4' },
-  { title: '"I Crashed" one-tap minimum day', when: 'M4' },
-  { title: 'Evening energy check-in (1–5)', when: 'M4' },
+  { title: 'Now card with Start Focus, Done, Partial and Skip', when: 'M4' },
+  { title: 'Capture tasks from text or a screenshot', when: 'M4' },
+  { title: '"I Crashed" and the evening check-in', when: 'M4' },
+  { title: 'Morning brief', when: 'M4' },
   { title: 'Pomodoro and Deep Work focus timer', when: 'M9' },
 ]
 
@@ -36,7 +37,7 @@ export function TodayPage() {
           </CardHeader>
         </Card>
 
-        <PlanPreview />
+        <DayTimeline />
 
         <Card>
           <CardHeader>

@@ -353,3 +353,24 @@ describe('at-risk work', () => {
     expect(risk?.minutes).toBeGreaterThan(0)
   })
 })
+
+describe('re-planning in the middle of the day', () => {
+  it("counts what was already studied today toward the subject's pace, so the afternoon goes to the other subjects", () => {
+    // Re-planning at 14:00. DBMS (exam first) has a pace of 55 minutes a day; Python has the higher priority.
+    const input = {
+      subjects: [subject('dbms', 20), subject('py', 30)],
+      topics: [topic('sql', 'dbms', 600), topic('loops', 'py', 600, { priority: 0.9 })],
+      nowMinute: 14 * 60,
+    }
+    const minutesOf = (result: Plan, topicId: string, day = 0) =>
+      (result.days[day]?.work ?? []).filter((item) => item.topicId === topicId).reduce((total, item) => total + item.minutes, 0)
+
+    const fresh = plan(input)
+    const afterMorning = plan({ ...input, doneTodayBySubject: { dbms: 50 } })
+    expect(minutesOf(fresh, 'sql')).toBeGreaterThan(0)
+    expect(minutesOf(afterMorning, 'sql')).toBeLessThan(minutesOf(fresh, 'sql'))
+    expect(minutesOf(afterMorning, 'loops')).toBeGreaterThan(minutesOf(fresh, 'loops'))
+    // Only today changes: tomorrow DBMS gets its pace again.
+    expect(minutesOf(afterMorning, 'sql', 1)).toBeGreaterThan(0)
+  })
+})

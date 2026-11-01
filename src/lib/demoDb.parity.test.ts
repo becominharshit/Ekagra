@@ -25,6 +25,9 @@ const QUESTION = id(7)
 const QUIZ = id(8)
 const CARD = id(9)
 const SNIPPET = id(10)
+const TASK = id(17)
+const BLOCK = id(18)
+const FOCUS = id(20)
 
 // The smallest rows each table accepts (in an order that respects the links), with ids given
 // so both databases link the same rows. Columns not listed here get their default.
@@ -45,10 +48,33 @@ const ROWS: [DemoTable, Record<string, unknown>][] = [
   ['flashcard_reviews', { id: id(15), flashcard_id: CARD, rating: 3 }],
   ['code_snippets', { id: SNIPPET, topic_id: TOPIC, question_id: QUESTION }],
   ['mistakes', { id: id(16), concept: 'Joins', topic_id: TOPIC, question_id: QUESTION, flashcard_id: CARD, code_snippet_id: SNIPPET }],
+  ['tasks', { id: TASK, title: 'DBMS assignment', subject_id: SUBJECT }],
+  [
+    'plan_blocks',
+    {
+      id: BLOCK,
+      date: '2026-11-02',
+      start_at: '2026-11-02T04:00:00.000Z',
+      end_at: '2026-11-02T04:45:00.000Z',
+      area: 'academics',
+      kind: 'learn',
+      title: 'SQL',
+      planned_minutes: 45,
+      subject_id: SUBJECT,
+      topic_id: TOPIC,
+      task_id: TASK,
+    },
+  ],
+  ['daily_checkins', { id: id(19), date: '2026-11-02' }],
+  ['focus_sessions', { id: FOCUS, area: 'academics', mode: 'custom', planned_minutes: 45, plan_block_id: BLOCK, subject_id: SUBJECT }],
+  ['distraction_events', { id: id(21), kind: 'mode_switch', focus_session_id: FOCUS, quiz_id: QUIZ, from_mode: 'study', to_mode: 'hustle', reason: 'urgent' }],
 ]
 
-/** Columns that hold "now" (or "now + 1 day"), so their values differ by a few milliseconds. */
-const TIME_COLUMNS = new Set(['created_at', 'updated_at', 'started_at', 'due_at', 'reviewed_at', 'next_review_at'])
+/**
+ * Columns that hold "now" (or "now + 1 day"), so their values differ by a few milliseconds, and
+ * dates and times we set ourselves (Postgres gives them back as Date objects, the demo as text).
+ */
+const TIME_COLUMNS = new Set(['created_at', 'updated_at', 'started_at', 'due_at', 'reviewed_at', 'next_review_at', 'at', 'date', 'start_at', 'end_at'])
 
 /** Makes Postgres and demo values comparable: the app gets numbers and plain JSON from Supabase. */
 function comparable(row: Record<string, unknown>): Record<string, unknown> {

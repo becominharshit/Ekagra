@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '@/features/auth/authStore'
-import { dbError } from '@/lib/dataSource'
+import { dbError, type DataSource } from '@/lib/dataSource'
 import { deviceFiles } from '@/lib/deviceFiles'
 import { requireSupabase } from '@/lib/supabase'
 import type { Tables, TablesInsert, TablesUpdate } from '@/types/database'
@@ -54,6 +54,11 @@ function supabaseRepo(userId: string): ProfileRepo {
       }
     },
   }
+}
+
+/** The profile storage of a data source, for code that runs outside React (e.g. re-planning). */
+export function profileRepoFor(source: DataSource): ProfileRepo {
+  return source.kind === 'demo' ? demoProfileRepo : supabaseRepo(source.userId)
 }
 
 /** The storage for whoever is using the app right now (null while signed out). */

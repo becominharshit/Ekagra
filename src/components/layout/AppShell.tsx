@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { Outlet, useLocation } from 'react-router'
 import { ModeSwitchGuard } from '@/features/mode/ModeSwitchGuard'
+import { usePlanKeeper } from '@/features/planner/replan'
 import { BottomTabBar } from './BottomTabBar'
 import { TopBar } from './TopBar'
 
@@ -8,6 +9,8 @@ import { TopBar } from './TopBar'
 export function AppShell() {
   const { pathname } = useLocation()
   const mainRef = useRef<HTMLElement>(null)
+  // The plan is made when the app opens with an old one, and again when its inputs change.
+  usePlanKeeper()
 
   // A new page starts at the top, not where the previous page was scrolled to.
   useEffect(() => {

@@ -439,7 +439,10 @@ function takePace(
     if (left <= 0) continue
     const target = addDays(subject.examDate, -settings.revisionDays)
     const daysLeft = Math.max(1, daysBetween(date, target) + 1)
-    paces.push({ topics, pace: Math.ceil(left / daysLeft) })
+    // What was already studied today counts toward today's pace.
+    const doneToday = date === ctx.input.today ? (ctx.input.doneTodayBySubject?.[subject.id] ?? 0) : 0
+    const pace = Math.ceil(left / daysLeft) - doneToday
+    if (pace > 0) paces.push({ topics, pace })
   }
 
   const totalPace = sum(paces.map((entry) => entry.pace))
