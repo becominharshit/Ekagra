@@ -590,6 +590,53 @@ export const MealResponseSchema = MealAnswerSchema.extend({ model: z.string(), p
 export type MealResponse = z.infer<typeof MealResponseSchema>
 
 // ---------------------------------------------------------------------------
+// Speaking practice: a recording → a word-for-word transcript, scores and tips (ai-speak)
+// The recording is only in the request: it is never stored. Words per minute and filler words
+// are counted in the app, from the transcript.
+// ---------------------------------------------------------------------------
+
+export const SPEAK_SCENARIOS = ['interview', 'presentation', 'group_discussion', 'small_talk'] as const
+export const SPEAK_SCORES = ['clarity', 'structure', 'vocabulary', 'confidence'] as const
+
+/** The biggest recording the app sends (it stops at 3 minutes: about 0.7 MB at its 32 kbit/s). */
+export const MAX_AUDIO_BYTES = 5 * 1024 * 1024
+
+export const AudioFileSchema = z.object({
+  /** What phones and browsers record: WebM (Chrome, Android), Ogg (Firefox), MP4/M4A (Safari). */
+  mimeType: z.enum(['audio/webm', 'audio/ogg', 'audio/mp4', 'audio/m4a', 'audio/mpeg', 'audio/wav', 'audio/aac']),
+  base64: z
+    .string()
+    .min(1)
+    .max(Math.ceil(MAX_AUDIO_BYTES / 3) * 4),
+})
+export type AudioFile = z.infer<typeof AudioFileSchema>
+
+export const SpeakRequestSchema = z.object({
+  scenario: z.enum(SPEAK_SCENARIOS),
+  /** The question they answered. */
+  prompt: z.string().trim().min(1).max(500),
+  durationSec: z.number().int().min(1).max(600),
+  audio: AudioFileSchema,
+})
+export type SpeakRequest = z.infer<typeof SpeakRequestSchema>
+
+const speakScore = z.number().min(1).max(10)
+
+export const SpeakAnswerSchema = z.object({
+  transcript: z
+    .string()
+    .max(20_000)
+    .describe('Exactly what was said, word for word, keeping every um, uh, like, basically, matlab and yaar; Hindi in Latin letters; empty if there is no speech'),
+  scores: z.object({ clarity: speakScore, structure: speakScore, vocabulary: speakScore, confidence: speakScore }),
+  strength: z.string().trim().max(200).describe('One specific thing they did well, in one sentence'),
+  tips: z.array(z.string().trim().min(1).max(200)).min(1).max(3).describe('The most useful changes for next time, one sentence each, the most useful first'),
+})
+export type SpeakAnswer = z.infer<typeof SpeakAnswerSchema>
+
+export const SpeakResponseSchema = SpeakAnswerSchema.extend({ model: z.string(), promptVersion: z.string() })
+export type SpeakResponse = z.infer<typeof SpeakResponseSchema>
+
+// ---------------------------------------------------------------------------
 // AI usage dashboard: the limits and what the whole app spent (ai-usage, no AI call)
 // ---------------------------------------------------------------------------
 

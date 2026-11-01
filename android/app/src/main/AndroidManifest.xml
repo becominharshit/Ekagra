@@ -95,6 +95,11 @@
     <!-- The Launchpad's "time's up" reminder on time ("Alarms & reminders"; Android 14+ asks the student). -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
+    <!-- Speaking practice (Life → Speaking): the WebView's microphone. Android asks the student the
+         first time they tap "Start speaking"; the recording is never saved. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+
     <!-- Android 11+ only shows other apps to apps that ask: FocusGuard lists the ones with a launcher icon. -->
     <queries>
         <intent>

@@ -20,6 +20,7 @@ export const AI_FUNCTIONS: { name: AiFunction; label: string; features: string[]
   { name: 'ai-grade', label: 'Marking mock tests', features: ['grade'] },
   { name: 'ai-review', label: 'Weekly reviews', features: ['review'] },
   { name: 'ai-meal', label: 'Meal estimates', features: ['meal'] },
+  { name: 'ai-speak', label: 'Speaking practice', features: ['speak'] },
 ]
 
 export interface UsageRow {
