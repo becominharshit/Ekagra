@@ -48,6 +48,7 @@ describe('readSettings', () => {
       attendance: { minPercent: 75, classesEndOn: null },
       grades: { scale: DEFAULT_GRADE_SCALE },
       review: { day: 0, reminder: true },
+      life: { program: null, workoutDays: [1, 3, 5] },
     })
   })
 

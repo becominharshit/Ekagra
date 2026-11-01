@@ -1,13 +1,11 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { dbError, need, readAll, useDataSource, type DataSource } from '@/lib/dataSource'
 import { demoDb } from '@/lib/demoDb'
+import { lifeKey } from '../lifeData'
 import { habitProblem, type Habit, type HabitInput, type HabitLog } from './habits'
 
 // Habits and their daily log, saved in Supabase or (Demo Mode) on the device. One log per habit
 // and day: logging again changes it.
-
-/** Every Life query key starts with this, so one refresh after a change updates them all. */
-export const lifeKey = (owner: string | null) => ['life', owner] as const
 
 const byOrder = (a: Habit, b: Habit) => a.order_index - b.order_index || a.created_at.localeCompare(b.created_at)
 
@@ -83,16 +81,4 @@ export function useHabits() {
 export function useHabitLogs(since: string) {
   const { source, owner } = useDataSource()
   return useQuery({ queryKey: [...lifeKey(owner), 'habit-logs', since], queryFn: () => listHabitLogs(need(source), since), enabled: source !== null })
-}
-
-/** A change to Life data. Afterwards every Life view reloads. */
-export function useLifeMutation<Variables>(run: (source: DataSource, variables: Variables) => Promise<void>) {
-  const { source, owner } = useDataSource()
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (variables: Variables) => run(need(source), variables),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: lifeKey(owner) })
-    },
-  })
 }

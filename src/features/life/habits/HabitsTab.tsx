@@ -25,7 +25,8 @@ import {
   type HabitKind,
   type HabitLog,
 } from './habits'
-import { archiveHabit, logHabit, saveHabit, useHabitLogs, useHabits, useLifeMutation } from './habitsData'
+import { useLifeMutation } from '../lifeData'
+import { archiveHabit, logHabit, saveHabit, useHabitLogs, useHabits } from './habitsData'
 
 // Monday first, like the routine editor.
 const DAYS = [

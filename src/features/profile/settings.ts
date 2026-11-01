@@ -94,6 +94,13 @@ const reviewSchema = z.looseObject({
   reminder: z.boolean().catch(true),
 })
 
+const lifeSchema = z.looseObject({
+  /** The workout program (null = none picked yet). */
+  program: z.enum(['hostel', 'dumbbell', 'gym']).nullable().catch(null),
+  /** The weekdays to work out (0 = Sunday … 6 = Saturday). */
+  workoutDays: z.array(z.number().int().min(0).max(6)).max(7).catch(() => [1, 3, 5]),
+})
+
 export const settingsSchema = z.looseObject({
   budget: budgetSchema.catch(() => ({ ...STANDARD_BUDGET })),
   planner: plannerSchema.catch(() => plannerSchema.parse({})),
@@ -103,6 +110,7 @@ export const settingsSchema = z.looseObject({
   attendance: attendanceSchema.catch(() => attendanceSchema.parse({})),
   grades: gradesSchema.catch(() => gradesSchema.parse({})),
   review: reviewSchema.catch(() => reviewSchema.parse({})),
+  life: lifeSchema.catch(() => lifeSchema.parse({})),
 })
 
 export type Settings = z.infer<typeof settingsSchema>
