@@ -70,6 +70,7 @@ const SCREENS: [path: string, name: string][] = [
   ['/me', 'Me'],
   ['/me/focus', 'Focus setup'],
   ['/me/review', 'Weekly review'],
+  ['/me/friends', 'Partner and groups'],
   ['/onboarding', 'Setup'],
 ]
 

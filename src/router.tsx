@@ -157,6 +157,10 @@ export const router = createBrowserRouter([
                 path: 'me/review',
                 lazy: async () => ({ Component: (await import('@/pages/WeeklyReviewPage')).WeeklyReviewPage }),
               },
+              {
+                path: 'me/friends',
+                lazy: async () => ({ Component: (await import('@/pages/FriendsPage')).FriendsPage }),
+              },
               { path: '*', element: <Navigate to="/today" replace /> },
             ],
           },

@@ -54,6 +54,7 @@ export const DEMO_TABLES = [
   'sleep_logs',
   'step_counts',
   'speaking_sessions',
+  'shared_stats',
 ] as const satisfies readonly (keyof PublicTables)[]
 
 export type DemoTable = (typeof DEMO_TABLES)[number]
@@ -322,6 +323,19 @@ const DEFAULTS: { [T in DemoTable]: (now: Date) => Partial<DemoRow<T>> } = {
   sleep_logs: () => ({ source: 'manual' }),
   step_counts: () => ({ source: 'manual' }),
   speaking_sessions: () => ({ transcript: '', words: 0, wpm: null, filler_count: 0, fillers: {}, scores: {}, feedback: [], source: 'device' }),
+  shared_stats: () => ({
+    display_name: 'Student',
+    share_focus: true,
+    share_streak: true,
+    share_plan: false,
+    share_studying: true,
+    on_leaderboard: false,
+    week_start: null,
+    focus_minutes: null,
+    streak_days: null,
+    plan_pct: null,
+    studying_until: null,
+  }),
 }
 
 interface ForeignKey {

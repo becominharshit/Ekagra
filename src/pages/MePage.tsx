@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CalendarCheck2, LockKeyhole, LogOut, ShieldCheck, SlidersHorizontal, UserRound } from 'lucide-react'
+import { CalendarCheck2, LockKeyhole, LogOut, ShieldCheck, SlidersHorizontal, UserRound, Users } from 'lucide-react'
 import { Link, useNavigate } from 'react-router'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/button'
@@ -26,6 +26,7 @@ export function MePage() {
       <div className="grid gap-4">
         <AccountCard />
         <ReviewCard />
+        <FriendsCard />
         <PlanSettingsCard />
         <FocusCard />
         <AiUsageCard />
@@ -48,6 +49,26 @@ function ReviewCard() {
           <Link to="/me/review">
             <CalendarCheck2 aria-hidden />
             Open the weekly review
+          </Link>
+        </Button>
+      </CardContent>
+    </Card>
+  )
+}
+
+/** Accountability partners and study groups. */
+function FriendsCard() {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Partner and groups</CardTitle>
+        <CardDescription>Study with friends: share a few numbers you pick, nudge each other and focus together.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Button asChild variant="outline">
+          <Link to="/me/friends">
+            <Users aria-hidden />
+            Open partner and groups
           </Link>
         </Button>
       </CardContent>

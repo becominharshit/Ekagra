@@ -8,6 +8,7 @@ import { ModeSwitchGuard } from '@/features/mode/ModeSwitchGuard'
 import { usePlanKeeper } from '@/features/planner/replan'
 import { CaptureButton } from '@/features/tasks/CaptureButton'
 import { ReviewReminder } from '@/features/review/ReviewNudges'
+import { SocialSync } from '@/features/social/SocialSync'
 import { CaptureSheet } from '@/features/tasks/CaptureSheet'
 import { BottomTabBar } from './BottomTabBar'
 import { TopBar } from './TopBar'
@@ -35,6 +36,8 @@ export function AppShell() {
       <FocusGuardSync />
       {/* Android: a notification when the weekly review is ready. */}
       <ReviewReminder />
+      {/* The numbers shared with partners and groups stay current; nudges notify on Android. */}
+      <SocialSync />
       <main ref={mainRef} className="flex-1 overflow-y-auto">
         {/* Extra space at the bottom so the floating + button never covers the last item. */}
         <div className="mx-auto w-full max-w-2xl px-4 pt-5 pb-24">
