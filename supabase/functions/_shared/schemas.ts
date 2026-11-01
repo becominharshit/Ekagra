@@ -162,3 +162,63 @@ export const CodeAnswerSchema = z.object({
   solution: z.string().min(1).max(8000).describe('A correct, simple solution that passes every test'),
 })
 export type CodeAnswer = z.infer<typeof CodeAnswerSchema>
+
+// ---------------------------------------------------------------------------
+// Lesson, check quiz and flashcards for one topic (ai-generate)
+// ---------------------------------------------------------------------------
+
+export const GenerateRequestSchema = z.object({
+  subjectName: z.string().trim().min(1).max(120),
+  unitTitle: z.string().max(200).nullable().optional(),
+  topicTitle: z.string().trim().min(1).max(200),
+  track: z.enum(['exam', 'skill']),
+  difficulty: z.number().int().min(1).max(5).nullable().optional(),
+  estMinutes: z.number().int().min(5).max(600).nullable().optional(),
+  /** Topics the student learned before this one. */
+  prerequisites: z.array(z.string().max(200)).max(10).optional(),
+  /** Past exam questions on this topic, so the lesson and questions match the exam. */
+  pastQuestions: z
+    .array(z.object({ text: z.string().max(600), marks: z.number().nullable(), year: z.number().int().nullable() }))
+    .max(8)
+    .optional(),
+  program: z.string().max(120).nullable().optional(),
+  year: z.number().int().min(1).max(8).nullable().optional(),
+  mentorTone: z.enum(['strict', 'balanced', 'friendly']).optional(),
+})
+export type GenerateRequest = z.infer<typeof GenerateRequestSchema>
+
+export const CheckQuestionSchema = z
+  .object({
+    type: z.enum(['mcq', 'numerical', 'short']),
+    prompt: z.string().min(5).max(800),
+    options: z.array(z.string().min(1).max(300)).max(5).describe('mcq: 4 options; numerical and short: an empty list'),
+    correctOption: z.number().int().min(0).max(4).nullable().describe('mcq: the index of the one right option; otherwise null'),
+    answer: z.string().min(1).max(1500).describe('mcq: the right option; numerical: only the number; short: a model answer'),
+    tolerance: z.number().min(0).nullable().describe('numerical: how far an answer may be off (for rounding); otherwise null'),
+    keyPoints: z.array(z.string().min(1).max(200)).max(5).describe('short: 2–4 points a good answer contains; otherwise an empty list'),
+    explanation: z.string().min(1).max(1500).describe('Why the answer is right, and why a tempting wrong answer is wrong'),
+    difficulty: z.number().int().min(1).max(5),
+  })
+  .superRefine((question, context) => {
+    if (question.type === 'mcq') {
+      const right = question.correctOption
+      if (question.options.length < 3 || right === null || right >= question.options.length) {
+        context.addIssue({ code: 'custom', message: 'An mcq needs 3–5 options and the index of the right one', path: ['correctOption'] })
+      }
+    }
+    if (question.type === 'numerical' && !Number.isFinite(Number(question.answer.replace(',', '.')))) {
+      context.addIssue({ code: 'custom', message: 'A numerical answer must be a number', path: ['answer'] })
+    }
+  })
+export type CheckQuestion = z.infer<typeof CheckQuestionSchema>
+
+export const GeneratedTopicSchema = z.object({
+  lessonMd: z.string().min(200).max(15_000).describe('The lesson in Markdown'),
+  checkQuestions: z.array(CheckQuestionSchema).min(3).max(5),
+  flashcards: z.array(z.object({ front: z.string().min(1).max(300), back: z.string().min(1).max(600) })).min(5).max(15),
+})
+export type GeneratedTopic = z.infer<typeof GeneratedTopicSchema>
+
+/** What ai-generate returns (model and prompt version are saved with the lesson and questions). */
+export const GenerateResponseSchema = GeneratedTopicSchema.extend({ model: z.string(), promptVersion: z.string() })
+export type GenerateResponse = z.infer<typeof GenerateResponseSchema>

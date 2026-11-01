@@ -115,7 +115,9 @@ Demo Mode never uses this: there, AI features give sample answers made on the de
 3. Send the secrets to Supabase: `npm run functions:secrets`
 4. Deploy the AI functions: `npm run functions:deploy` (no Docker needed). Run it again whenever something in `supabase/functions/` changes.
 
-**Check:** Supabase → **Edge Functions** lists the `ai-…` functions, and **Edge Functions → Secrets** lists the `AI_…` names.
+**Check:** Supabase → **Edge Functions** lists `ai-syllabus`, `ai-papers`, `ai-tutor` and `ai-generate`, and **Edge Functions → Secrets** lists the `AI_…` names. Then, signed in: import a syllabus (Academics → a subject → Import syllabus), and open a topic → **Make my lesson**.
+
+The Coding Lab doesn't need any of this: Python runs on the device. Its first run downloads Python (about 13 MB) from the jsDelivr CDN, so that one needs the internet.
 
 **Limits:** every AI request goes through `supabase/functions/_shared/ai.ts`. Each student can make `AI_USER_DAILY_REQUESTS` requests in 24 hours, and the whole app can spend at most `AI_MONTHLY_BUDGET_USD` ÷ 30 in 24 hours. Every request's tokens and cost are saved in the `ai_usage` table.
 

@@ -1,4 +1,7 @@
 import type {
+  CheckQuestion,
+  GenerateRequest,
+  GenerateResponse,
   PaperAnswer,
   PaperRequest,
   SyllabusRequest,
@@ -7,6 +10,7 @@ import type {
   TutorRequest,
   TutorResponse,
 } from '@shared/schemas.ts'
+import { minutesLabel } from '@/features/academics/labels'
 
 // Demo Mode has no server and therefore no AI. Its "AI" answers are samples made on this device
 // from the text the student gives, good enough to try every screen. They are always labelled.
@@ -243,4 +247,92 @@ export function demoTutor(request: TutorRequest): TutorResponse {
     }
   }
   return { answerMd, flashcards, model: 'demo', promptVersion: 'demo-sample' }
+}
+
+/** What Demo Mode knows about a topic besides the request: facts from the student's roadmap. */
+export interface DemoTopicFacts {
+  otherUnits: string[]
+  otherTopics: string[]
+  pyqCount: number
+  marksShare: number
+}
+
+/** An mcq whose right answer sits at a position that depends on the text (so it isn't always first). */
+function mcq(prompt: string, right: string, wrong: string[], explanation: string): CheckQuestion {
+  const options = wrong.slice(0, 3)
+  const position = prompt.length % (options.length + 1)
+  options.splice(position, 0, right)
+  return { type: 'mcq', prompt, options, correctOption: position, answer: right, tolerance: null, keyPoints: [], explanation, difficulty: 1 }
+}
+
+/**
+ * A sample lesson, check quiz and flashcards made from the student's own roadmap (which unit,
+ * what comes before, how often it was asked, the planned time). It shows how studying a topic
+ * works; the content itself needs the real AI.
+ */
+export function demoTopic(request: GenerateRequest, facts: DemoTopicFacts): GenerateResponse {
+  const topic = `“${request.topicTitle}”`
+  const unit = request.unitTitle ?? request.subjectName
+  const minutes = request.estMinutes ?? 60
+  const before = request.prerequisites ?? []
+  const past = request.pastQuestions ?? []
+  const asked = facts.pyqCount === 0 ? 'Not in your past papers yet' : `${facts.pyqCount} time${facts.pyqCount === 1 ? '' : 's'} (${Math.round(facts.marksShare * 100)}% of the marks)`
+
+  const lessonMd = [
+    '**Sample lesson (Demo Mode has no AI).** Sign in to get a real lesson written for this topic.',
+    `## What this topic is\n${topic} is part of ${unit} in ${request.subjectName}. Your roadmap plans ${minutesLabel(minutes)} for it.`,
+    `## Before you start\n${before.length > 0 ? `You learned ${before.join(', ')} first. Skim it again if it feels rusty.` : "It doesn't need another topic first."}`,
+    `## How it was asked\n${past.length > 0 ? past.map((question) => `- ${question.text}${question.marks !== null ? ` (${question.marks} marks)` : ''}`).join('\n') : 'Not in your past papers yet.'}`,
+    `## How to study it\n1. Read your notes or the textbook section on ${topic} once, without stopping.\n2. Close them and write the key ideas from memory.\n3. Take the check quiz below, then review the flashcards over the next days.`,
+  ].join('\n\n')
+
+  const questions: CheckQuestion[] = []
+  if (request.unitTitle && facts.otherUnits.length >= 2) {
+    questions.push(mcq(`Which unit of ${request.subjectName} is ${topic} in?`, request.unitTitle, facts.otherUnits, `Your roadmap puts it in ${request.unitTitle}.`))
+  }
+  const notBefore = facts.otherTopics.filter((title) => !before.includes(title))
+  if (before[0] && notBefore.length >= 2) {
+    questions.push(mcq(`Which topic should you learn before ${topic}?`, before[0], notBefore, `Your roadmap lists ${before.join(', ')} before it.`))
+  }
+  questions.push(
+    mcq(
+      `How much time does your roadmap plan for ${topic}?`,
+      minutesLabel(minutes),
+      [minutesLabel(Math.max(15, Math.round(minutes / 2))), minutesLabel(minutes * 2), minutesLabel(minutes + 30)],
+      'You can change it with Edit roadmap.',
+    ),
+    {
+      type: 'numerical',
+      prompt: `In how many past exam questions was ${topic} asked?`,
+      options: [],
+      correctOption: null,
+      answer: String(facts.pyqCount),
+      tolerance: 0,
+      keyPoints: [],
+      explanation: `Your past papers: ${asked}.`,
+      difficulty: 1,
+    },
+    {
+      type: 'short',
+      prompt: `Explain ${topic} in 2–3 sentences, as you would at the start of an exam answer.`,
+      options: [],
+      correctOption: null,
+      answer: `Start with a one-line definition of ${request.topicTitle}, give one small example, and say where it is used or why it matters.`,
+      tolerance: null,
+      keyPoints: ['A one-line definition', 'One small example', 'Why it matters or where it is used'],
+      explanation: 'This shape works for most short exam answers.',
+      difficulty: 2,
+    },
+  )
+
+  const flashcards = [
+    { front: `Which unit is ${topic} in?`, back: unit },
+    { front: `How much time does your plan give ${topic}?`, back: minutesLabel(minutes) },
+    { front: `How often was ${topic} asked in past papers?`, back: asked },
+    { front: `What should you learn before ${topic}?`, back: before.length > 0 ? before.join(', ') : "Nothing: it's a starting topic" },
+    { front: `What are the 3 parts of a good short answer on ${topic}?`, back: 'A definition, an example, and why it matters' },
+    ...past.slice(0, 3).map((question) => ({ front: question.text.slice(0, 300), back: 'Answer it in your own words: definition, example, why it matters. Then check your notes.' })),
+  ]
+
+  return { lessonMd, checkQuestions: questions.slice(-5), flashcards, model: 'demo', promptVersion: 'demo-sample' }
 }

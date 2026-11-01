@@ -16,10 +16,6 @@ import { PracticeCard } from '@/features/academics/PracticeCard'
 import { useAuthStore } from '@/features/auth/authStore'
 import { useNow } from '@/hooks/useNow'
 
-const COMING = [
-  { title: 'Lessons and check quizzes', when: 'M3' },
-]
-
 export function AcademicsPage() {
   const navigate = useNavigate()
   const isDemo = useAuthStore((state) => state.status === 'demo')
@@ -120,22 +116,9 @@ export function AcademicsPage() {
             </Link>
           )
         })}
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Coming to Academics</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ul className="grid gap-2">
-              {COMING.map((item) => (
-                <li key={item.title} className="flex items-center justify-between gap-3">
-                  <span>{item.title}</span>
-                  <Badge variant="secondary">{item.when}</Badge>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
+        {subjects.data && subjects.data.length > 0 && (
+          <p className="text-xs text-muted-foreground">Open a subject, then a topic, to study it: lesson, check quiz and flashcards.</p>
+        )}
       </div>
 
       <SubjectDialog open={adding} onOpenChange={setAdding} onSaved={(subject) => navigate(`/academics/subjects/${subject.id}`)} />

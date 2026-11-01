@@ -27,6 +27,9 @@ import { prerequisiteTitles, priorityLabels, roadmapSections, type PriorityLabel
 import { useNow } from '@/hooks/useNow'
 import { cn } from '@/lib/utils'
 
+/** Shown for topics that were started (via their lesson and check quiz). */
+const PROGRESS_LABEL: Record<string, string> = { learning: 'Learning', review: 'Learned ✓', mastered: 'Mastered ✓' }
+
 const PRIORITY_TONE = {
   High: 'bg-destructive/10 text-destructive',
   Medium: 'bg-mode-hustle/15 text-mode-hustle',
@@ -222,6 +225,7 @@ function BackLink() {
 /** One topic; `priority` is only given on the exam track. */
 function TopicItem({ topic, needs, priority }: { topic: Topic; needs: string[]; priority: PriorityLabel | null }) {
   const details = [
+    PROGRESS_LABEL[topic.status] ?? null,
     topic.est_minutes !== null ? minutesLabel(topic.est_minutes) : null,
     topic.difficulty !== null ? DIFFICULTY_LABEL[topic.difficulty] : null,
     topic.pyq_count > 0
@@ -231,7 +235,9 @@ function TopicItem({ topic, needs, priority }: { topic: Topic; needs: string[]; 
   return (
     <li className="grid gap-0.5">
       <div className="flex items-start justify-between gap-3">
-        <span className="font-medium">{topic.title}</span>
+        <Link to={`/academics/topics/${topic.id}`} className="font-medium underline-offset-4 hover:underline">
+          {topic.title}
+        </Link>
         {priority && (
           <Badge variant="secondary" className={cn('shrink-0', PRIORITY_TONE[priority])}>
             {priority}
