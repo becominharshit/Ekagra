@@ -1,11 +1,12 @@
 import { differenceInCalendarDays, parseISO } from 'date-fns'
-import { countLabel } from '@/features/academics/labels'
+import { countLabel, minutesLabel } from '@/features/academics/labels'
+import { SLEEP_AIM } from '@/features/life/health/health'
 import { METRIC_LABEL, metricValueLabel, type Metric } from '@/features/metrics/metrics'
 import { DAY_WINDOWS } from '@/features/planner/planner'
 import type { Area } from '@/features/planner/types'
 import { fitNumber, NUMBER_RULES, type Change, type ReviewChange } from './changes'
 import { usableChanges, type ReviewContext } from './review'
-import { WINDOW_PHRASE, type WeekStats } from './weekStats'
+import { RESTED_MINUTES, WINDOW_PHRASE, type WeekStats } from './weekStats'
 
 // The weekly review written on the device, from fixed rules (Demo Mode, and when the AI can't be
 // reached). Each rule looks at one part of the week's numbers and may give an insight and a change;
@@ -23,6 +24,8 @@ interface Idea {
 const MIN_BLOCKS = 5
 const MIN_ANSWERS_PER_WINDOW = 8
 const MIN_REVIEWS = 10
+/** Nights a week (or days after each kind of night) before sleep is talked about. */
+const MIN_NIGHTS = 3
 
 const percent = (share: number) => `${Math.round(share * 100)}%`
 const byScore = (a: Idea, b: Idea) => b.score - a.score
@@ -107,6 +110,33 @@ function ideas(stats: WeekStats, ctx: ReviewContext): Idea[] {
       change: settings.budget[from] >= 10 ? { type: 'shift_budget', from, to: 'life', points: 5 } : undefined,
       reason: 'More time for rest and life helps you recover.',
     })
+  }
+
+  // Sleep: study after rested and short nights (the last 4 weeks; only when rest helped), then this week's nights.
+  const { sleep } = stats
+  const { rested, short } = sleep.vsStudy
+  const restedHours = RESTED_MINUTES / 60
+  if (rested.days >= MIN_NIGHTS && short.days >= MIN_NIGHTS) {
+    if (rested.attempts >= MIN_ANSWERS_PER_WINDOW && short.attempts >= MIN_ANSWERS_PER_WINDOW && rested.accuracy !== null && short.accuracy !== null && rested.accuracy - short.accuracy >= 0.1) {
+      found.push({ score: 82, insight: `After ${restedHours}+ hours of sleep you got ${percent(rested.accuracy)} of your answers right, against ${percent(short.accuracy)} after shorter nights (last 4 weeks).` })
+    } else if (rested.focusMinutes !== null && short.focusMinutes !== null && rested.focusMinutes - short.focusMinutes >= 20) {
+      found.push({
+        score: 78,
+        insight: `After ${restedHours}+ hours of sleep you focused ${minutesLabel(Math.round(rested.focusMinutes))} a day, against ${minutesLabel(Math.round(short.focusMinutes))} after shorter nights (last 4 weeks).`,
+      })
+    }
+  }
+  if (sleep.nights >= MIN_NIGHTS && sleep.avgMinutes !== null) {
+    if (sleep.avgMinutes < RESTED_MINUTES) {
+      found.push({
+        score: 72,
+        insight: `You slept about ${minutesLabel(sleep.avgMinutes)} a night, with ${sleep.shortNights} of ${sleep.nights} nights under ${restedHours} hours; most people need ${SLEEP_AIM.min}–${SLEEP_AIM.max} hours.`,
+      })
+    } else if (sleep.regularity !== null && sleep.regularity < 60) {
+      found.push({ score: 57, insight: `Your bed and wake times moved around this week (regularity ${sleep.regularity}/100); steady times keep your energy and memory steady.` })
+    } else if (sleep.regularity !== null && sleep.regularity >= 80) {
+      found.push({ score: 45, insight: `You slept about ${minutesLabel(sleep.avgMinutes)} a night at regular times: a good base for focus and memory.` })
+    }
   }
 
   // Exams coming up: finishing topics two weeks early leaves time to revise.

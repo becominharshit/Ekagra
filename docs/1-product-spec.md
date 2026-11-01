@@ -231,6 +231,9 @@ Turns goals into a realistic daily schedule and keeps fixing it.
 Every Sunday (customizable), a 5-minute review (Me → Weekly review; a card on Today on the review day and the day after, and on Android a notification at 18:00):
 
 - Hours per area vs budget, topics completed, quiz accuracy and retention, focus minutes, top distractions (apps and times), **(P3)** income and hustle progress, **(P4)** sleep and workouts.
+  - As built (sleep and workouts added 2026-11-02): the week's average sleep, regularity (0–100) and nights under 7 hours, and the workouts logged.
+  - A **Sleep and study** card compares, over the last 4 weeks, the days after a night of 7+ hours with the days after a shorter one: focus minutes that day and the share of answers right. It's shown as a pattern in the student's own numbers, not proof and not medical advice. With no nights logged, it links to Life → Sleep & steps.
+  - Sleep shows up in the insights only (no change is about sleep), e.g. "After 7+ hours of sleep you got 85% of your answers right, against 62% after shorter nights (last 4 weeks)."
 - **3 insights** and **3 suggested changes** for next week, e.g. "Move DBMS to mornings; your accuracy is 20% higher before noon." The student accepts or edits each change.
   - As built: the changes come from a fixed list the app can apply in one tap: study a subject at a part of the day, move budget between areas, the buffer, the daily review cap, new flashcards a day, block length, best focus hours, revision days, blocking apps in every study block, next week's challenge, a skill course's weekly time.
   - Each one can be edited before applying, or skipped. Applying a setting re-makes the plan.
@@ -287,7 +290,7 @@ Each hustle has a goal (e.g. "first ₹10,000 by January"), phases with steps fr
 - **Sleep and steps:** from Health Connect (works with many phones, watches and fitness apps); sleep consistency score; the weekly review shows how sleep affects study results.
   - As built: on Android, Health Connect's sleep sessions and daily step totals for the last 30 days (read only, after the student allows it). Anyone can type nights and steps in; a typed value wins over Health Connect's for that day.
   - Sleep shows the 7-night average against 7–9 hours and a regularity score (0–100, from how much bed and wake times wander). Steps show today against a goal (8,000 by default) and the 7-day average.
-  - **Not built yet:** sleep in the weekly review.
+  - In the weekly review (added 2026-11-02): the week's average sleep, regularity and short nights, and focus and quiz accuracy on the days after rested (7+ hours) and short nights over the last 4 weeks (§12).
 - **Communication:** AI speaking partner for 5–10 minutes of daily voice practice (interviews, presentations, group discussions, small talk) with feedback on clarity, filler words, pace and vocabulary, and progress over time.
   - As built: pick the kind of speech and a question (or your own), record up to 3 minutes and play it back. `ai-speak` writes a word-for-word transcript with scores for clarity, structure, vocabulary and confidence, one strength and tips.
   - Words per minute and filler words ("um", "like", "basically", "actually", "you know", Hinglish "matlab", "yaar") are counted in code. Only the transcript, the counts and the scores are kept, never the recording.

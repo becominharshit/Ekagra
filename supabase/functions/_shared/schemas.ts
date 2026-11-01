@@ -450,6 +450,9 @@ const minutes = z.number().min(0).max(100_000)
 const shareOrNull = z.number().min(0).max(1).nullable()
 const accuracy = z.object({ attempts: count, accuracy: shareOrNull })
 const areaTime = z.object({ planned: minutes, done: minutes, budgetPct: z.number().min(0).max(100), sharePct: z.number().min(0).max(100) })
+const nightsInWeek = z.number().int().min(0).max(7)
+/** Study on the days after one kind of night: days, focus minutes a day, answers and the share right. */
+const studyAfterSleep = z.object({ days: count, focusMinutes: minutes.nullable(), attempts: count, accuracy: shareOrNull })
 
 export const ReviewStatsSchema = z.object({
   areas: z.object({ academics: areaTime, hustle: areaTime, life: areaTime }),
@@ -484,6 +487,18 @@ export const ReviewStatsSchema = z.object({
   checkIns: z.object({ days: count, energy: z.number().min(1).max(5).nullable(), mood: z.number().min(1).max(5).nullable(), crashedDays: count }),
   tasks: z.object({ completed: count, overdue: count }),
   hustle: z.object({ minutes, income: z.array(z.object({ currency: z.string().max(8), amount: z.number() })).max(5) }),
+  // Sleep and workouts are optional: app versions from before they were added still get reviews.
+  sleep: z
+    .object({
+      nights: nightsInWeek,
+      avgMinutes: z.number().min(0).max(1440).nullable(),
+      regularity: z.number().min(0).max(100).nullable(),
+      shortNights: nightsInWeek,
+      /** The last 4 weeks: study after nights of 7+ hours (rested) and after shorter ones. */
+      vsStudy: z.object({ rested: studyAfterSleep, short: studyAfterSleep }),
+    })
+    .optional(),
+  workouts: count.optional(),
   metrics: z.object({ memory: shareOrNull, learning_speed: z.number().min(0).nullable(), processing_speed: z.number().min(0).nullable(), problem_solving: shareOrNull }).nullable(),
 })
 

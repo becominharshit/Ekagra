@@ -16,6 +16,7 @@ import { peakWindowFor, readSettings, toChronotype, toMentorTone, type Settings 
 import { ChangeCard } from '@/features/review/ChangeCard'
 import { readReviewChanges, type ChangeContext } from '@/features/review/changes'
 import { useApplyReviewChange, useMakeReview, useReview, useUpdateReview, withChange, type WeeklyReview } from '@/features/review/reviewData'
+import { SleepAndStudy } from '@/features/review/SleepAndStudy'
 import { readWeekStats, reviewWeekStart } from '@/features/review/weekStats'
 import { WeekNumbers } from '@/features/review/WeekNumbers'
 import { useNow } from '@/hooks/useNow'
@@ -164,6 +165,8 @@ function ReviewView({
           {stats ? <WeekNumbers stats={stats} /> : <p className="text-sm text-muted-foreground">The numbers of this review couldn't be read.</p>}
         </CardContent>
       </Card>
+
+      {stats && <SleepAndStudy sleep={stats.sleep} />}
 
       <Card>
         <CardHeader>

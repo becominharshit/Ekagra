@@ -1,11 +1,13 @@
-import { addDays, format } from 'date-fns'
+import { addDays, format, parseISO } from 'date-fns'
+import { onePerDate, SLEEP_AIM, sleepRegularity } from '@/features/life/health/health'
 import type { MetricValues } from '@/features/metrics/metrics'
 import { DAY_WINDOWS, WINDOW_HOURS, type DayWindow } from '@/features/planner/planner'
 import type { Area, Budget } from '@/features/planner/types'
 
 // The numbers of one week (Monday to Sunday) for the Sunday review: time per area against the
 // budget, plan blocks done, each subject, topics learned, quiz accuracy (also by part of the day,
-// over the last 4 weeks), flashcard retention, focus, distractions, check-ins, tasks, hustle and
+// over the last 4 weeks), flashcard retention, focus, distractions, check-ins, tasks, hustle,
+// sleep (and how study went after rested and short nights, over the last 4 weeks), workouts and
 // the 4 learning metrics. Pure functions, tested on their own.
 
 /** "Study DBMS in the mornings", "more accurate at night". */
@@ -39,6 +41,7 @@ export interface WeekStatsInputs {
   attempts: { question_id: string; is_correct: boolean | null; created_at: string }[]
   questionSubjects: ReadonlyMap<string, string | null>
   reviews: { rating: number; reviewed_at: string }[]
+  /** Focus sessions of the last 4 weeks (or more): the week's count, and the rest for sleep and study. */
   focus: { started_at: string; actual_minutes: number | null; completed: boolean }[]
   distractions: { kind: string; app_package: string | null; reason: string | null; at: string }[]
   /** Names of blocked apps by package, e.g. com.instagram.android → Instagram (null: the package name is shown). */
@@ -47,11 +50,39 @@ export interface WeekStatsInputs {
   tasks: { status: string; completed_at: string | null; due_at: string | null }[]
   timeEntries: { minutes: number; started_at: string }[]
   transactions: { kind: string; amount: number; currency: string; occurred_on: string }[]
+  /** Nights of the last 4 weeks (or more), typed in or from Health Connect. */
+  sleep: { date: string; bed_at: string; wake_at: string; minutes: number; source: string }[]
+  workouts: { date: string }[]
   /** The week's 4 learning metrics (worked out by src/features/metrics), when known. */
   metrics?: MetricValues | null
 }
 
 type Share = { attempts: number; accuracy: number | null }
+
+/** A night of at least this long counts as rested: the low end of the 7–9 hours most people need. */
+export const RESTED_MINUTES = SLEEP_AIM.min * 60
+
+/** Study on the days after one kind of night: how many days, focus minutes a day, and the answers given. */
+export type StudyAfterSleep = { days: number; focusMinutes: number | null; attempts: number; accuracy: number | null }
+
+/** A type (not an interface) so it can be saved as JSON in weekly_reviews.stats. */
+export type SleepWeek = {
+  /** Nights logged this week (a night belongs to the morning it ended). */
+  nights: number
+  /** Average minutes asleep. */
+  avgMinutes: number | null
+  /** How regular bed and wake times were, 0–100 (null under 3 nights). */
+  regularity: number | null
+  /** Nights under 7 hours. */
+  shortNights: number
+  /** The last 4 weeks: study on the day after a night of 7+ hours (rested), and after a shorter one. */
+  vsStudy: { rested: StudyAfterSleep; short: StudyAfterSleep }
+}
+
+const noStudy = (): StudyAfterSleep => ({ days: 0, focusMinutes: null, attempts: 0, accuracy: null })
+
+/** A week without sleep logged (also how older saved reviews read). */
+export const noSleep = (): SleepWeek => ({ nights: 0, avgMinutes: null, regularity: null, shortNights: 0, vsStudy: { rested: noStudy(), short: noStudy() } })
 
 /** A type (not an interface) so it can be saved as JSON in weekly_reviews.stats. */
 export type WeekStats = {
@@ -78,6 +109,9 @@ export type WeekStats = {
   checkIns: { days: number; energy: number | null; mood: number | null; crashedDays: number }
   tasks: { completed: number; overdue: number }
   hustle: { minutes: number; income: { currency: string; amount: number }[] }
+  sleep: SleepWeek
+  /** Workouts logged this week. */
+  workouts: number
   /** Memory, learning speed, processing speed and problem solving (null = not enough practice). */
   metrics: MetricValues | null
 }
@@ -100,6 +134,50 @@ function top<T>(values: T[], count: number): { value: T; count: number }[] {
 function doneMinutes(block: WeekStatsInputs['blocks'][number]): number {
   if (block.status !== 'done' && block.status !== 'partial') return 0
   return block.actual_minutes ?? (block.status === 'done' ? block.planned_minutes : 0)
+}
+
+/**
+ * The week's sleep, and how study went on the day after each kind of night over the last 4 weeks:
+ * focus minutes that day and the answers given that day. One night per morning: what the student
+ * typed wins over Health Connect's (as in Life → Sleep & steps).
+ */
+export function sleepWeek(inputs: Pick<WeekStatsInputs, 'sleep' | 'focus' | 'attempts'>, firstDay: string, lastDay: string): SleepWeek {
+  const nights = onePerDate(inputs.sleep)
+  const windowFirst = format(addDays(parseISO(lastDay), 1 - WINDOW_DAYS), 'yyyy-MM-dd')
+  const week = nights.filter((night) => night.date >= firstDay && night.date <= lastDay)
+  const recent = nights.filter((night) => night.date >= windowFirst && night.date <= lastDay)
+
+  const focusByDay = new Map<string, number>()
+  for (const session of inputs.focus) {
+    const day = format(new Date(session.started_at), 'yyyy-MM-dd')
+    focusByDay.set(day, (focusByDay.get(day) ?? 0) + (session.actual_minutes ?? 0))
+  }
+  const answersByDay = new Map<string, { right: number; total: number }>()
+  for (const attempt of inputs.attempts) {
+    if (attempt.is_correct === null) continue
+    const day = format(new Date(attempt.created_at), 'yyyy-MM-dd')
+    const counts = answersByDay.get(day) ?? { right: 0, total: 0 }
+    counts.total += 1
+    if (attempt.is_correct) counts.right += 1
+    answersByDay.set(day, counts)
+  }
+  const studyAfter = (group: typeof nights): StudyAfterSleep => {
+    const answers = group.map((night) => answersByDay.get(night.date) ?? { right: 0, total: 0 })
+    const right = answers.reduce((sum, day) => sum + day.right, 0)
+    const total = answers.reduce((sum, day) => sum + day.total, 0)
+    return { days: group.length, focusMinutes: average(group.map((night) => focusByDay.get(night.date) ?? 0)), attempts: total, accuracy: share(right, total) }
+  }
+
+  return {
+    nights: week.length,
+    avgMinutes: week.length > 0 ? Math.round(week.reduce((sum, night) => sum + night.minutes, 0) / week.length) : null,
+    regularity: sleepRegularity(week),
+    shortNights: week.filter((night) => night.minutes < RESTED_MINUTES).length,
+    vsStudy: {
+      rested: studyAfter(recent.filter((night) => night.minutes >= RESTED_MINUTES)),
+      short: studyAfter(recent.filter((night) => night.minutes < RESTED_MINUTES)),
+    },
+  }
 }
 
 export function weekStats(inputs: WeekStatsInputs): WeekStats {
@@ -217,15 +295,18 @@ export function weekStats(inputs: WeekStatsInputs): WeekStats {
       minutes: inputs.timeEntries.filter((entry) => inWeek(entry.started_at)).reduce((sum, entry) => sum + entry.minutes, 0),
       income: [...income].map(([currency, amount]) => ({ currency, amount: round(amount, 2) })),
     },
+    sleep: sleepWeek(inputs, firstDay, lastDay),
+    workouts: inputs.workouts.filter((workout) => onWeekDay(workout.date)).length,
     metrics: inputs.metrics ?? null,
   }
 }
 
-/** A saved review's numbers (weekly_reviews.stats), or null when they're missing or broken. */
+/** A saved review's numbers (weekly_reviews.stats), or null when they're missing or broken. Reviews saved before sleep was added read with none. */
 export function readWeekStats(json: unknown): WeekStats | null {
   if (typeof json !== 'object' || json === null || Array.isArray(json)) return null
   const value = json as Partial<WeekStats>
-  return typeof value.weekStart === 'string' && value.areas && value.blocks && value.reviews && value.distractions ? (json as WeekStats) : null
+  if (typeof value.weekStart !== 'string' || !value.areas || !value.blocks || !value.reviews || !value.distractions) return null
+  return { ...(json as WeekStats), sleep: value.sleep ?? noSleep(), workouts: value.workouts ?? 0 }
 }
 
 /** The reminder's time on the review day. */

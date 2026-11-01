@@ -1,6 +1,6 @@
 import { readSettings } from '@/features/profile/settings'
 import type { ReviewContext } from './review'
-import type { WeekStats } from './weekStats'
+import { noSleep, type WeekStats } from './weekStats'
 
 // Shared test data for the weekly review: a quiet week and the context around it.
 
@@ -26,6 +26,8 @@ export function quietWeek(values: Partial<WeekStats> = {}): WeekStats {
     checkIns: { days: 0, energy: null, mood: null, crashedDays: 0 },
     tasks: { completed: 0, overdue: 0 },
     hustle: { minutes: 0, income: [] },
+    sleep: noSleep(),
+    workouts: 0,
     metrics: null,
     ...values,
   }

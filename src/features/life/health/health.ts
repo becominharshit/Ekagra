@@ -70,6 +70,13 @@ export function sleepRegularity(nights: { bed_at: string; wake_at: string }[]): 
   return Math.max(0, Math.min(100, Math.round(100 - ((bed + wake) / 2) * (100 / 120))))
 }
 
+/** A regularity score in words. */
+export function regularityLabel(score: number): string {
+  if (score >= 80) return 'Very regular'
+  if (score >= 60) return 'Fairly regular'
+  return 'Irregular times'
+}
+
 export function average(values: number[]): number | null {
   return values.length > 0 ? Math.round(values.reduce((sum, value) => sum + value, 0) / values.length) : null
 }

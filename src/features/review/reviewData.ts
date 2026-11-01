@@ -61,6 +61,8 @@ export async function loadWeekInputs(source: DataSource, weekStart: Date, budget
       tasks: demoDb.list('tasks'),
       timeEntries: demoDb.list('time_entries'),
       transactions: demoDb.list('transactions'),
+      sleep: demoDb.list('sleep_logs'),
+      workouts: demoDb.list('workouts'),
     }
   }
 
@@ -69,7 +71,9 @@ export async function loadWeekInputs(source: DataSource, weekStart: Date, budget
   const to = addDays(weekStart, 7).toISOString()
   const firstDay = format(weekStart, 'yyyy-MM-dd')
   const lastDay = format(addDays(weekStart, 6), 'yyyy-MM-dd')
-  const [blocks, topics, attempts, reviews, focus, distractions, apps, checkIns, tasks, timeEntries, transactions] = await Promise.all([
+  // Answers, focus and sleep go back 4 weeks: for accuracy by part of the day, and sleep and study.
+  const windowStart = addDays(weekStart, 7 - WINDOW_DAYS)
+  const [blocks, topics, attempts, reviews, focus, distractions, apps, checkIns, tasks, timeEntries, transactions, sleep, workouts] = await Promise.all([
     readAll((start, end) =>
       client.from('plan_blocks').select('date, area, subject_id, planned_minutes, actual_minutes, status').eq('user_id', userId).gte('date', firstDay).lte('date', lastDay).order('id').range(start, end),
     ),
@@ -79,13 +83,15 @@ export async function loadWeekInputs(source: DataSource, weekStart: Date, budget
         .from('attempts')
         .select('question_id, is_correct, created_at')
         .eq('user_id', userId)
-        .gte('created_at', addDays(weekStart, 7 - WINDOW_DAYS).toISOString())
+        .gte('created_at', windowStart.toISOString())
         .lt('created_at', to)
         .order('id')
         .range(start, end),
     ),
     readAll((start, end) => client.from('flashcard_reviews').select('rating, reviewed_at').eq('user_id', userId).gte('reviewed_at', from).lt('reviewed_at', to).order('id').range(start, end)),
-    readAll((start, end) => client.from('focus_sessions').select('started_at, actual_minutes, completed').eq('user_id', userId).gte('started_at', from).lt('started_at', to).order('id').range(start, end)),
+    readAll((start, end) =>
+      client.from('focus_sessions').select('started_at, actual_minutes, completed').eq('user_id', userId).gte('started_at', windowStart.toISOString()).lt('started_at', to).order('id').range(start, end),
+    ),
     readAll((start, end) => client.from('distraction_events').select('kind, app_package, reason, at').eq('user_id', userId).gte('at', from).lt('at', to).order('id').range(start, end)),
     readAll((start, end) => client.from('blocked_apps').select('package_name, label').eq('user_id', userId).order('id').range(start, end)),
     readAll((start, end) => client.from('daily_checkins').select('date, energy, mood, minimum_day').eq('user_id', userId).gte('date', firstDay).lte('date', lastDay).order('id').range(start, end)),
@@ -95,6 +101,17 @@ export async function loadWeekInputs(source: DataSource, weekStart: Date, budget
     readAll((start, end) =>
       client.from('transactions').select('kind, amount, currency, occurred_on').eq('user_id', userId).gte('occurred_on', firstDay).lte('occurred_on', lastDay).order('id').range(start, end),
     ),
+    readAll((start, end) =>
+      client
+        .from('sleep_logs')
+        .select('date, bed_at, wake_at, minutes, source')
+        .eq('user_id', userId)
+        .gte('date', format(windowStart, 'yyyy-MM-dd'))
+        .lte('date', lastDay)
+        .order('id')
+        .range(start, end),
+    ),
+    readAll((start, end) => client.from('workouts').select('date').eq('user_id', userId).gte('date', firstDay).lte('date', lastDay).order('id').range(start, end)),
   ])
   return {
     weekStart,
@@ -116,6 +133,8 @@ export async function loadWeekInputs(source: DataSource, weekStart: Date, budget
     tasks,
     timeEntries,
     transactions,
+    sleep,
+    workouts,
   }
 }
 

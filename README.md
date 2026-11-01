@@ -149,3 +149,13 @@ Add a dated line whenever an important decision is made or changed.
   - The payload is version 2, checked with Zod; long texts are cut to fit a link.
   - An incoming link is turned into the anchor's address before the router starts (`launch.ts`). Otherwise the index redirect to /today wins the race.
   - Realtime on `ai_anchors` syncs anchors between the two apps when both are signed in to the same account.
+- 2026-11-02: Sleep in the weekly review, the last item left from M14 (no migration; `ai-review` prompt `review-v2`). **The numbers** (`weekStats.ts`):
+  - The week's nights, one per morning (a typed night wins over Health Connect's, as in Life → Sleep & steps). From them: average minutes, regularity (0–100, from 3 nights) and nights under 7 hours (`RESTED_MINUTES`, the low end of 7–9). Workouts logged that week count too.
+  - Sleep vs study uses the same last 4 weeks as accuracy by part of the day. Each night is rested (7+ hours) or short, and the day it ended gets that day's focus minutes and answers. Focus sessions are now loaded for 4 weeks too.
+  - Reviews saved before this read as having no sleep.
+
+  **Insights, not changes:** no change type is about sleep (the 11 stay), so sleep only shows up in the insights.
+  - Rules on the device need at least 3 days after each kind of night, and speak only when rested nights went better: 10+ points more answers right (8+ answers each), or else 20+ more minutes of focus a day. Then one note about the week: under 7 hours on average, or irregular times (under 60), or praise for 7+ hours at regular times (80+).
+  - `ai-review` gets `sleep` and `workouts`, optional in the request so older app versions still work. The prompt asks for one sleep insight when it stands out, as a pattern rather than proof, never medical advice.
+
+  **Screen:** a "Sleep and study" card under the week in numbers (with a link to Life → Sleep & steps when no nights were logged), and a Workouts tile when there were any. Phase 4's "Burnout guard; sleep vs study results" is ticked (the Burnout Guard came in M4).

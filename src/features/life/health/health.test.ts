@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { average, dailyValues, nightFromTimes, nightsFromSessions, onePerDate, sleepRegularity } from './health'
+import { average, dailyValues, nightFromTimes, nightsFromSessions, onePerDate, regularityLabel, sleepRegularity } from './health'
 
 // Local times in November 2026.
 const at = (day: number, hour: number, minute = 0) => new Date(2026, 10, day, hour, minute)
@@ -43,6 +43,7 @@ describe('sleep regularity', () => {
     const chaos = [night(2, [21, 0], [5, 0]), night(3, [3, 0], [12, 0]), night(4, [22, 0], [6, 0])]
     expect(sleepRegularity(chaos)).toBeLessThan(10)
     expect(sleepRegularity(wandering.slice(0, 2))).toBeNull()
+    expect([95, 70, 40].map(regularityLabel)).toEqual(['Very regular', 'Fairly regular', 'Irregular times'])
   })
 })
 

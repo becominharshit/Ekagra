@@ -29,6 +29,14 @@ const REQUEST: ReviewRequest = {
     checkIns: { days: 5, energy: 3.2, mood: 3.6, crashedDays: 0 },
     tasks: { completed: 6, overdue: 1 },
     hustle: { minutes: 250, income: [{ currency: 'INR', amount: 2000 }] },
+    sleep: {
+      nights: 6,
+      avgMinutes: 395,
+      regularity: 58,
+      shortNights: 4,
+      vsStudy: { rested: { days: 8, focusMinutes: 95, attempts: 40, accuracy: 0.8 }, short: { days: 12, focusMinutes: 55, attempts: 45, accuracy: 0.62 } },
+    },
+    workouts: 2,
     metrics: { memory: 0.78, learning_speed: null, processing_speed: 21, problem_solving: 0.55 },
   },
   settings: {
@@ -63,7 +71,7 @@ describe('ai-review', () => {
   it('writes 3 insights and up to 3 changes on the Smart tier, and logs the usage', async () => {
     const { response, usage } = await call(REQUEST, ANSWER)
     expect(response.status).toBe(200)
-    expect(await response.json()).toEqual({ ...ANSWER, model: 'smart-model', promptVersion: 'review-v1' })
+    expect(await response.json()).toEqual({ ...ANSWER, model: 'smart-model', promptVersion: 'review-v2' })
     expect(usage.logged).toEqual([expect.objectContaining({ feature: 'review', model: 'smart-model' })])
   })
 
@@ -73,6 +81,22 @@ describe('ai-review', () => {
     for (const part of ['Week starting 2026-11-02', 'Instagram', '\\"bufferPct\\":12', "This week's challenge: memory, target 0.82", 'set_skill_minutes', "Don't suggest what is already set"]) {
       expect(prompt).toContain(part)
     }
+  })
+
+  it('gives the model the sleep numbers, to be read as a pattern and never as medical advice', async () => {
+    const { model } = await call(REQUEST, ANSWER)
+    const prompt = JSON.stringify(model.doGenerateCalls[0]?.prompt)
+    for (const part of ['\\"shortNights\\":4', '\\"vsStudy\\"', 'rested', 'a pattern, not proof', 'never give medical advice', 'No change type is about sleep']) {
+      expect(prompt).toContain(part)
+    }
+  })
+
+  it('still reviews weeks sent by app versions from before sleep was added', async () => {
+    const older: Record<string, unknown> = { ...REQUEST.stats }
+    delete older.sleep
+    delete older.workouts
+    const { response } = await call({ ...REQUEST, stats: older }, ANSWER)
+    expect(response.status).toBe(200)
   })
 
   it('asks again when a change is incomplete or names the wrong kind of subject', async () => {
@@ -91,5 +115,8 @@ describe('ai-review', () => {
   it('rejects numbers that make no sense', async () => {
     const { response } = await call({ ...REQUEST, stats: { ...REQUEST.stats, reviews: { count: 5, retention: 4 } } }, ANSWER)
     expect(response.status).toBe(400)
+    const sleep = REQUEST.stats.sleep
+    const nineNights = await call({ ...REQUEST, stats: { ...REQUEST.stats, sleep: sleep && { ...sleep, nights: 9 } } }, ANSWER)
+    expect(nineNights.response.status).toBe(400)
   })
 })

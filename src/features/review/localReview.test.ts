@@ -4,6 +4,8 @@ import { localReview } from './localReview'
 import { quietWeek, reviewContext } from './reviewTestData'
 
 const share = (attempts: number, accuracy: number | null) => ({ attempts, accuracy })
+const study = (days: number, focusMinutes: number | null, attempts: number, accuracy: number | null) => ({ days, focusMinutes, attempts, accuracy })
+const noExams = () => reviewContext({ subjects: new Map() })
 
 /** Many missed blocks, mornings much better than nights, low retention, Instagram. */
 const hardWeek = quietWeek({
@@ -60,6 +62,37 @@ describe('localReview', () => {
       'You remembered 92% of 25 flashcard reviews: your memory is working well.',
     ])
     expect(review.changes).toEqual([])
+  })
+
+  it('notices better answers after rested nights, and short sleep this week (no changes: sleep has none)', () => {
+    const week = quietWeek({
+      sleep: { nights: 5, avgMinutes: 390, regularity: 55, shortNights: 4, vsStudy: { rested: study(9, 95, 40, 0.8), short: study(10, 50, 36, 0.6) } },
+    })
+    const review = localReview(week, noExams())
+    expect(review.insights).toEqual([
+      'After 7+ hours of sleep you got 80% of your answers right, against 60% after shorter nights (last 4 weeks).',
+      'You slept about 6 h 30 min a night, with 4 of 5 nights under 7 hours; most people need 7–9 hours.',
+    ])
+    expect(review.changes).toEqual([])
+  })
+
+  it('compares focus when there are too few answers, and notices irregular sleep times', () => {
+    const week = quietWeek({
+      sleep: { nights: 4, avgMinutes: 450, regularity: 48, shortNights: 1, vsStudy: { rested: study(6, 82.5, 4, 1), short: study(3, 40, 2, 0.5) } },
+    })
+    expect(localReview(week, noExams()).insights).toEqual([
+      'After 7+ hours of sleep you focused 1 h 23 min a day, against 40 min after shorter nights (last 4 weeks).',
+      'Your bed and wake times moved around this week (regularity 48/100); steady times keep your energy and memory steady.',
+    ])
+  })
+
+  it('says nothing about small gaps or too few nights, and praises enough regular sleep', () => {
+    const steady = quietWeek({
+      sleep: { nights: 7, avgMinutes: 465, regularity: 88, shortNights: 0, vsStudy: { rested: study(20, 60, 50, 0.72), short: study(3, 55, 9, 0.75) } },
+    })
+    expect(localReview(steady, noExams()).insights).toEqual(['You slept about 7 h 45 min a night at regular times: a good base for focus and memory.'])
+    const twoNights = quietWeek({ sleep: { nights: 2, avgMinutes: 300, regularity: null, shortNights: 2, vsStudy: { rested: study(1, 90, 8, 1), short: study(2, 10, 8, 0.2) } } })
+    expect(localReview(twoNights, noExams()).insights).toEqual(['There was little to measure this week. Plan a few study blocks and mark them done, and next week brings a real review.'])
   })
 
   it('says so when there was little to measure', () => {

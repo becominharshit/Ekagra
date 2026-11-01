@@ -25,6 +25,14 @@ describe('toReviewRequest', () => {
       { id: 'logo', name: 'Logo design', planned: 120, done: 60, attempts: 0, accuracy: null },
     ],
     topicsLearned: [{ title: 'Joins', subjectId: 'dbms' }],
+    sleep: {
+      nights: 4,
+      avgMinutes: 413,
+      regularity: 78,
+      shortNights: 2,
+      vsStudy: { rested: { days: 3, focusMinutes: 90, attempts: 10, accuracy: 0.9 }, short: { days: 2, focusMinutes: 15, attempts: 8, accuracy: 0.375 } },
+    },
+    workouts: 2,
     metrics: { memory: 0.85, learning_speed: null, processing_speed: 20, problem_solving: null },
   })
   const ctx = reviewContext({
@@ -43,6 +51,12 @@ describe('toReviewRequest', () => {
     expect(request.challenge).toEqual({ metric: 'memory', target: 0.82, onTarget: true })
     expect(subjectIdByKey.get('s2')).toBe('logo')
     expect(() => ReviewRequestSchema.parse(request)).not.toThrow()
+  })
+
+  it('sends the sleep and workout numbers too', () => {
+    const { request } = toReviewRequest(stats, ctx)
+    expect(request.stats.sleep).toEqual(stats.sleep)
+    expect(request.stats.workouts).toBe(2)
   })
 
   it('uses the same change types, parts of the day and metrics as the Edge Function', () => {

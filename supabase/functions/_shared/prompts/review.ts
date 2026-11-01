@@ -2,7 +2,7 @@ import type { ReviewRequest } from '../schemas.ts'
 
 // Prompt for ai-review (Smart tier): the Sunday review, 3 insights and up to 3 changes the app can
 // apply in one tap. Change the version when the wording changes.
-export const REVIEW_PROMPT_VERSION = 'review-v1'
+export const REVIEW_PROMPT_VERSION = 'review-v2'
 
 const TONES: Record<ReviewRequest['mentorTone'], string> = {
   strict: 'Be brief and direct.',
@@ -26,6 +26,7 @@ export function reviewInstructions(request: ReviewRequest): string {
 - challenge_metric: metric for next week's challenge (memory, learning_speed, processing_speed, problem_solving); only one that has a value this week.
 - set_skill_minutes: subjectKey of a skill course + value = minutes a week (30-600).
 Each change needs a reason from the numbers. Don't suggest what is already set (see "settings"). Pick the changes that would help most; fewer is fine when the week went well or there is little data.
+Sleep ("sleep", when there are nights): avgMinutes, shortNights (under 7 hours) and regularity (0-100; 100 = the same bed and wake times every day) are this week's. vsStudy covers the last 4 weeks: focus minutes a day and answers right on the days after 7+ hours of sleep (rested) and after shorter nights (short). When sleep stands out (under 7 hours on average, regularity under 60, or a clear gap between rested and short with 3+ days each), give it one insight. Call a gap a pattern, not proof; never give medical advice. No change type is about sleep. "workouts" = workouts logged this week.
 Accuracy shares are 0-1; minutes are minutes. Use the subjects' names in the text, their keys only in subjectKey. No greetings, emojis or markdown. Simple English.
 ${TONES[request.mentorTone]} Answer only with JSON in the required format.`
 }

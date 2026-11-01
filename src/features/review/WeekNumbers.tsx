@@ -45,6 +45,7 @@ export function WeekNumbers({ stats }: { stats: WeekStats }) {
     },
     { label: 'Energy', value: stats.checkIns.energy === null ? '–' : `${stats.checkIns.energy}/5`, note: countLabel(stats.checkIns.days, 'check-in') },
     { label: 'Tasks done', value: String(stats.tasks.completed), note: stats.tasks.overdue > 0 ? `${stats.tasks.overdue} overdue` : 'None overdue' },
+    ...(stats.workouts > 0 ? [{ label: 'Workouts', value: String(stats.workouts), note: 'Logged this week' }] : []),
     ...(stats.hustle.minutes > 0 || stats.hustle.income.length > 0
       ? [
           {

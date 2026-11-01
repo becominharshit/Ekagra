@@ -27,6 +27,11 @@ describe("a week's numbers in Demo Mode", () => {
     demoDb.insert('focus_sessions', [{ area: 'academics', mode: 'pomodoro', planned_minutes: 25, actual_minutes: 25, completed: true, started_at: at(3) }])
     demoDb.insert('daily_checkins', [{ date: '2026-11-03', energy: 4, mood: 4 }])
     demoDb.insert('transactions', [{ hustle_id: hustle?.id ?? '', kind: 'income', amount: 800, currency: 'INR', occurred_on: '2026-11-05' }])
+    demoDb.insert('sleep_logs', [
+      { date: '2026-11-03', bed_at: at(2, 23), wake_at: at(3, 7), minutes: 480 },
+      { date: '2026-11-04', bed_at: at(4, 1), wake_at: at(4, 7), minutes: 360, source: 'health_connect' },
+    ])
+    demoDb.insert('workouts', [{ date: '2026-11-05', title: 'Hostel workout' }])
 
     const stats = await loadWeekStats(DEMO, WEEK, { academics: 55, hustle: 25, life: 20 })
     expect(stats.areas.academics).toEqual({ planned: 100, done: 40, budgetPct: 55, sharePct: 100 })
@@ -36,6 +41,10 @@ describe("a week's numbers in Demo Mode", () => {
     expect(stats.focus).toEqual({ minutes: 25, sessions: 1, completed: 1 })
     expect(stats.checkIns).toMatchObject({ days: 1, energy: 4 })
     expect(stats.hustle.income).toEqual([{ currency: 'INR', amount: 800 }])
+    expect(stats.sleep).toMatchObject({ nights: 2, avgMinutes: 420, shortNights: 1 })
+    // The 25-minute focus session was on the day after the 8-hour night.
+    expect(stats.sleep.vsStudy).toMatchObject({ rested: { days: 1, focusMinutes: 25 }, short: { days: 1, focusMinutes: 0 } })
+    expect(stats.workouts).toBe(1)
   })
 })
 

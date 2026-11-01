@@ -61,6 +61,8 @@ export function toReviewRequest(stats: WeekStats, ctx: ReviewContext): { request
         checkIns: stats.checkIns,
         tasks: stats.tasks,
         hustle: { minutes: stats.hustle.minutes, income: stats.hustle.income.slice(0, 5) },
+        sleep: stats.sleep,
+        workouts: stats.workouts,
         metrics: stats.metrics,
       },
       settings: {

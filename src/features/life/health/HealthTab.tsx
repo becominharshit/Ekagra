@@ -13,7 +13,7 @@ import { readSettings } from '@/features/profile/settings'
 import { useNow } from '@/hooks/useNow'
 import { healthBridge, healthBridgeAvailable } from '@/lib/native/healthBridge'
 import { useLifeMutation } from '../lifeData'
-import { average, dailyValues, nightFromTimes, onePerDate, SLEEP_AIM, sleepRegularity, type SleepLog, type StepCount } from './health'
+import { average, dailyValues, nightFromTimes, onePerDate, regularityLabel, SLEEP_AIM, sleepRegularity, type SleepLog, type StepCount } from './health'
 import { deleteSleep, deleteSteps, saveNights, saveSteps, SYNC_DAYS, useHealthSync, useSleepLogs, useStepCounts } from './healthData'
 
 /** The charts show this many days, today last. */
@@ -23,7 +23,6 @@ const number = (value: number) => value.toLocaleString('en-IN')
 const clock = (iso: string) => format(parseISO(iso), 'HH:mm')
 const dayLabel = (date: string) => format(parseISO(date), 'EEE d MMM')
 const messageOf = (error: unknown) => (error instanceof Error ? error.message : 'Something went wrong. Please try again.')
-const regularityNote = (score: number) => (score >= 80 ? 'Very regular' : score >= 60 ? 'Fairly regular' : 'Irregular times')
 
 /** Life → Sleep & steps: from Health Connect on Android, or typed in; averages, regularity and charts. */
 export function HealthTab() {
@@ -199,7 +198,7 @@ function SleepCard({ rows, today }: { rows: SleepLog[]; today: string }) {
       <CardContent className="grid gap-4">
         <dl className="grid grid-cols-3 gap-2">
           <Tile label="7-night average" value={averageMinutes === null ? '–' : minutesLabel(averageMinutes)} note={`Most people need ${SLEEP_AIM.min}–${SLEEP_AIM.max} h`} />
-          <Tile label="Regularity" value={regularity === null ? '–' : `${regularity}/100`} note={regularity === null ? 'Needs 3 nights' : regularityNote(regularity)} />
+          <Tile label="Regularity" value={regularity === null ? '–' : `${regularity}/100`} note={regularity === null ? 'Needs 3 nights' : regularityLabel(regularity)} />
           <Tile label="Nights" value={String(week.length)} note="in the last 7 days" />
         </dl>
         {known.length > 0 && (

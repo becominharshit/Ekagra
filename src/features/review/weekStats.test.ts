@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { dayWindowOf, nextReviewAt, readWeekStats, reviewOffset, reviewWeekStart, weekStats, type WeekStatsInputs } from './weekStats'
+import { dayWindowOf, nextReviewAt, noSleep, readWeekStats, RESTED_MINUTES, reviewOffset, reviewWeekStart, weekStats, type WeekStatsInputs } from './weekStats'
 
 // The week of Monday 2 November 2026 (local time).
 const WEEK = new Date(2026, 10, 2)
@@ -24,6 +24,8 @@ const empty: WeekStatsInputs = {
   tasks: [],
   timeEntries: [],
   transactions: [],
+  sleep: [],
+  workouts: [],
 }
 
 const block = (date: string, area: string, status: string, planned: number, actual: number | null = null, subject: string | null = null) => ({
@@ -150,6 +152,69 @@ describe('weekStats', () => {
   })
 })
 
+describe('sleep and study', () => {
+  // Local times in 2026: month 9 is October, 10 is November.
+  const local = (month: number, day: number, hour: number, minute = 0) => new Date(2026, month, day, hour, minute).toISOString()
+  const night = (date: string, bedAt: string, wakeAt: string, minutes: number, source = 'manual') => ({ date, bed_at: bedAt, wake_at: wakeAt, minutes, source })
+  const session = (startedAt: string, minutes: number) => ({ started_at: startedAt, actual_minutes: minutes, completed: true })
+  const answers = (createdAt: string, right: number, total: number) => Array.from({ length: total }, (_, index) => ({ question_id: 'q1', is_correct: index < right, created_at: createdAt }))
+
+  // This week: 8 h, 6 h, 7.5 h and 6 h. Rested days (7+ hours): Oct 20, Nov 2 and Nov 4; short: Nov 3 and Nov 5.
+  const inputs: WeekStatsInputs = {
+    ...empty,
+    sleep: [
+      night('2026-10-11', local(9, 11, 2), local(9, 11, 7), 300, 'health_connect'), // before the last 4 weeks: left out
+      night('2026-10-20', local(9, 19, 23), local(9, 20, 7), 480), // in the last 4 weeks, not this week
+      night('2026-11-02', local(10, 1, 23), local(10, 2, 7), 480),
+      night('2026-11-03', local(10, 3, 1), local(10, 3, 7), 360),
+      night('2026-11-04', local(10, 3, 23, 30), local(10, 4, 7), 450),
+      night('2026-11-05', local(10, 5, 1, 30), local(10, 5, 7), 330, 'health_connect'),
+      night('2026-11-05', local(10, 5, 1), local(10, 5, 7), 360), // typed in: wins over Health Connect's
+    ],
+    focus: [session(local(9, 20, 10), 120), session(local(10, 2, 9), 60), session(local(10, 2, 15), 30), session(local(10, 3, 10), 30), session(local(10, 4, 10), 60)],
+    attempts: [
+      ...answers(local(9, 11, 9), 0, 4),
+      ...answers(local(9, 20, 9), 2, 2),
+      ...answers(local(10, 2, 9), 4, 4),
+      ...answers(local(10, 3, 9), 2, 4),
+      ...answers(local(10, 4, 9), 3, 4),
+      ...answers(local(10, 5, 9), 1, 4),
+      { question_id: 'q1', is_correct: null, created_at: local(10, 2, 11) }, // not marked: left out
+    ],
+    workouts: [{ date: '2026-11-03' }, { date: '2026-11-07' }, { date: '2026-11-09' }],
+  }
+
+  it("works out the week's sleep, one night per morning (typed in before Health Connect's)", () => {
+    // Average (480 + 360 + 450 + 360) / 4 = 412.5; bedtimes 23:00, 01:00, 23:30 and 01:00, always up at 07:00.
+    expect(weekStats(inputs).sleep).toMatchObject({ nights: 4, avgMinutes: 413, regularity: 78, shortNights: 2 })
+  })
+
+  it('compares focus and answers on the days after rested and short nights, over the last 4 weeks', () => {
+    const stats = weekStats(inputs)
+    expect(RESTED_MINUTES).toBe(7 * 60)
+    expect(stats.sleep.vsStudy).toEqual({
+      rested: { days: 3, focusMinutes: 90, attempts: 10, accuracy: 0.9 },
+      short: { days: 2, focusMinutes: 15, attempts: 8, accuracy: 0.375 },
+    })
+    // Older focus sessions only count for sleep and study, not for the week's focus.
+    expect(stats.focus).toEqual({ minutes: 180, sessions: 4, completed: 4 })
+    expect(stats.workouts).toBe(2)
+  })
+
+  it('counts a night of exactly 7 hours as rested', () => {
+    const { sleep } = weekStats({ ...inputs, sleep: [night('2026-11-06', local(10, 6, 0), local(10, 6, 7), 420)], focus: [], attempts: [] })
+    expect(sleep).toMatchObject({ nights: 1, avgMinutes: 420, regularity: null, shortNights: 0 })
+    expect(sleep.vsStudy.rested).toEqual({ days: 1, focusMinutes: 0, attempts: 0, accuracy: null })
+    expect(sleep.vsStudy.short.days).toBe(0)
+  })
+
+  it('has nothing to compare without nights', () => {
+    const stats = weekStats(empty)
+    expect(stats.sleep).toEqual(noSleep())
+    expect(stats.workouts).toBe(0)
+  })
+})
+
 describe('reminders and saved numbers', () => {
   it('reminds on the review day at 18:00, next week once it has passed or the review is done', () => {
     const sunday = (hour: number) => new Date(2026, 10, 8, hour)
@@ -164,6 +229,13 @@ describe('reminders and saved numbers', () => {
     expect(readWeekStats(JSON.parse(JSON.stringify(stats)))).toEqual(stats)
     expect(readWeekStats({ weekStart: '2026-11-02' })).toBeNull()
     expect(readWeekStats([])).toBeNull()
+  })
+
+  it('reads reviews saved before sleep was added as having none', () => {
+    const saved: Record<string, unknown> = JSON.parse(JSON.stringify(weekStats(empty)))
+    delete saved.sleep
+    delete saved.workouts
+    expect(readWeekStats(saved)).toMatchObject({ weekStart: '2026-11-02', sleep: noSleep(), workouts: 0 })
   })
 })
 

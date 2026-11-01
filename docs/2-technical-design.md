@@ -380,6 +380,10 @@ const TopicTree = z.object({
 
 **j) Weekly review (`ai-review`, Smart, P2; built in M13):** weekly stats → 3 insights + 3 changes in a format code can apply, e.g. `{ "type": "move_subject_to_window", "subjectId": "…", "window": "morning" }`. As built:
 - The request holds the week's numbers (`src/features/review/weekStats.ts`), with subjects as short keys (s1, s2, …). It adds the settings in force now (so nothing already set is suggested) and this week's challenge.
+- Sleep and workouts (added 2026-11-02, prompt `review-v2`):
+  - `sleep` holds the week's nights (one per morning; a typed night wins over Health Connect's), average minutes, regularity and nights under 7 hours.
+  - `sleep.vsStudy` covers the last 4 weeks: for nights of 7+ hours (`rested`) and shorter ones (`short`), the days, focus minutes a day and the answers given that day, with the share right. `workouts` counts the week's workouts.
+  - Both are optional in the request, so older app versions still get reviews. No change type is about sleep: the prompt asks for one insight when it stands out, as a pattern rather than proof, never medical advice.
 - The answer is 1–3 insights and up to 3 changes in a flat format: the type plus the fields it needs, the others null, and a reason.
 - There are 11 types: `move_subject_to_window`, `shift_budget`, `set_buffer`, `set_review_cap`, `set_new_cards`, `set_block_length`, `set_peak_window`, `set_revision_days`, `block_apps_in_study`, `challenge_metric`, `set_skill_minutes`. Each has limits (`src/features/review/changes.ts`).
 - Zod checks that each change is complete and names a subject of the right kind (one retry). The app then keeps only changes that do something and differ from each other (at most 3).

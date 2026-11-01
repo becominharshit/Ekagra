@@ -156,6 +156,7 @@ Health Connect, the microphone and the camera only work on a phone. Try Android 
    - On Android 9–13 without it, the card says **Install Health Connect** and opens the Play Store. Install it, come back, and the card says **Connect**.
    - **Connect** opens Health Connect's own screen with "Sleep" and "Steps". Allow both; the card then says "Connected" and "Brought in … nights … days".
    - With no data yet, walk with the phone (or open Google Fit or a watch app that writes to Health Connect), then tap **Sync now**.
+   - After a few synced nights: Me → **Weekly review** → **Make my review**. The **Sleep and study** card shows them (for a review already made, the next week's will).
 2. **Privacy link:** on Health Connect's permission screen (or Android 14+ Settings → Security and privacy → Privacy → Health Connect → Ekagra), tap the link about the app's privacy policy. Ekagra opens on its privacy page.
 3. **Taking access back:** **Health Connect settings** → Ekagra → turn both off. Back in Ekagra, the card says **Connect** again, and the typed nights and steps still show.
 4. **Microphone:** Life → **Speaking** → **Start speaking**. Android asks once for the microphone; allow it. Speak for 20 seconds, **Stop**, play it back, then **Get feedback** (signed in) or type what you said (Demo Mode).
