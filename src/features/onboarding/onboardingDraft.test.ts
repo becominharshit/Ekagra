@@ -126,6 +126,7 @@ describe('resultFrom', () => {
       user_id: 'user-1',
       start_time: `${row.start_time}:00`,
       end_time: `${row.end_time}:00`,
+      subject_id: row.subject_id ?? null,
       valid_from: null,
       valid_to: null,
       created_at: NOW.toISOString(),

@@ -71,6 +71,7 @@ export const demoProfileRepo: ProfileRepo = {
     data.routine = rows.map((row, index) => ({
       valid_from: null,
       valid_to: null,
+      subject_id: null,
       ...row,
       id: `demo-routine-${index + 1}`,
       user_id: DEMO_USER.id,

@@ -14,6 +14,7 @@ describe('dbError', () => {
   it('asks for the latest update when a newer table, column or rule is missing', () => {
     expect(dbError(error('PGRST205', "Could not find the table 'public.feedback' in the schema cache")).message).toMatch(/latest update/)
     expect(dbError(error('42P01', 'relation "public.feedback" does not exist')).message).toMatch(/latest update/)
+    expect(dbError(error('PGRST205', "Could not find the table 'public.semester_results' in the schema cache")).message).toMatch(/latest update/)
     expect(dbError(error('PGRST204', "Could not find the 'links' column of 'hustles'")).message).toMatch(/latest update/)
     expect(dbError(error('23514', 'new row violates check constraint "hustles_type_check"')).message).toMatch(/latest update/)
   })

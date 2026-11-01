@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import migration from '../../supabase/migrations/001_phase1_core.sql?raw'
 import hustleMigration from '../../supabase/migrations/002_hustle_mode.sql?raw'
 import betaMigration from '../../supabase/migrations/003_beta.sql?raw'
+import attendanceMigration from '../../supabase/migrations/004_attendance_grades.sql?raw'
 import supabaseStubs from '../../tests/db/supabase-stubs.sql?raw'
 import { stubLocalStorage } from '@/test/memoryStorage'
 import { DEMO_TABLES, demoDb, type DemoTable } from './demoDb'
@@ -39,6 +40,7 @@ const ITEM = id(26)
 // so both databases link the same rows. Columns not listed here get their default.
 const ROWS: [DemoTable, Record<string, unknown>][] = [
   ['subjects', { id: SUBJECT, name: 'DBMS' }],
+  ['subjects', { id: id(38), name: 'Maths', credits: 4, grade: 'A+' }],
   ['topics', { id: UNIT, subject_id: SUBJECT, title: 'Unit 1' }],
   ['topics', { id: TOPIC, subject_id: SUBJECT, parent_id: UNIT, title: 'SQL' }],
   ['topic_prereqs', { id: id(11), topic_id: TOPIC, prereq_topic_id: UNIT }],
@@ -87,6 +89,10 @@ const ROWS: [DemoTable, Record<string, unknown>][] = [
   ['blocked_apps', { id: id(31), package_name: 'com.google.android.youtube', label: 'YouTube', active: false }],
   ['feedback', { id: id(32), kind: 'bug', message: 'The timer froze' }],
   ['feedback', { id: id(33), kind: 'idea', message: 'Dark mode', screen: 'Me', path: '/me', context: { app: 'web' } }],
+  ['attendance', { id: id(34), subject_id: SUBJECT, date: '2026-11-02', status: 'present' }],
+  ['attendance', { id: id(35), subject_id: SUBJECT, date: '2026-11-03', start_time: '09:00:00', status: 'absent' }],
+  ['marks', { id: id(36), subject_id: SUBJECT, assessment: 'Internal 1', max_marks: 30, obtained: 24.5 }],
+  ['semester_results', { id: id(37), semester: 1, sgpa: 8.4, credits: 22 }],
 ]
 
 /**
@@ -128,6 +134,7 @@ beforeAll(async () => {
   await db.exec(migration)
   await db.exec(hustleMigration)
   await db.exec(betaMigration)
+  await db.exec(attendanceMigration)
   await db.exec(`insert into auth.users (id, email, raw_user_meta_data) values ('${USER}', 'demo@example.com', '{}')`)
 })
 
@@ -148,7 +155,7 @@ async function insertEverywhere(): Promise<void> {
   }
 }
 
-describe('demoDb matches the real database (migrations 001 to 003)', () => {
+describe('demoDb matches the real database (every migration)', () => {
   it('has a test row for every demo table', () => {
     expect(new Set(ROWS.map(([table]) => table))).toEqual(new Set(DEMO_TABLES))
   })

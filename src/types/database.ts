@@ -173,6 +173,47 @@ export type Database = {
           },
         ]
       }
+      attendance: {
+        Row: {
+          created_at: string
+          date: string
+          id: string
+          start_time: string | null
+          status: string
+          subject_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          date: string
+          id?: string
+          start_time?: string | null
+          status: string
+          subject_id: string
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          id?: string
+          start_time?: string | null
+          status?: string
+          subject_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attendance_subject_id_user_id_fkey"
+            columns: ["subject_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
+            referencedColumns: ["id", "user_id"]
+          },
+        ]
+      }
       blocked_apps: {
         Row: {
           active: boolean
@@ -989,6 +1030,50 @@ export type Database = {
           },
         ]
       }
+      marks: {
+        Row: {
+          assessment: string
+          created_at: string
+          date: string | null
+          id: string
+          max_marks: number
+          obtained: number
+          subject_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          assessment: string
+          created_at?: string
+          date?: string | null
+          id?: string
+          max_marks: number
+          obtained: number
+          subject_id: string
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          assessment?: string
+          created_at?: string
+          date?: string | null
+          id?: string
+          max_marks?: number
+          obtained?: number
+          subject_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marks_subject_id_user_id_fkey"
+            columns: ["subject_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
+            referencedColumns: ["id", "user_id"]
+          },
+        ]
+      }
       material_pages: {
         Row: {
           created_at: string
@@ -1591,6 +1676,7 @@ export type Database = {
           id: string
           kind: string
           start_time: string
+          subject_id: string | null
           title: string
           updated_at: string
           user_id: string
@@ -1604,6 +1690,7 @@ export type Database = {
           id?: string
           kind: string
           start_time: string
+          subject_id?: string | null
           title: string
           updated_at?: string
           user_id?: string
@@ -1617,11 +1704,50 @@ export type Database = {
           id?: string
           kind?: string
           start_time?: string
+          subject_id?: string | null
           title?: string
           updated_at?: string
           user_id?: string
           valid_from?: string | null
           valid_to?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "routine_blocks_subject_id_user_id_fkey"
+            columns: ["subject_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
+            referencedColumns: ["id", "user_id"]
+          },
+        ]
+      }
+      semester_results: {
+        Row: {
+          created_at: string
+          credits: number
+          id: string
+          semester: number
+          sgpa: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          credits: number
+          id?: string
+          semester: number
+          sgpa: number
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          credits?: number
+          id?: string
+          semester?: number
+          sgpa?: number
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -1631,8 +1757,10 @@ export type Database = {
           code: string | null
           color: string | null
           created_at: string
+          credits: number | null
           exam_date: string | null
           exam_date_estimated: boolean
+          grade: string | null
           id: string
           kind: string
           name: string
@@ -1646,8 +1774,10 @@ export type Database = {
           code?: string | null
           color?: string | null
           created_at?: string
+          credits?: number | null
           exam_date?: string | null
           exam_date_estimated?: boolean
+          grade?: string | null
           id?: string
           kind?: string
           name: string
@@ -1661,8 +1791,10 @@ export type Database = {
           code?: string | null
           color?: string | null
           created_at?: string
+          credits?: number | null
           exam_date?: string | null
           exam_date_estimated?: boolean
+          grade?: string | null
           id?: string
           kind?: string
           name?: string

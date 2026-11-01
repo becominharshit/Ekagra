@@ -4,7 +4,7 @@ import type { Database } from '@/types/database'
 // Demo Mode's database: the same tables and rows as Supabase, kept in this browser's localStorage
 // (one key per table). Nothing is sent to a server.
 // It does the jobs Postgres does for us: ids, timestamps, column defaults (copied from
-// supabase/migrations/001_phase1_core.sql, 002 and 003) and what happens to linked rows when a row is deleted
+// supabase/migrations/001_phase1_core.sql and the later ones) and what happens to linked rows when a row is deleted
 // (the foreign keys). demoDb.parity.test.ts checks all of this against the real migration.
 
 type PublicTables = Database['public']['Tables']
@@ -40,6 +40,9 @@ export const DEMO_TABLES = [
   'time_entries',
   'blocked_apps',
   'feedback',
+  'attendance',
+  'marks',
+  'semester_results',
 ] as const satisfies readonly (keyof PublicTables)[]
 
 export type DemoTable = (typeof DEMO_TABLES)[number]
@@ -61,6 +64,8 @@ const DEFAULTS: { [T in DemoTable]: (now: Date) => Partial<DemoRow<T>> } = {
     weekly_minutes_limit: null,
     color: null,
     archived_at: null,
+    credits: null,
+    grade: null,
   }),
   topics: () => ({
     parent_id: null,
@@ -276,6 +281,9 @@ const DEFAULTS: { [T in DemoTable]: (now: Date) => Partial<DemoRow<T>> } = {
     context: {},
     status: 'new',
   }),
+  attendance: () => ({ start_time: null }),
+  marks: () => ({ date: null }),
+  semester_results: () => ({}),
 }
 
 interface ForeignKey {
@@ -339,6 +347,8 @@ const FOREIGN_KEYS: ForeignKey[] = [
   { table: 'tasks', column: 'hustle_id', references: 'hustles', onDelete: 'set null' },
   { table: 'plan_blocks', column: 'hustle_id', references: 'hustles', onDelete: 'set null' },
   { table: 'focus_sessions', column: 'hustle_id', references: 'hustles', onDelete: 'set null' },
+  { table: 'attendance', column: 'subject_id', references: 'subjects', onDelete: 'cascade' },
+  { table: 'marks', column: 'subject_id', references: 'subjects', onDelete: 'cascade' },
 ]
 
 /** Inside this file rows are plain objects; the public functions below give them their table's type. */

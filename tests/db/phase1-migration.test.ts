@@ -52,6 +52,7 @@ beforeAll(async () => {
   await db.exec(readSql('../../supabase/migrations/001_phase1_core.sql'))
   await db.exec(readSql('../../supabase/migrations/002_hustle_mode.sql'))
   await db.exec(readSql('../../supabase/migrations/003_beta.sql'))
+  await db.exec(readSql('../../supabase/migrations/004_attendance_grades.sql'))
 
   // Two people sign up. The sign-up trigger creates their profiles.
   await db.exec(`
@@ -141,6 +142,11 @@ beforeAll(async () => {
       [alice.hustle],
     )
     await insertId(tx, `insert into public.feedback (kind, message, screen) values ('bug', 'The timer froze', 'Focus')`)
+    await insertId(tx, `insert into public.attendance (subject_id, date, start_time, status) values ($1, '2026-11-02', '09:00', 'present')`, [
+      alice.subject,
+    ])
+    await insertId(tx, `insert into public.marks (subject_id, assessment, max_marks, obtained) values ($1, 'Internal 1', 30, 24)`, [alice.subject])
+    await insertId(tx, `insert into public.semester_results (semester, sgpa, credits) values (1, 8.2, 22)`)
   })
 })
 
@@ -477,6 +483,70 @@ describe('Beta migration (003_beta.sql): feedback', () => {
     await db.query('delete from auth.users where id = $1', [CAROL])
     const { rows } = await db.query<{ n: number }>('select count(*)::int as n from public.feedback where user_id = $1', [CAROL])
     expect(rows[0]?.n).toBe(0)
+  })
+})
+
+describe('Attendance and grades migration (004_attendance_grades.sql)', () => {
+  it('links a class block to its subject; deleting the subject keeps the block, without the link', async () => {
+    await as(BOB, async (tx) => {
+      const subject = await insertId(tx, `insert into public.subjects (name) values ('Physics')`)
+      const block = await insertId(
+        tx,
+        `insert into public.routine_blocks (kind, title, days_of_week, start_time, end_time, subject_id) values ('class', 'Physics', '{1,3}', '10:00', '11:00', $1)`,
+        [subject],
+      )
+      await tx.query('delete from public.subjects where id = $1', [subject])
+      const { rows } = await tx.query('select title, subject_id from public.routine_blocks where id = $1', [block])
+      expect(rows).toEqual([{ title: 'Physics', subject_id: null }])
+      await tx.query('delete from public.routine_blocks where id = $1', [block])
+    })
+  })
+
+  it('keeps one row per class from the routine (marking again changes it); classes added by hand can repeat', async () => {
+    await as(BOB, async (tx) => {
+      const subject = await insertId(tx, `insert into public.subjects (name, credits, grade) values ('Chemistry', 4, 'A+')`)
+      const mark = (status: string) =>
+        tx.query(
+          `insert into public.attendance (subject_id, date, start_time, status) values ($1, '2026-11-04', '09:00', $2)
+           on conflict (user_id, subject_id, date, start_time) do update set status = excluded.status`,
+          [subject, status],
+        )
+      await mark('present')
+      await mark('absent')
+      await tx.query(`insert into public.attendance (subject_id, date, status) values ($1, '2026-11-04', 'present'), ($1, '2026-11-04', 'present')`, [subject])
+      const { rows } = await tx.query<{ status: string; start_time: string | null }>(
+        'select status, start_time from public.attendance where subject_id = $1 order by start_time nulls last',
+        [subject],
+      )
+      expect(rows).toEqual([
+        { status: 'absent', start_time: '09:00:00' },
+        { status: 'present', start_time: null },
+        { status: 'present', start_time: null },
+      ])
+      const credits = await tx.query('select credits::float8 as credits, grade from public.subjects where id = $1', [subject])
+      expect(credits.rows).toEqual([{ credits: 4, grade: 'A+' }])
+    })
+  })
+
+  it('rejects unknown statuses, marks above the maximum and impossible SGPAs; one result per semester', async () => {
+    const bob = (sql: string) => as(BOB, (tx) => tx.query(sql))
+    const subject = await as(BOB, (tx) => insertId(tx, `insert into public.subjects (name) values ('Biology')`))
+    await expect(bob(`insert into public.attendance (subject_id, date, status) values ('${subject}', '2026-11-04', 'late')`)).rejects.toThrow(/check constraint/)
+    await expect(bob(`insert into public.marks (subject_id, assessment, max_marks, obtained) values ('${subject}', 'Quiz', 10, 11)`)).rejects.toThrow(
+      /check constraint/,
+    )
+    await expect(bob(`insert into public.semester_results (semester, sgpa, credits) values (2, 10.5, 20)`)).rejects.toThrow(/check constraint/)
+    await bob(`insert into public.semester_results (semester, sgpa, credits) values (2, 7.9, 20)`)
+    await expect(bob(`insert into public.semester_results (semester, sgpa, credits) values (2, 8.1, 20)`)).rejects.toThrow(/duplicate key/)
+  })
+
+  it("stops Bob from adding attendance or marks to Alice's subject", async () => {
+    await expect(
+      as(BOB, (tx) => tx.query(`insert into public.attendance (subject_id, date, status) values ($1, '2026-11-04', 'present')`, [alice.subject])),
+    ).rejects.toThrow(/foreign key/)
+    await expect(
+      as(BOB, (tx) => tx.query(`insert into public.marks (subject_id, assessment, max_marks, obtained) values ($1, 'Quiz', 10, 5)`, [alice.subject])),
+    ).rejects.toThrow(/foreign key/)
   })
 })
 
