@@ -10,7 +10,7 @@ import { OnboardingPage } from '@/pages/OnboardingPage'
 import { SignInPage } from '@/pages/SignInPage'
 import { TodayPage } from '@/pages/TodayPage'
 
-// Public pages: sign-in and the page Google sign-in returns to (web).
+// Public pages: sign-in, the page Google sign-in returns to (web) and the privacy policy.
 // Everything else needs a signed-in user or Demo Mode (RequireAuth), who is sent to
 // /onboarding until it's finished. Onboarding is full screen; the other pages live inside
 // AppShell (top bar + bottom tabs). createBrowserRouter is needed for useBlocker,
@@ -18,6 +18,10 @@ import { TodayPage } from '@/pages/TodayPage'
 export const router = createBrowserRouter([
   { path: '/sign-in', element: <SignInPage /> },
   { path: '/auth/callback', element: <AuthCallbackPage /> },
+  {
+    path: '/privacy',
+    lazy: async () => ({ Component: (await import('@/pages/PrivacyPage')).PrivacyPage }),
+  },
   {
     element: <RequireAuth />,
     children: [
@@ -100,6 +104,10 @@ export const router = createBrowserRouter([
           {
             path: 'me/focus',
             lazy: async () => ({ Component: (await import('@/pages/FocusSetupPage')).FocusSetupPage }),
+          },
+          {
+            path: 'me/account',
+            lazy: async () => ({ Component: (await import('@/pages/AccountPage')).AccountPage }),
           },
           { path: '*', element: <Navigate to="/today" replace /> },
         ],

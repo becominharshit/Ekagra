@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { PGlite, type Transaction } from '@electric-sql/pglite'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { KEPT_BY_WIPE, PROFILE_RESET, USER_TABLES } from '../../supabase/functions/_shared/userTables.ts'
 
 // Runs the real Phase 1 migration inside PGlite (a small Postgres that runs inside Node:
 // nothing to install, no internet) and checks the security rules with two users, Alice and Bob.
@@ -476,5 +477,62 @@ describe('Beta migration (003_beta.sql): feedback', () => {
     await db.query('delete from auth.users where id = $1', [CAROL])
     const { rows } = await db.query<{ n: number }>('select count(*)::int as n from public.feedback where user_id = $1', [CAROL])
     expect(rows[0]?.n).toBe(0)
+  })
+})
+
+// These run last: they delete Alice's and Bob's data.
+describe('Account controls (account-delete Edge Function)', () => {
+  /** Rows of this user in every table. */
+  async function rowsOf(userId: string): Promise<Record<string, number>> {
+    const counts: Record<string, number> = {}
+    for (const table of tables) {
+      const column = table === 'profiles' ? 'id' : 'user_id'
+      const { rows } = await db.query<{ n: number }>(`select count(*)::int as n from public.${table} where ${column} = $1`, [userId])
+      if ((rows[0]?.n ?? 0) > 0) counts[table] = rows[0]?.n ?? 0
+    }
+    return counts
+  }
+
+  it('knows every table that holds student rows (a new table must be added to _shared/userTables.ts)', () => {
+    expect([...USER_TABLES].sort()).toEqual(tables.filter((table) => table !== 'profiles').sort())
+  })
+
+  it("wipes a student's data table by table in that order, keeps AI usage and resets the profile", async () => {
+    expect(Object.keys(await rowsOf(ALICE)).length).toBeGreaterThan(15)
+    // Like the Edge Function: the secret key (service role) deletes one table after another.
+    await db.transaction(async (tx) => {
+      await tx.exec('set local role service_role')
+      for (const table of USER_TABLES) {
+        if (!KEPT_BY_WIPE.includes(table)) await tx.query(`delete from public.${table} where user_id = $1`, [ALICE])
+      }
+      const reset = Object.entries(PROFILE_RESET)
+      await tx.query(`update public.profiles set ${reset.map(([column], index) => `${column} = $${index + 2}`).join(', ')} where id = $1`, [
+        ALICE,
+        ...reset.map(([, value]) => (value !== null && typeof value === 'object' ? JSON.stringify(value) : value)),
+      ])
+    })
+
+    expect(await rowsOf(ALICE)).toEqual({ ai_usage: 1, profiles: 1 })
+    const profile = await as(ALICE, async (tx) => (await tx.query('select full_name, onboarded_at, settings, chronotype from public.profiles')).rows)
+    expect(profile).toEqual([{ full_name: 'Alice', onboarded_at: null, settings: {}, chronotype: 'neutral' }])
+  })
+
+  it("deletes every row of a student when the sign-in account is deleted", async () => {
+    await as(BOB, async (tx) => {
+      const subject = await insertId(tx, `insert into public.subjects (name) values ('Maths')`)
+      const topic = await insertId(tx, `insert into public.topics (subject_id, title) values ($1, 'Limits')`, [subject])
+      await insertId(tx, `insert into public.flashcards (topic_id, front, back) values ($1, 'Q', 'A')`, [topic])
+      const hustle = await insertId(tx, `insert into public.hustles (type, name) values ('parttime', 'Tutoring')`)
+      const client = await insertId(tx, `insert into public.clients (hustle_id, name) values ($1, 'Riya')`, [hustle])
+      await insertId(tx, `insert into public.transactions (hustle_id, client_id, kind, amount) values ($1, $2, 'income', 500)`, [hustle, client])
+      const session = await insertId(tx, `insert into public.focus_sessions (area, hustle_id, mode, planned_minutes) values ('hustle', $1, 'deep', 50)`, [hustle])
+      await insertId(tx, `insert into public.time_entries (hustle_id, client_id, focus_session_id, started_at, minutes) values ($1, $2, $3, now(), 50)`, [hustle, client, session])
+      await insertId(tx, `insert into public.feedback (kind, message) values ('idea', 'Dark mode')`)
+    })
+    expect(Object.keys(await rowsOf(BOB)).length).toBeGreaterThan(8)
+
+    // What auth.admin.deleteUser does in the database.
+    await db.query('delete from auth.users where id = $1', [BOB])
+    expect(await rowsOf(BOB)).toEqual({})
   })
 })

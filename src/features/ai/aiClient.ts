@@ -9,11 +9,11 @@ import { requireSupabase } from '@/lib/supabase'
 /** The AI Edge Functions. */
 export type AiFunction = 'ai-syllabus' | 'ai-papers' | 'ai-tutor' | 'ai-generate' | 'ai-capture' | 'ai-brief' | 'ai-hustle'
 
-/** Every Edge Function the app calls: the AI ones, and ai-usage (the AI usage dashboard, no AI call). */
-export type EdgeFunction = AiFunction | 'ai-usage'
+/** Every Edge Function the app calls: the AI ones, ai-usage (the AI usage dashboard) and account-delete. */
+export type EdgeFunction = AiFunction | 'ai-usage' | 'account-delete'
 
 /** The Edge Functions that don't call the AI. */
-const NOT_AI = new Set<EdgeFunction>(['ai-usage'])
+const NOT_AI = new Set<EdgeFunction>(['ai-usage', 'account-delete'])
 
 /** An AI request that failed. `message` is written for the student. */
 export class AiRequestError extends Error {

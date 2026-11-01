@@ -405,3 +405,22 @@ export const AiUsageResponseSchema = z.object({
   aiConfigured: z.boolean(),
 })
 export type AiUsageResponse = z.infer<typeof AiUsageResponseSchema>
+
+// ---------------------------------------------------------------------------
+// Wiping data or deleting the account (account-delete, no AI call)
+// ---------------------------------------------------------------------------
+
+export const AccountDeleteRequestSchema = z.object({
+  /** data = delete everything the student added but keep the account; account = delete the account too. */
+  mode: z.enum(['data', 'account']),
+  /** The word the student typed to confirm. */
+  confirm: z.literal('DELETE'),
+})
+export type AccountDeleteRequest = z.infer<typeof AccountDeleteRequestSchema>
+
+export const AccountDeleteResponseSchema = z.object({
+  deleted: z.enum(['data', 'account']),
+  /** How many files (PDFs, screenshots) were deleted. */
+  files: z.number().int().min(0),
+})
+export type AccountDeleteResponse = z.infer<typeof AccountDeleteResponseSchema>

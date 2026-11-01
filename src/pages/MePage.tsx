@@ -1,18 +1,7 @@
 import { useState } from 'react'
-import { LogOut, RotateCcw, ShieldCheck, SlidersHorizontal, UserRound } from 'lucide-react'
+import { LockKeyhole, LogOut, ShieldCheck, SlidersHorizontal, UserRound } from 'lucide-react'
 import { Link, useNavigate } from 'react-router'
 import { PageHeader } from '@/components/layout/PageHeader'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { signOut } from '@/features/auth/auth'
@@ -20,7 +9,7 @@ import { AiUsageCard } from '@/features/ai/AiUsageCard'
 import { useAuthStore } from '@/features/auth/authStore'
 import { FeedbackCard } from '@/features/feedback/FeedbackCard'
 import { blockedPackages, useBlockedApps } from '@/features/focus/blockedApps'
-import { useProfile, useResetDemoData, useRoutine } from '@/features/profile/queries'
+import { useProfile, useRoutine } from '@/features/profile/queries'
 import {
   CHRONOTYPE_LABEL,
   MENTOR_TONE_LABEL,
@@ -107,6 +96,12 @@ function AccountCard() {
             </p>
           </div>
         </div>
+        <Button asChild variant="outline">
+          <Link to="/me/account">
+            <LockKeyhole aria-hidden />
+            {isDemo ? 'Privacy, export and reset' : 'Privacy, export and delete'}
+          </Link>
+        </Button>
         <Button variant="outline" disabled={busy} onClick={() => void leave()}>
           <LogOut aria-hidden />
           {isDemo ? 'Exit Demo Mode' : 'Sign out'}
@@ -126,7 +121,6 @@ function PlanSettingsCard() {
   const navigate = useNavigate()
   const profile = useProfile()
   const routine = useRoutine()
-  const isDemo = useAuthStore((state) => state.status === 'demo')
 
   // RequireAuth has already loaded the profile before this page shows.
   if (!profile.data) return null
@@ -160,38 +154,7 @@ function PlanSettingsCard() {
           <SlidersHorizontal aria-hidden />
           Edit routine and budget
         </Button>
-        {isDemo && <ResetDemoButton />}
       </CardContent>
     </Card>
-  )
-}
-
-/** Demo Mode only: start again from an empty demo profile (asks first). */
-function ResetDemoButton() {
-  const resetDemoData = useResetDemoData()
-
-  return (
-    <AlertDialog>
-      <AlertDialogTrigger asChild>
-        <Button variant="ghost" className="text-destructive">
-          <RotateCcw aria-hidden />
-          Reset demo data
-        </Button>
-      </AlertDialogTrigger>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Reset demo data?</AlertDialogTitle>
-          <AlertDialogDescription>
-            This deletes the demo profile, routine and time budget from this device. You'll go through setup again.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>Keep my data</AlertDialogCancel>
-          <AlertDialogAction variant="destructive" onClick={() => void resetDemoData()}>
-            Reset
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
   )
 }

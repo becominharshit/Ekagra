@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { FlaskConical, LoaderCircle } from 'lucide-react'
-import { Navigate } from 'react-router'
+import { Link, Navigate } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { clearAccountNotice, readAccountNotice } from '@/features/account/notice'
 import { signInWithGoogle } from '@/features/auth/auth'
 import { useAuthStore } from '@/features/auth/authStore'
 import { isSupabaseConfigured } from '@/lib/supabase'
@@ -13,6 +14,9 @@ export function SignInPage() {
   const startDemo = useAuthStore((state) => state.startDemo)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // E.g. "Your account and all its data were deleted." (shown once).
+  const [notice] = useState(readAccountNotice)
+  useEffect(() => clearAccountNotice(), [])
 
   if (status === 'signed_in' || status === 'demo') return <Navigate to="/today" replace />
 
@@ -56,6 +60,11 @@ export function SignInPage() {
           <CardDescription>Studies, side hustle and life in one plan, with one clear next step.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3">
+          {notice && (
+            <p role="status" className="rounded-lg bg-muted px-3 py-2 text-sm">
+              {notice}
+            </p>
+          )}
           {/* Without Supabase, Demo Mode is the main button. */}
           {isSupabaseConfigured ? [googleButton, demoButton] : [demoButton, googleButton]}
           {!isSupabaseConfigured && (
@@ -69,6 +78,9 @@ export function SignInPage() {
               {problem}
             </p>
           )}
+          <Link to="/privacy" className="justify-self-start text-xs text-muted-foreground underline underline-offset-3 hover:text-foreground">
+            Privacy policy and permissions
+          </Link>
         </CardContent>
       </Card>
     </main>
