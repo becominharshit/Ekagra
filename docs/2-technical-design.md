@@ -125,7 +125,9 @@ Every table has `id uuid`, `created_at` and `updated_at`, and an RLS policy `use
 profiles            id (= auth user id), full_name, college, program, year, semester,
                     timezone, currency (default INR), chronotype (early|neutral|night),
                     mentor_tone (strict|balanced|friendly), settings jsonb (since M12 also
-                    attendance { minPercent, classesEndOn } and grades { scale })
+                    attendance { minPercent, classesEndOn } and grades { scale }; since M13
+                    planner.maxBlockMinutes, planner.subjectWindows { subjectId: morning|
+                    afternoon|evening|night } and review { day 0–6, reminder })
 routine_blocks      user_id, kind (class|sleep|gym|meal|commute|custom), title,
                     days_of_week int[], start_time, end_time, valid_from, valid_to,
                     subject_id (class blocks: the subject taught then, for attendance; M12)
@@ -202,7 +204,9 @@ metric_snapshots    user_id, week_start, memory, learning_speed, processing_spee
                     details jsonb; one per finished week with practice
 challenges          user_id, week_start, metric, baseline, target, achieved (null      (M11)
                     until the week is over); one per week
-weekly_reviews      user_id, week_start, stats jsonb, insights jsonb, changes jsonb
+weekly_reviews      user_id, week_start, stats jsonb, insights jsonb, changes jsonb       (M13)
+                    (each change with its status: open|applied|skipped), source (ai|device),
+                    model, prompt_version, completed_at; one per week
 
 ── Life ──────────────────────────────────────────────────────────────────────
 habits              user_id, title, kind (sleep|gym|meal|water|custom), schedule jsonb, target
@@ -346,7 +350,13 @@ const TopicTree = z.object({
 
 **j) Custom hustle plan (`ai-hustle`, Smart):** the student's idea (+ the skill it needs most, the goal) → a name, 4–8 phases of 2–5 small steps (steps about learning a skill name it, for the Skill Bridge) and 3–6 pipeline columns. Shown for checking before anything is saved; without the AI (and in Demo Mode) the general Custom template is used.
 
-**j) Weekly review (`ai-review`, Smart, P2):** weekly stats → 3 insights + 3 changes in a format code can apply, e.g. `{ "type": "move_subject_to_window", "subjectId": "…", "window": "morning" }`.
+**j) Weekly review (`ai-review`, Smart, P2; built in M13):** weekly stats → 3 insights + 3 changes in a format code can apply, e.g. `{ "type": "move_subject_to_window", "subjectId": "…", "window": "morning" }`. As built:
+- The request holds the week's numbers (`src/features/review/weekStats.ts`), with subjects as short keys (s1, s2, …). It adds the settings in force now (so nothing already set is suggested) and this week's challenge.
+- The answer is 1–3 insights and up to 3 changes in a flat format: the type plus the fields it needs, the others null, and a reason.
+- There are 11 types: `move_subject_to_window`, `shift_budget`, `set_buffer`, `set_review_cap`, `set_new_cards`, `set_block_length`, `set_peak_window`, `set_revision_days`, `block_apps_in_study`, `challenge_metric`, `set_skill_minutes`. Each has limits (`src/features/review/changes.ts`).
+- Zod checks that each change is complete and names a subject of the right kind (one retry). The app then keeps only changes that do something and differ from each other (at most 3).
+- Demo Mode, and any failure, use fixed rules on the device (`localReview.ts`).
+- The review is saved once a week (`weekly_reviews`). Applying a change saves the setting, and the plan is made again by itself; or it saves a skill course's weekly minutes, or next week's challenge.
 
 **k) Coding hints (`ai-hint`, Fast, P2):** problem + code + test results + hint level → one hint; no full solution before level 4.
 
@@ -371,7 +381,7 @@ Pure TypeScript in `src/features/planner/`, run in the app, saved to `plan_block
 1. **Free slots:** each day from wake to sleep, minus fixed blocks (classes, meals, gym, commute, calendar events), minus a 10–15% buffer.
 2. **Reviews:** time for flashcards and mistakes due (~10 s per card), in low-energy slots, max 30 min/day by default.
 3. **Deadlines, earliest first:** task work before each due date, aiming to finish a day early. On the due day, a task due at a set time (e.g. 5 PM) is placed first, in the free time before then; if there's no room, as early as possible and flagged at risk. A due date without a time means 23:59; a task without an estimate gets 60 minutes.
-4. **Roadmap topics:** per subject, `minutesPerDay = remainingMinutes ÷ daysUntilTarget`, where `target = examDate − revisionDays (default 10)` and `remainingMinutes = Σ estMinutes × speedFactor × (1 − progress)`. Pick by `priority × urgency`, respecting prerequisites. Topics with difficulty ≥ 4 go into peak-energy slots.
+4. **Roadmap topics:** per subject, `minutesPerDay = remainingMinutes ÷ daysUntilTarget`, where `target = examDate − revisionDays (default 10)` and `remainingMinutes = Σ estMinutes × speedFactor × (1 − progress)`. Pick by `priority × urgency`, respecting prerequisites. Topics with difficulty ≥ 4 go into peak-energy slots. A subject the student set to a part of the day (`planner.subjectWindows`, from the weekly review: morning 6–12, afternoon 12–17, evening 17–21, night 21–24) has its study blocks placed there first, before the peak slots (M13).
 4b. **Skill courses** (`subjects.kind = 'skill_course'`, e.g. from the Hustle Skill Bridge): after the exam pace and caught-up work, each gets its `weekly_minutes_limit` (default 2 h) per Monday–Sunday week, minus what was studied that week already, at most about a third of it a day (at least one block, at most 50 minutes). Getting-ahead time never goes to them, so the limit holds. They pause in exam season like the rest of the skill track.
 5. **Area budgets:** reserve hustle and life time according to the weekly budget. The general hustle time is named after (and linked to) the main hustle: the active one with the nearest goal date, else the oldest. Hustle tasks link to their own hustle. Focus sessions on linked blocks add `time_entries` (source `focus`) for that hustle.
 6. **Block shaping:** 25–50 minute blocks with breaks; max 2 same-subject blocks in a row.

@@ -226,13 +226,16 @@ Turns goals into a realistic daily schedule and keeps fixing it.
 - **When it re-plans:** when the app opens with an old plan, after the evening check-in, and when deadlines, tasks or routine change.
 - **Time budget (default):** Academics 55%, Hustle 25%, Life 20% of free time. Editable; exam season changes it automatically (P3).
 
-## 12. Weekly AI review (P2)
+## 12. Weekly AI review (P2, built in M13)
 
-Every Sunday (customizable), a 5-minute review:
+Every Sunday (customizable), a 5-minute review (Me → Weekly review; a card on Today on the review day and the day after, and on Android a notification at 18:00):
 
 - Hours per area vs budget, topics completed, quiz accuracy and retention, focus minutes, top distractions (apps and times), **(P3)** income and hustle progress, **(P4)** sleep and workouts.
 - **3 insights** and **3 suggested changes** for next week, e.g. "Move DBMS to mornings; your accuracy is 20% higher before noon." The student accepts or edits each change.
-- Sets next week's challenge.
+  - As built: the changes come from a fixed list the app can apply in one tap: study a subject at a part of the day, move budget between areas, the buffer, the daily review cap, new flashcards a day, block length, best focus hours, revision days, blocking apps in every study block, next week's challenge, a skill course's weekly time.
+  - Each one can be edited before applying, or skipped. Applying a setting re-makes the plan.
+  - In Demo Mode, or without the AI, the device writes the review from rules.
+- Sets next week's challenge (one of the changes, or picked directly on the review screen).
 
 ## 13. Hustle mode
 
