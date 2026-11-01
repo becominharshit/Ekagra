@@ -54,7 +54,7 @@
 ┌──────────────────────────────────── Supabase ────────────────────────────────────┐
 │  Postgres + RLS + pgvector · Auth (Google) · Storage (PDFs, images) · Vault       │
 │  Edge Functions: ai-syllabus, ai-papers, ai-capture, ai-generate, ai-grade,       │
-│    ai-tutor, ai-brief, worker · P2: ai-review, ai-hint, oauth-google ·            │
+│    ai-tutor, ai-brief, ai-hustle, worker · P2: ai-review, ai-hint, oauth-google · │
 │    P3: integrations                                                               │
 │  Cron: job worker every minute · P2 weekly review · P3 integration sync           │
 └──────────────┬──────────────────────────────────────────────┬────────────────────┘
@@ -86,7 +86,7 @@ student-mentor-app/
 │   ├── migrations/              SQL: tables + RLS policies
 │   └── functions/
 │       ├── _shared/             ai.ts, prompts/, schemas/ (Zod)
-│       └── ai-syllabus/ ai-papers/ ai-capture/ ai-generate/ ai-grade/ ai-tutor/ ai-brief/ worker/
+│       └── ai-syllabus/ ai-papers/ ai-capture/ ai-generate/ ai-grade/ ai-tutor/ ai-brief/ ai-hustle/ worker/
 ├── capacitor.config.ts
 ├── .env.example
 └── package.json
@@ -318,6 +318,8 @@ const TopicTree = z.object({
 **h) Grading (`ai-grade`, Fast):** short answer + rubric of key points → score, feedback, model answer.
 
 **i) Morning brief (`ai-brief`, Fast):** today's plan + deadlines + last check-in → 3 short lines, cached for the day.
+
+**j) Custom hustle plan (`ai-hustle`, Smart):** the student's idea (+ the skill it needs most, the goal) → a name, 4–8 phases of 2–5 small steps (steps about learning a skill name it, for the Skill Bridge) and 3–6 pipeline columns. Shown for checking before anything is saved; without the AI (and in Demo Mode) the general Custom template is used.
 
 **j) Weekly review (`ai-review`, Smart, P2):** weekly stats → 3 insights + 3 changes in a format code can apply, e.g. `{ "type": "move_subject_to_window", "subjectId": "…", "window": "morning" }`.
 

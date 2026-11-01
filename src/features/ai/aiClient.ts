@@ -7,7 +7,7 @@ import { requireSupabase } from '@/lib/supabase'
 // In Demo Mode there is no server, so each feature uses its sample answers instead.
 
 /** The AI Edge Functions. */
-export type AiFunction = 'ai-syllabus' | 'ai-papers' | 'ai-tutor' | 'ai-generate' | 'ai-capture' | 'ai-brief'
+export type AiFunction = 'ai-syllabus' | 'ai-papers' | 'ai-tutor' | 'ai-generate' | 'ai-capture' | 'ai-brief' | 'ai-hustle'
 
 /** An AI request that failed. `message` is written for the student. */
 export class AiRequestError extends Error {

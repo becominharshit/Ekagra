@@ -319,3 +319,47 @@ export const BriefAnswerSchema = z.object({
 /** What ai-brief returns. */
 export const BriefResponseSchema = BriefAnswerSchema.extend({ model: z.string(), promptVersion: z.string() })
 export type BriefResponse = z.infer<typeof BriefResponseSchema>
+
+// ---------------------------------------------------------------------------
+// Custom hustle: the student's own idea → phases, steps and board columns (ai-hustle)
+// ---------------------------------------------------------------------------
+
+export const HustlePlanRequestSchema = z.object({
+  description: z.string().trim().min(10, 'Describe your idea in a sentence or two').max(2000),
+  /** The skill it needs most, if the student named one. */
+  skill: z.string().trim().max(80).optional(),
+  goal: z.string().trim().max(160).optional(),
+})
+export type HustlePlanRequest = z.infer<typeof HustlePlanRequestSchema>
+
+export const HustlePlanAnswerSchema = z
+  .object({
+    name: z.string().trim().min(1).max(80).describe('A short name for the hustle'),
+    phases: z
+      .array(
+        z.object({
+          title: z.string().trim().min(1).max(80),
+          steps: z
+            .array(
+              z.object({
+                title: z.string().trim().min(1).max(160).describe('One concrete action a student can tick off in a day or two'),
+                skill: z.string().trim().min(1).max(60).nullable().describe('The learnable skill this step is about (e.g. "Video editing"), or null'),
+              }),
+            )
+            .min(1)
+            .max(6),
+        }),
+      )
+      .min(3)
+      .max(8),
+    stages: z.array(z.string().trim().min(1).max(30)).min(3).max(6).describe("The pipeline board's columns, in order"),
+  })
+  .superRefine((plan, context) => {
+    const names = plan.stages.map((stage) => stage.toLowerCase())
+    if (new Set(names).size !== names.length) context.addIssue({ code: 'custom', message: 'Board columns must all be different', path: ['stages'] })
+  })
+export type HustlePlanAnswer = z.infer<typeof HustlePlanAnswerSchema>
+
+/** What ai-hustle returns. Nothing is saved until the student starts the hustle. */
+export const HustlePlanResponseSchema = HustlePlanAnswerSchema.safeExtend({ model: z.string(), promptVersion: z.string() })
+export type HustlePlanResponse = z.infer<typeof HustlePlanResponseSchema>
