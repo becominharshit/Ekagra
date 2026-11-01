@@ -5,6 +5,7 @@ import hustleMigration from '../../supabase/migrations/002_hustle_mode.sql?raw'
 import betaMigration from '../../supabase/migrations/003_beta.sql?raw'
 import attendanceMigration from '../../supabase/migrations/004_attendance_grades.sql?raw'
 import adaptiveMigration from '../../supabase/migrations/005_adaptive.sql?raw'
+import reviewMigration from '../../supabase/migrations/006_weekly_review.sql?raw'
 import supabaseStubs from '../../tests/db/supabase-stubs.sql?raw'
 import { stubLocalStorage } from '@/test/memoryStorage'
 import { DEMO_TABLES, demoDb, type DemoTable } from './demoDb'
@@ -99,6 +100,20 @@ const ROWS: [DemoTable, Record<string, unknown>][] = [
   ['metric_snapshots', { id: id(41), week_start: '2026-10-26' }],
   ['metric_snapshots', { id: id(42), week_start: '2026-11-02', memory: 0.85, learning_speed: 1.2, processing_speed: 42.5, problem_solving: 0.6, focus_minutes: 300, details: { reviews: 40 } }],
   ['challenges', { id: id(43), week_start: '2026-11-02', metric: 'memory', target: 0.88 }],
+  ['weekly_reviews', { id: id(44), week_start: '2026-11-02' }],
+  [
+    'weekly_reviews',
+    {
+      id: id(45),
+      week_start: '2026-10-26',
+      stats: { blocks: { done: 12 } },
+      insights: ['Mornings went best.'],
+      changes: [{ type: 'set_buffer', percent: 15, reason: 'Many blocks were missed.', status: 'open' }],
+      source: 'ai',
+      model: 'smart-model',
+      prompt_version: 'review-v1',
+    },
+  ],
 ]
 
 /**
@@ -142,6 +157,7 @@ beforeAll(async () => {
   await db.exec(betaMigration)
   await db.exec(attendanceMigration)
   await db.exec(adaptiveMigration)
+  await db.exec(reviewMigration)
   await db.exec(`insert into auth.users (id, email, raw_user_meta_data) values ('${USER}', 'demo@example.com', '{}')`)
 })
 

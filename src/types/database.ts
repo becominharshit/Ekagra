@@ -2286,6 +2286,51 @@ export type Database = {
           },
         ]
       }
+      weekly_reviews: {
+        Row: {
+          changes: Json
+          completed_at: string | null
+          created_at: string
+          id: string
+          insights: Json
+          model: string | null
+          prompt_version: string | null
+          source: string
+          stats: Json
+          updated_at: string
+          user_id: string
+          week_start: string
+        }
+        Insert: {
+          changes?: Json
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          insights?: Json
+          model?: string | null
+          prompt_version?: string | null
+          source?: string
+          stats?: Json
+          updated_at?: string
+          user_id?: string
+          week_start: string
+        }
+        Update: {
+          changes?: Json
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          insights?: Json
+          model?: string | null
+          prompt_version?: string | null
+          source?: string
+          stats?: Json
+          updated_at?: string
+          user_id?: string
+          week_start?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       hustle_earnings: {

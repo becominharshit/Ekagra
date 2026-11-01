@@ -1,7 +1,6 @@
-import type { PostgrestError } from '@supabase/supabase-js'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { addDays, format } from 'date-fns'
-import { dbError, need, useDataSource, type DataSource } from '@/lib/dataSource'
+import { dbError, need, readAll, useDataSource, type DataSource } from '@/lib/dataSource'
 import { demoDb } from '@/lib/demoDb'
 import type { Tables, TablesUpdate } from '@/types/database'
 import { isOnTarget, planChallenge, startTarget, type ChallengeWeek } from './challenge'
@@ -17,21 +16,6 @@ export const metricsKey = (owner: string | null) => ['metrics', owner] as const
 
 /** How many finished weeks are looked at for missing snapshots. */
 const WEEKS_BACK = 8
-const PAGE_SIZE = 1000
-const MAX_PAGES = 50
-
-/** All rows of a query, one page at a time. */
-async function readAll<T>(page: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: PostgrestError | null }>): Promise<T[]> {
-  const rows: T[] = []
-  for (let index = 0; index < MAX_PAGES; index++) {
-    const from = index * PAGE_SIZE
-    const { data, error } = await page(from, from + PAGE_SIZE - 1)
-    if (error) throw dbError(error)
-    rows.push(...(data ?? []))
-    if ((data ?? []).length < PAGE_SIZE) break
-  }
-  return rows
-}
 
 const learnedWork = (block: { topic_id: string | null; actual_minutes: number | null; status: string }) =>
   block.topic_id !== null && (block.actual_minutes ?? 0) > 0 && (block.status === 'done' || block.status === 'partial')

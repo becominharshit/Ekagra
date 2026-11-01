@@ -54,6 +54,7 @@ beforeAll(async () => {
   await db.exec(readSql('../../supabase/migrations/003_beta.sql'))
   await db.exec(readSql('../../supabase/migrations/004_attendance_grades.sql'))
   await db.exec(readSql('../../supabase/migrations/005_adaptive.sql'))
+  await db.exec(readSql('../../supabase/migrations/006_weekly_review.sql'))
 
   // Two people sign up. The sign-up trigger creates their profiles.
   await db.exec(`
@@ -151,6 +152,7 @@ beforeAll(async () => {
     await insertId(tx, `insert into public.subject_ratings (subject_id, rating, attempts_count) values ($1, 1040, 3)`, [alice.subject])
     await insertId(tx, `insert into public.metric_snapshots (week_start, memory, focus_minutes) values ('2026-10-26', 0.9, 120)`)
     await insertId(tx, `insert into public.challenges (week_start, metric, baseline, target) values ('2026-11-02', 'memory', 0.85, 0.9)`)
+    await insertId(tx, `insert into public.weekly_reviews (week_start, insights) values ('2026-11-02', '["Mornings went best."]')`)
   })
 })
 
@@ -596,6 +598,18 @@ describe('Adaptive practice migration (005_adaptive.sql)', () => {
 
   it("stops Bob from rating himself on Alice's subject", async () => {
     await expect(as(BOB, (tx) => tx.query(`insert into public.subject_ratings (subject_id) values ($1)`, [alice.subject]))).rejects.toThrow(/foreign key/)
+  })
+})
+
+describe('Weekly review migration (006_weekly_review.sql)', () => {
+  it('keeps one review per week, written by the AI or the device', async () => {
+    const bob = (sql: string) => as(BOB, (tx) => tx.query(sql))
+    await bob(`insert into public.weekly_reviews (week_start, source, model) values ('2026-11-02', 'ai', 'smart-model')`)
+    await expect(bob(`insert into public.weekly_reviews (week_start) values ('2026-11-02')`)).rejects.toThrow(/duplicate key/)
+    await expect(bob(`insert into public.weekly_reviews (week_start, source) values ('2026-11-09', 'friend')`)).rejects.toThrow(/check constraint/)
+    await expect(bob(`insert into public.weekly_reviews (week_start, changes) values ('2026-11-09', '{}')`)).rejects.toThrow(/check constraint/)
+    const { rows } = await as(BOB, (tx) => tx.query(`select stats, insights, changes, completed_at from public.weekly_reviews where week_start = '2026-11-02'`))
+    expect(rows).toEqual([{ stats: {}, insights: [], changes: [], completed_at: null }])
   })
 })
 

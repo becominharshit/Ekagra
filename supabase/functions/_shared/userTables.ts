@@ -41,6 +41,7 @@ export const USER_TABLES = [
   'semester_results',
   'metric_snapshots',
   'challenges',
+  'weekly_reviews',
   'daily_checkins',
   'blocked_apps',
   'feedback',

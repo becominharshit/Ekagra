@@ -46,6 +46,7 @@ export const DEMO_TABLES = [
   'subject_ratings',
   'metric_snapshots',
   'challenges',
+  'weekly_reviews',
 ] as const satisfies readonly (keyof PublicTables)[]
 
 export type DemoTable = (typeof DEMO_TABLES)[number]
@@ -298,6 +299,15 @@ const DEFAULTS: { [T in DemoTable]: (now: Date) => Partial<DemoRow<T>> } = {
     details: {},
   }),
   challenges: () => ({ baseline: null, achieved: null }),
+  weekly_reviews: () => ({
+    stats: {},
+    insights: [],
+    changes: [],
+    source: 'device',
+    model: null,
+    prompt_version: null,
+    completed_at: null,
+  }),
 }
 
 interface ForeignKey {

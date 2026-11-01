@@ -26,11 +26,27 @@ export function need(source: DataSource | null): DataSource {
   return source
 }
 
+const PAGE_SIZE = 1000
+const MAX_PAGES = 50
+
+/** All rows of a Supabase query, one page (1000 rows) at a time: `page(from, to)` runs it with `.range(from, to)`. */
+export async function readAll<T>(page: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: PostgrestError | null }>): Promise<T[]> {
+  const rows: T[] = []
+  for (let index = 0; index < MAX_PAGES; index++) {
+    const from = index * PAGE_SIZE
+    const { data, error } = await page(from, from + PAGE_SIZE - 1)
+    if (error) throw dbError(error)
+    rows.push(...(data ?? []))
+    if ((data ?? []).length < PAGE_SIZE) break
+  }
+  return rows
+}
+
 /** Checks added by later migrations: failing one means the server's database is older than the app. */
 const NEWER_CHECKS = ['hustles_type_check', 'hustles_links_is_list']
 
 /** Tables added by later migrations (003_beta.sql onwards). */
-const NEWER_TABLES = /\b(feedback|attendance|marks|semester_results|subject_ratings|metric_snapshots|challenges)\b/
+const NEWER_TABLES = /\b(feedback|attendance|marks|semester_results|subject_ratings|metric_snapshots|challenges|weekly_reviews)\b/
 
 const NEEDS_UPDATE = 'The database needs the latest update. Run `npm run db:push` (docs/4-setup-guide.md, step 2), then try again.'
 
