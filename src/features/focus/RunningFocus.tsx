@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { format } from 'date-fns'
 import { Check, Pause, Play, Square } from 'lucide-react'
-import { useNavigate } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { countLabel } from '@/features/academics/labels'
@@ -26,7 +26,8 @@ const time = (iso: string) => format(new Date(iso), 'HH:mm')
 
 /** The focus screen while a session runs: the clock, the schedule, pause, and Done, Partly or Stop. */
 export function RunningFocus({ session }: { session: FocusSession }) {
-  const { phases, view, focusedMinutes } = useFocusTimer(session)
+  const { now, phases, view, focusedMinutes } = useFocusTimer(session)
+  const pass = useFocusStore((state) => state.pass)
   const day = localDateOf(session.started_at)
   const blocks = useBlocks(day, day)
   const subjects = useSubjects()
@@ -191,6 +192,16 @@ export function RunningFocus({ session }: { session: FocusSession }) {
             {error.message}
           </p>
         )}
+        <div className="grid justify-items-center gap-1 border-t pt-3 text-center text-xs text-muted-foreground">
+          {pass && Date.parse(pass.until) > now.getTime() && (
+            <p>
+              Emergency unlock: {pass.app ?? 'blocked apps'} open until {format(new Date(pass.until), 'HH:mm')}
+            </p>
+          )}
+          <Link to="/today/focus/tollbooth" className="underline underline-offset-4 hover:text-foreground">
+            Emergency unlock (Academic Tollbooth)
+          </Link>
+        </div>
       </CardContent>
     </Card>
   )

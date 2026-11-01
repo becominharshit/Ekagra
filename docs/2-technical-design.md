@@ -176,8 +176,9 @@ focus_sessions      user_id, plan_block_id (null = a session on its own), area, 
                     planned_minutes (of focus; the timer adds the breaks), actual_minutes
                     (focused: no breaks or pauses; pauses are kept on the device), outcome, completed
 distraction_events  user_id, focus_session_id, at,
-                    kind (self_report|blocked_open|emergency_unlock|mode_switch),
-                    app_package, reason
+                    kind (self_report|blocked_open|tollbooth_unlock|tollbooth_failed|mode_switch),
+                    app_package, reason, from_mode, to_mode, quiz_id (the tollbooth quiz),
+                    unlock_until (tollbooth_unlock: blocked apps open until then)
 blocked_apps        user_id, package_name, label, active
 screen_time_daily   user_id, date, package_name, minutes                       (P2)
 

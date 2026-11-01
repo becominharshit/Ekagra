@@ -21,14 +21,24 @@ interface FocusState {
   activity: Record<string, string>
   /** Sessions with the idle guard off ("I'm studying away from the screen"). */
   idleOff: Record<string, boolean>
+  /** The emergency unlock pass from the Academic Tollbooth: blocked apps are open until then. */
+  pass: UnlockPass | null
   pause: (sessionId: string, at: Date) => void
   /** The idle guard pauses a session, from the moment its 4 minutes ran out. */
   autoPause: (sessionId: string, at: Date) => void
   resume: (sessionId: string, at: Date) => void
   touch: (sessionId: string, at: Date) => void
   setIdleOff: (sessionId: string) => void
+  setPass: (pass: UnlockPass | null) => void
   /** Drops a session that ended. */
   forget: (sessionId: string) => void
+}
+
+export interface UnlockPass {
+  /** ISO timestamp. */
+  until: string
+  /** The app it was asked for (its name), if known. */
+  app: string | null
 }
 
 const keepLast = <T>(map: Record<string, T>) => Object.fromEntries(Object.entries(map).slice(-KEEP))
@@ -40,15 +50,17 @@ export const useFocusStore = create<FocusState>()(
       pauses: {},
       activity: {},
       idleOff: {},
+      pass: null,
       pause: (sessionId, at) => set((state) => ({ pauses: keepLast({ ...state.pauses, [sessionId]: pauseAt(state.pauses[sessionId] ?? [], at) }) })),
       autoPause: (sessionId, at) => set((state) => ({ pauses: keepLast({ ...state.pauses, [sessionId]: pauseAt(state.pauses[sessionId] ?? [], at, true) }) })),
       resume: (sessionId, at) => set((state) => ({ pauses: { ...state.pauses, [sessionId]: resumeAt(state.pauses[sessionId] ?? [], at) } })),
       touch: (sessionId, at) => set((state) => ({ activity: keepLast({ ...state.activity, [sessionId]: at.toISOString() }) })),
       setIdleOff: (sessionId) => set((state) => ({ idleOff: keepLast({ ...state.idleOff, [sessionId]: true }) })),
+      setPass: (pass) => set({ pass }),
       forget: (sessionId) =>
         set((state) => ({ pauses: without(state.pauses, sessionId), activity: without(state.activity, sessionId), idleOff: without(state.idleOff, sessionId) })),
     }),
-    { name: 'ekagra-focus', partialize: (state) => ({ pauses: state.pauses, activity: state.activity, idleOff: state.idleOff }) },
+    { name: 'ekagra-focus', partialize: (state) => ({ pauses: state.pauses, activity: state.activity, idleOff: state.idleOff, pass: state.pass }) },
   ),
 )
 
