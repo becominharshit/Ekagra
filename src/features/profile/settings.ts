@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { PEAK_WINDOWS, STANDARD_BUDGET } from '@/features/planner/planner'
 import { formatTime, parseTime } from '@/features/planner/time'
 import type { Area, Budget, Chronotype, PlannerSettings } from '@/features/planner/types'
+import type { Json } from '@/types/database'
 
 // What a student can customize, saved in profiles.settings (a JSON column).
 // Zod checks the saved JSON: anything missing or broken falls back to its default,
@@ -35,10 +36,37 @@ const learningSchema = z.looseObject({
   targetRetention: z.number().min(0.8).max(0.95).catch(0.9),
 })
 
+/** Minutes of focus, then of break (Pomodoro and Deep work). */
+const lengths = (work: number, rest: number) =>
+  z.object({ work: z.number().int().min(5).max(180), break: z.number().int().min(1).max(60) }).catch({ work, break: rest })
+
+// The keys and defaults match the profiles.settings default in the 001 migration.
+const focusSchema = z.looseObject({
+  pomodoro: lengths(25, 5),
+  deep: lengths(50, 10),
+  /** FocusGuard blocks apps during focus sessions only, or during every Study block. */
+  blockDuring: z.enum(['focus_sessions', 'study_blocks']).catch('focus_sessions'),
+  /** The timer that "Start focus" uses. */
+  defaultMode: z.enum(['pomodoro', 'deep', 'custom']).catch('pomodoro'),
+  /** Study sessions pause after 4 minutes without a tap, scroll or key press. */
+  idleCheck: z.boolean().catch(true),
+})
+
+const tollboothSchema = z.looseObject({
+  /** Rapid-fire questions to get all right for an emergency unlock. */
+  questions: z.number().int().min(1).max(10).catch(3),
+  /** How long blocked apps stay open after passing. */
+  unlockMinutes: z.number().int().min(3).max(5).catch(3),
+  /** Emergency unlocks a day. */
+  dailyLimit: z.number().int().min(0).max(10).catch(3),
+})
+
 export const settingsSchema = z.looseObject({
   budget: budgetSchema.catch(() => ({ ...STANDARD_BUDGET })),
   planner: plannerSchema.catch(() => plannerSchema.parse({})),
   learning: learningSchema.catch(() => learningSchema.parse({})),
+  focus: focusSchema.catch(() => focusSchema.parse({})),
+  tollbooth: tollboothSchema.catch(() => tollboothSchema.parse({})),
 })
 
 export type Settings = z.infer<typeof settingsSchema>
@@ -80,6 +108,23 @@ export function deviceTimezone(): string {
 export function readSettings(raw: unknown): Settings {
   const parsed = settingsSchema.safeParse(raw ?? {})
   return parsed.success ? parsed.data : settingsSchema.parse({})
+}
+
+type JsonObject = { [key: string]: Json | undefined }
+const isJsonObject = (value: unknown): value is JsonObject => typeof value === 'object' && value !== null && !Array.isArray(value)
+
+/** Changes to some settings, by section: { focus: { defaultMode: 'deep' } }. */
+export type SettingsPatch = Record<string, JsonObject>
+
+/** The saved settings with `patch` put in, one level deep: everything else stays as it was. */
+export function mergeSettings(saved: Json | undefined, patch: SettingsPatch): JsonObject {
+  const base = isJsonObject(saved) ? saved : {}
+  const merged: JsonObject = { ...base }
+  for (const [section, values] of Object.entries(patch)) {
+    const current = base[section]
+    merged[section] = { ...(isJsonObject(current) ? current : {}), ...values }
+  }
+  return merged
 }
 
 /** Best focus hours: the student's own choice, or the default for their rhythm. */

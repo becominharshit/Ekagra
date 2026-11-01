@@ -5,6 +5,7 @@ import { deviceFiles } from '@/lib/deviceFiles'
 import { requireSupabase } from '@/lib/supabase'
 import type { Tables, TablesInsert, TablesUpdate } from '@/types/database'
 import { clearDemoData, demoProfileRepo } from './localStore'
+import { mergeSettings, type SettingsPatch } from './settings'
 
 export type ProfileRow = Tables<'profiles'>
 export type RoutineRow = Tables<'routine_blocks'>
@@ -112,6 +113,23 @@ export function useSaveOnboarding() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['profile', owner] })
       await queryClient.invalidateQueries({ queryKey: ['routine', owner] })
+    },
+  })
+}
+
+/** Saves some settings, e.g. { focus: { defaultMode: 'deep' } }. The other saved settings stay as they are. */
+export function useSaveSettings() {
+  const { repo, owner } = useRepo()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (patch: SettingsPatch) => {
+      if (!repo) throw new Error('Please sign in again.')
+      // Read fresh, so a change made elsewhere meanwhile isn't overwritten.
+      const profile = await repo.getProfile()
+      await repo.saveProfile({ settings: mergeSettings(profile?.settings, patch) })
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['profile', owner] })
     },
   })
 }

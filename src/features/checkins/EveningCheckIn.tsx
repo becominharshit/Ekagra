@@ -6,12 +6,13 @@ import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle }
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { minutesLabel } from '@/features/academics/labels'
+import { focusedMinutesNow, useTimerLengths } from '@/features/focus/focusStore'
+import { useActiveFocus, type BlockOutcome } from '@/features/focus/sessions'
 import { useBlocks } from '@/features/planner/planBlocks'
 import { usePlanner } from '@/features/planner/replan'
 import { localDateOf, minuteOf, type PlanBlock } from '@/features/planner/schedule'
 import { addDays } from '@/features/planner/time'
 import type { LocalDate } from '@/features/planner/types'
-import { useActiveFocus, type BlockOutcome } from '@/features/today/focus'
 import { useTodayMutation } from '@/features/today/todayMutation'
 import { useNow } from '@/hooks/useNow'
 import { guardOn, saveEveningCheckIn, useCheckIns, type CheckIn } from './checkins'
@@ -97,6 +98,7 @@ interface CheckInFlowProps {
 
 function CheckInFlow({ today, blocks, row, onClose }: CheckInFlowProps) {
   const focus = useActiveFocus()
+  const lengths = useTimerLengths()
   const save = useTodayMutation(saveEveningCheckIn)
   const planner = usePlanner()
   const [outcomes, setOutcomes] = useState<Record<string, BlockOutcome | undefined>>(() =>
@@ -126,6 +128,7 @@ function CheckInFlow({ today, blocks, row, onClose }: CheckInFlowProps) {
         // Blocks that aren't marked count as missed.
         outcomes: blocks.map((block) => ({ block, outcome: outcomes[block.id] ?? 'missed' })),
         session: focus.data ?? null,
+        focused: focus.data ? focusedMinutesNow(focus.data, lengths) : undefined,
       })
       await planner.replanAsync('tomorrow')
       setFinished(true)

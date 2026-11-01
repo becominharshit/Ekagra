@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { Outlet, useLocation } from 'react-router'
+import { FocusBar } from '@/features/focus/FocusBar'
 import { LaunchpadBar } from '@/features/hustle/LaunchpadBar'
 import { ModeSwitchGuard } from '@/features/mode/ModeSwitchGuard'
 import { usePlanKeeper } from '@/features/planner/replan'
@@ -25,6 +26,8 @@ export function AppShell() {
       <TopBar />
       {/* A running Launchpad session (10 minutes on Upwork, Instagram…) stays in view on every screen. */}
       <LaunchpadBar />
+      {/* So does a running focus session (Today and the focus screen show it themselves). */}
+      <FocusBar />
       <main ref={mainRef} className="flex-1 overflow-y-auto">
         {/* Extra space at the bottom so the floating + button never covers the last item. */}
         <div className="mx-auto w-full max-w-2xl px-4 pt-5 pb-24">

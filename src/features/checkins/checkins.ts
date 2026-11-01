@@ -1,10 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
+import { finishBlock, type BlockOutcome, type FocusSession } from '@/features/focus/sessions'
 import { planKey } from '@/features/planner/planBlocks'
 import { burnoutGuard, resolveSettings } from '@/features/planner/planner'
 import { localDateOf, type PlanBlock } from '@/features/planner/schedule'
 import { addDays } from '@/features/planner/time'
 import type { LocalDate, PlannerCheckIn } from '@/features/planner/types'
-import { finishBlock, type BlockOutcome, type FocusSession } from '@/features/today/focus'
 import { dbError, need, useDataSource, type DataSource } from '@/lib/dataSource'
 import { demoDb } from '@/lib/demoDb'
 import type { Tables, TablesUpdate } from '@/types/database'
@@ -62,17 +62,20 @@ export interface EveningCheckInInput {
   outcomes: { block: PlanBlock; outcome: BlockOutcome }[]
   /** The focus session that is running, if any: it ends with its block. */
   session: FocusSession | null
+  /** Minutes focused in that session so far (from the timer on this device). */
+  focused?: number
   now?: Date
 }
 
 /** The evening check-in: today's blocks get their outcome, then energy, mood and the biggest distraction are saved. */
 export async function saveEveningCheckIn(
   source: DataSource,
-  { date, energy, mood, topDistraction, outcomes, session, now = new Date() }: EveningCheckInInput,
+  { date, energy, mood, topDistraction, outcomes, session, focused, now = new Date() }: EveningCheckInInput,
 ): Promise<void> {
   for (const { block, outcome } of outcomes) {
     if (block.status === outcome) continue
-    await finishBlock(source, { block, outcome, session: session?.plan_block_id === block.id ? session : null, now })
+    const itsSession = session?.plan_block_id === block.id
+    await finishBlock(source, { block, outcome, session: itsSession ? session : null, focused: itsSession ? focused : undefined, now })
   }
   await saveCheckIn(source, date, { energy, mood, top_distraction: topDistraction, checked_in_at: now.toISOString() })
 }

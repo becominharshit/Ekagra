@@ -32,6 +32,10 @@ export const router = createBrowserRouter([
             path: 'today/tasks',
             lazy: async () => ({ Component: (await import('@/pages/TasksPage')).TasksPage }),
           },
+          {
+            path: 'today/focus',
+            lazy: async () => ({ Component: (await import('@/pages/FocusPage')).FocusPage }),
+          },
           { path: 'academics', element: <AcademicsPage /> },
           // Loaded only when opened (lazy), so the first screen of the app stays small.
           {

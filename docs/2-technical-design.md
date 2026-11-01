@@ -171,8 +171,10 @@ plan_blocks         user_id, date, start_at, end_at, area,
                     kind (learn|review|practice|task|hustle|life|break|buffer|fixed),
                     topic_id, task_id, hustle_id, title, planned_minutes, actual_minutes,
                     status (planned|in_progress|done|partial|missed|moved), plan_version
-focus_sessions      user_id, plan_block_id, area, mode (pomodoro|deep|custom), started_at,
-                    ended_at, planned_minutes, actual_minutes, completed
+focus_sessions      user_id, plan_block_id (null = a session on its own), area, subject_id,
+                    hustle_id, mode (pomodoro|deep|custom), started_at, ended_at,
+                    planned_minutes (of focus; the timer adds the breaks), actual_minutes
+                    (focused: no breaks or pauses; pauses are kept on the device), outcome, completed
 distraction_events  user_id, focus_session_id, at,
                     kind (self_report|blocked_open|emergency_unlock|mode_switch),
                     app_package, reason
@@ -209,7 +211,8 @@ transactions        user_id, hustle_id, client_id, kind (income|expense), amount
                     occurred_on, category, note,
                     source (manual|gmail|paypal|stripe|sms), source_ref
 time_entries        user_id, hustle_id, started_at, ended_at, minutes, source (focus|manual)
-                    (focus = focus sessions on hustle blocks and 10-minute Launchpad sessions)
+                    (focus = hustle focus sessions, for a block or on their own, and 10-minute
+                    Launchpad sessions)
 
 ── Social (P2) ───────────────────────────────────────────────────────────────
 groups              name, owner_id, invite_code

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { PEAK_WINDOWS, STANDARD_BUDGET } from '@/features/planner/planner'
 import type { Area, Budget } from '@/features/planner/types'
 import {
+  mergeSettings,
   peakWindowFor,
   plannerSettingsFor,
   readSettings,
@@ -30,16 +31,40 @@ describe('readSettings', () => {
     })
   })
 
-  it('keeps settings it does not know about yet (focus, tollbooth, theme …)', () => {
+  it('keeps settings it does not know about yet (theme …), and fills in missing focus and Tollbooth settings', () => {
     const saved = {
       budget: { academics: 55, hustle: 25, life: 20 },
       planner: PLANNER_DEFAULTS,
       learning: { newCardsPerDay: 20, targetRetention: 0.9, language: 'en' },
-      focus: { pomodoro: { work: 25, break: 5 } },
+      focus: { pomodoro: { work: 30, break: 5 } },
       tollbooth: { questions: 3 },
       theme: 'dark',
     }
-    expect(readSettings(saved)).toEqual(saved)
+    expect(readSettings(saved)).toEqual({
+      ...saved,
+      focus: { pomodoro: { work: 30, break: 5 }, deep: { work: 50, break: 10 }, blockDuring: 'focus_sessions', defaultMode: 'pomodoro', idleCheck: true },
+      tollbooth: { questions: 3, unlockMinutes: 3, dailyLimit: 3 },
+    })
+  })
+
+  it('saves one setting without touching the others', () => {
+    const saved = { focus: { pomodoro: { work: 30, break: 5 }, blockDuring: 'focus_sessions' }, theme: 'dark' }
+    expect(mergeSettings(saved, { focus: { defaultMode: 'deep' } })).toEqual({
+      focus: { pomodoro: { work: 30, break: 5 }, blockDuring: 'focus_sessions', defaultMode: 'deep' },
+      theme: 'dark',
+    })
+    expect(mergeSettings(null, { tollbooth: { dailyLimit: 2 } })).toEqual({ tollbooth: { dailyLimit: 2 } })
+    expect(mergeSettings({ focus: 'broken' }, { focus: { idleCheck: false } })).toEqual({ focus: { idleCheck: false } })
+  })
+
+  it("reads the database's default focus and Tollbooth settings", () => {
+    const settings = readSettings({
+      focus: { pomodoro: { work: 25, break: 5 }, deep: { work: 50, break: 10 }, blockDuring: 'focus_sessions' },
+      tollbooth: { questions: 3, unlockMinutes: 3, dailyLimit: 3 },
+    })
+    expect(settings.focus).toMatchObject({ pomodoro: { work: 25, break: 5 }, deep: { work: 50, break: 10 }, blockDuring: 'focus_sessions' })
+    expect(settings.tollbooth).toEqual({ questions: 3, unlockMinutes: 3, dailyLimit: 3 })
+    expect(readSettings({ tollbooth: { unlockMinutes: 30, dailyLimit: -1 } }).tollbooth).toEqual({ questions: 3, unlockMinutes: 3, dailyLimit: 3 })
   })
 
   it('replaces only the broken values with their defaults', () => {

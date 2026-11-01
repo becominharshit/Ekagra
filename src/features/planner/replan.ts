@@ -110,6 +110,7 @@ export function usePlanFingerprint(): string | null {
   const hustles = useHustles()
   if (!profile.data?.onboarded_at || !routine.data || !study.data || !tasks.data || !checkIns.data || !hustles.data) return null
   const mainHustle = primaryHustle(hustles.data)
+  const settings = readSettings(profile.data.settings)
   return planFingerprint({
     // Starting, pausing or renaming the main hustle changes the hustle blocks' names and links.
     hustle: mainHustle ? [mainHustle.id, mainHustle.name] : null,
@@ -118,7 +119,8 @@ export function usePlanFingerprint(): string | null {
     tasks: tasks.data
       .filter(isOpenTask)
       .map((task) => [task.id, task.due_at, task.est_minutes, task.priority, task.area, task.subject_id, task.hustle_id]),
-    settings: profile.data.settings,
+    // Only the settings the planner uses: changing a focus or Tollbooth setting doesn't re-plan.
+    settings: [settings.budget, settings.planner, settings.learning.newCardsPerDay],
     chronotype: profile.data.chronotype,
     routine: routine.data.map((row) => [row.kind, row.days_of_week, row.start_time, row.end_time, row.valid_from, row.valid_to]),
     subjects: study.data.subjects.map((subject) => [subject.id, subject.exam_date, subject.kind, subject.weekly_minutes_limit]),
