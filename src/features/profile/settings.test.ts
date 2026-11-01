@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { DEFAULT_GRADE_SCALE } from '@/features/grades/gpa'
 import { PEAK_WINDOWS, STANDARD_BUDGET } from '@/features/planner/planner'
 import type { Area, Budget } from '@/features/planner/types'
 import {
@@ -45,7 +46,18 @@ describe('readSettings', () => {
       focus: { pomodoro: { work: 30, break: 5 }, deep: { work: 50, break: 10 }, blockDuring: 'focus_sessions', defaultMode: 'pomodoro', idleCheck: true },
       tollbooth: { questions: 3, unlockMinutes: 3, dailyLimit: 3 },
       attendance: { minPercent: 75, classesEndOn: null },
+      grades: { scale: DEFAULT_GRADE_SCALE },
     })
+  })
+
+  it('reads an edited grade scale, and falls back to the 10-point scale when it is broken', () => {
+    const own = [
+      { letter: 'S', points: 10, minPercent: 90 },
+      { letter: 'U', points: 0, minPercent: 0 },
+    ]
+    expect(readSettings({ grades: { scale: own } }).grades.scale).toEqual(own)
+    expect(readSettings({ grades: { scale: [{ letter: 'S', points: 10, minPercent: 90 }] } }).grades.scale).toEqual(DEFAULT_GRADE_SCALE)
+    expect(readSettings({ grades: { scale: 'oops' } }).grades.scale).toEqual(DEFAULT_GRADE_SCALE)
   })
 
   it('reads the attendance minimum and the last day of classes, with 75% and none by default', () => {

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { DEFAULT_GRADE_SCALE, scaleProblems } from '@/features/grades/gpa'
 import { PEAK_WINDOWS, STANDARD_BUDGET } from '@/features/planner/planner'
 import { formatTime, parseTime } from '@/features/planner/time'
 import type { Area, Budget, Chronotype, PlannerSettings } from '@/features/planner/types'
@@ -68,6 +69,20 @@ const attendanceSchema = z.looseObject({
   classesEndOn: z.iso.date().nullable().catch(null),
 })
 
+const gradeStepSchema = z.object({
+  letter: z.string().trim().min(1).max(4),
+  points: z.number().min(0).max(10),
+  minPercent: z.number().min(0).max(100),
+})
+
+const gradesSchema = z.looseObject({
+  /** Letters, grade points and % cut-offs (10-point scale unless changed). */
+  scale: z
+    .array(gradeStepSchema)
+    .refine((scale) => scaleProblems(scale).length === 0)
+    .catch(() => DEFAULT_GRADE_SCALE.map((step) => ({ ...step }))),
+})
+
 export const settingsSchema = z.looseObject({
   budget: budgetSchema.catch(() => ({ ...STANDARD_BUDGET })),
   planner: plannerSchema.catch(() => plannerSchema.parse({})),
@@ -75,6 +90,7 @@ export const settingsSchema = z.looseObject({
   focus: focusSchema.catch(() => focusSchema.parse({})),
   tollbooth: tollboothSchema.catch(() => tollboothSchema.parse({})),
   attendance: attendanceSchema.catch(() => attendanceSchema.parse({})),
+  grades: gradesSchema.catch(() => gradesSchema.parse({})),
 })
 
 export type Settings = z.infer<typeof settingsSchema>

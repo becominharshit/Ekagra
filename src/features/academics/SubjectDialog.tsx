@@ -43,9 +43,10 @@ function SubjectForm({ subject, onDone }: { subject: Subject | null; onDone: (su
   const [name, setName] = useState(subject?.name ?? '')
   const [code, setCode] = useState(subject?.code ?? '')
   const [examDate, setExamDate] = useState(subject?.exam_date ?? '')
+  const [credits, setCredits] = useState(subject?.credits == null ? '' : String(Number(subject.credits)))
   const [problem, setProblem] = useState<string | null>(null)
   const save = useAcademicsMutation<void, Subject>(async (source) => {
-    const values = { name: name.trim(), code: code.trim() || null, exam_date: examDate || null }
+    const values = { name: name.trim(), code: code.trim() || null, exam_date: examDate || null, credits: credits.trim() === '' ? null : Number(credits) }
     return subject ? updateSubject(source, subject.id, values) : createSubject(source, values)
   })
 
@@ -53,6 +54,11 @@ function SubjectForm({ subject, onDone }: { subject: Subject | null; onDone: (su
     event.preventDefault()
     if (!name.trim()) {
       setProblem('Please enter the subject name.')
+      return
+    }
+    const creditValue = Number(credits)
+    if (credits.trim() !== '' && (!Number.isFinite(creditValue) || creditValue <= 0 || creditValue > 30)) {
+      setProblem('Credits go from more than 0 to 30 (or leave them empty).')
       return
     }
     setProblem(null)
@@ -78,6 +84,10 @@ function SubjectForm({ subject, onDone }: { subject: Subject | null; onDone: (su
           <Label htmlFor="subject-exam">Exam date</Label>
           <Input id="subject-exam" type="date" value={examDate} onChange={(e) => setExamDate(e.target.value)} />
         </div>
+      </div>
+      <div className="grid max-w-40 gap-2">
+        <Label htmlFor="subject-credits">Credits (for SGPA)</Label>
+        <Input id="subject-credits" type="number" inputMode="decimal" min={0.5} max={30} step="0.5" placeholder="e.g. 4" value={credits} onChange={(e) => setCredits(e.target.value)} />
       </div>
       {(problem || save.error) && (
         <p role="alert" className="text-sm text-destructive">
