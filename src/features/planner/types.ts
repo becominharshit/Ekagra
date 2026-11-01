@@ -110,6 +110,8 @@ export interface PlannerSettings {
   maxSameSubjectInARow: number
   /** Best focus hours: hard topics are placed here first. */
   peakWindow: Interval
+  /** Subjects to study at a set time of day ("Study DBMS in the mornings"): their study blocks go there first. */
+  subjectWindows: Record<string, Interval>
 }
 
 export type BlockKind = 'learn' | 'review' | 'task' | 'hustle' | 'life'

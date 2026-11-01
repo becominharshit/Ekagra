@@ -12,7 +12,7 @@ import {
   toMentorTone,
 } from './settings'
 
-const PLANNER_DEFAULTS = { bufferPct: 12, revisionDays: 10, maxReviewMinutes: 30, maxDailyIncreasePct: 20 }
+const PLANNER_DEFAULTS = { bufferPct: 12, revisionDays: 10, maxReviewMinutes: 30, maxDailyIncreasePct: 20, maxBlockMinutes: 50, subjectWindows: {} }
 
 describe('readSettings', () => {
   it('uses the defaults when nothing usable is saved', () => {
@@ -47,6 +47,7 @@ describe('readSettings', () => {
       tollbooth: { questions: 3, unlockMinutes: 3, dailyLimit: 3 },
       attendance: { minPercent: 75, classesEndOn: null },
       grades: { scale: DEFAULT_GRADE_SCALE },
+      review: { day: 0, reminder: true },
     })
   })
 
@@ -131,7 +132,21 @@ describe('plannerSettingsFor', () => {
       maxReviewMinutes: 30,
       maxDailyIncreasePct: 20,
       peakWindow: PEAK_WINDOWS.night,
+      maxBlockMinutes: 50,
+      subjectWindows: {},
     })
+  })
+
+  it("passes the block length and each subject's part of the day (in minutes); broken ones are dropped", () => {
+    const settings = readSettings({ planner: { maxBlockMinutes: 30, subjectWindows: { dbms: 'morning', maths: 'evening' } } })
+    expect(plannerSettingsFor(settings, 'neutral')).toMatchObject({ maxBlockMinutes: 30, subjectWindows: { dbms: { start: 360, end: 720 }, maths: { start: 1020, end: 1260 } } })
+    expect(readSettings({ planner: { maxBlockMinutes: 5, subjectWindows: { dbms: 'noon' } } }).planner).toMatchObject({ maxBlockMinutes: 50, subjectWindows: {} })
+  })
+
+  it('reads the review day and reminder, with Sunday and on by default', () => {
+    expect(readSettings({}).review).toEqual({ day: 0, reminder: true })
+    expect(readSettings({ review: { day: 6, reminder: false } }).review).toEqual({ day: 6, reminder: false })
+    expect(readSettings({ review: { day: 9 } }).review).toEqual({ day: 0, reminder: true })
   })
 })
 

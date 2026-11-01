@@ -1,21 +1,12 @@
 import { addDays, format } from 'date-fns'
+import type { MetricValues } from '@/features/metrics/metrics'
+import { DAY_WINDOWS, WINDOW_HOURS, type DayWindow } from '@/features/planner/planner'
 import type { Area, Budget } from '@/features/planner/types'
 
 // The numbers of one week (Monday to Sunday) for the Sunday review: time per area against the
 // budget, plan blocks done, each subject, topics learned, quiz accuracy (also by part of the day,
-// over the last 4 weeks), flashcard retention, focus, distractions, check-ins, tasks and hustle.
-// Pure functions, tested on their own.
-
-export const DAY_WINDOWS = ['morning', 'afternoon', 'evening', 'night'] as const
-export type DayWindow = (typeof DAY_WINDOWS)[number]
-
-/** The local hours of each part of the day (night also takes the hours after midnight). */
-export const WINDOW_HOURS: Record<DayWindow, [start: number, end: number]> = {
-  morning: [6, 12],
-  afternoon: [12, 17],
-  evening: [17, 21],
-  night: [21, 24],
-}
+// over the last 4 weeks), flashcard retention, focus, distractions, check-ins, tasks, hustle and
+// the 4 learning metrics. Pure functions, tested on their own.
 
 export const WINDOW_LABEL: Record<DayWindow, string> = { morning: 'mornings', afternoon: 'afternoons', evening: 'evenings', night: 'nights' }
 
@@ -53,6 +44,8 @@ export interface WeekStatsInputs {
   tasks: { status: string; completed_at: string | null; due_at: string | null }[]
   timeEntries: { minutes: number; started_at: string }[]
   transactions: { kind: string; amount: number; currency: string; occurred_on: string }[]
+  /** The week's 4 learning metrics (worked out by src/features/metrics), when known. */
+  metrics?: MetricValues | null
 }
 
 type Share = { attempts: number; accuracy: number | null }
@@ -82,6 +75,8 @@ export type WeekStats = {
   checkIns: { days: number; energy: number | null; mood: number | null; crashedDays: number }
   tasks: { completed: number; overdue: number }
   hustle: { minutes: number; income: { currency: string; amount: number }[] }
+  /** Memory, learning speed, processing speed and problem solving (null = not enough practice). */
+  metrics: MetricValues | null
 }
 
 const round = (value: number, places: number) => Math.round(value * 10 ** places) / 10 ** places
@@ -219,6 +214,7 @@ export function weekStats(inputs: WeekStatsInputs): WeekStats {
       minutes: inputs.timeEntries.filter((entry) => inWeek(entry.started_at)).reduce((sum, entry) => sum + entry.minutes, 0),
       income: [...income].map(([currency, amount]) => ({ currency, amount: round(amount, 2) })),
     },
+    metrics: inputs.metrics ?? null,
   }
 }
 

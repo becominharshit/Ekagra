@@ -193,6 +193,25 @@ export function useMetrics() {
   })
 }
 
+/**
+ * Picks a coming week's challenge (from the weekly review): the metric, with a target 5% better
+ * than its last value. A challenge already set for that week is changed unless it's settled.
+ */
+export async function setWeekChallenge(source: DataSource, { weekStart, metric, baseline }: { weekStart: string; metric: Metric; baseline: number }): Promise<void> {
+  const row = { week_start: weekStart, metric, baseline, target: startTarget(metric, baseline) }
+  if (source.kind === 'demo') {
+    const existing = demoDb.list('challenges').find((challenge) => challenge.week_start === weekStart)
+    if (!existing) demoDb.insert('challenges', [row])
+    else if (existing.achieved === null) demoDb.update('challenges', existing.id, row)
+    return
+  }
+  const { data, error } = await source.client.from('challenges').select('id, achieved').eq('user_id', source.userId).eq('week_start', weekStart).maybeSingle()
+  if (error) throw dbError(error)
+  if (data && data.achieved !== null) return
+  const saved = data ? await source.client.from('challenges').update(row).eq('id', data.id) : await source.client.from('challenges').insert({ ...row, user_id: source.userId })
+  if (saved.error) throw dbError(saved.error)
+}
+
 /** Challenges another metric this week; its target starts 5% better than its last measured value. */
 export async function changeChallenge(source: DataSource, { id, metric, baseline }: { id: string; metric: Metric; baseline: number }): Promise<void> {
   await updateChallenge(source, id, { metric, baseline, target: startTarget(metric, baseline) })

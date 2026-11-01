@@ -163,6 +163,17 @@ describe('standard day (55/25/20)', () => {
     expect(hard?.start).toBe(18 * 60) // a night owl's best hours are 18:00–22:00
   })
 
+  it("puts a subject's study blocks in the part of the day chosen for it (before the best focus hours)", () => {
+    const topics = [topic('sql', 'dbms', 100, { difficulty: 5 }), topic('calculus', 'maths', 100)]
+    const settings = { peakWindow: PEAK_WINDOWS.neutral, subjectWindows: { dbms: { start: 17 * 60, end: 21 * 60 } } }
+    const blocks = day(plan({ subjects: [subject('dbms'), subject('maths')], topics, settings }), 0).blocks
+    const dbms = blocks.filter((block) => block.subjectId === 'dbms')
+    expect(dbms.length).toBeGreaterThan(0)
+    // Even the hard DBMS topic goes to the evening the student chose, not the 09:00–13:00 focus hours.
+    expect(dbms.every((block) => block.start >= 17 * 60 && block.start < 21 * 60)).toBe(true)
+    expect(blocks.some((block) => block.subjectId === 'maths' && block.start < 17 * 60)).toBe(true)
+  })
+
   it('mixes subjects: never more than 2 blocks of the same subject in a row', () => {
     const subjects = [subject('maths', 30), subject('physics', 30)]
     const topics = [topic('calculus', 'maths', 3000), topic('optics', 'physics', 3000)]

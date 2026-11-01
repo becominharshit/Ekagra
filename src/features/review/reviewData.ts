@@ -1,5 +1,7 @@
 import { addDays, format } from 'date-fns'
 import { listSubjects } from '@/features/academics/subjects'
+import { weekMetrics, weekValues } from '@/features/metrics/metrics'
+import { loadMetricInputs } from '@/features/metrics/metricsData'
 import type { Budget } from '@/features/planner/types'
 import { dbError, readAll, type DataSource } from '@/lib/dataSource'
 import { demoDb } from '@/lib/demoDb'
@@ -27,12 +29,15 @@ async function questionSubjects(source: Extract<DataSource, { kind: 'supabase' }
 
 /** What a week's numbers are worked out from. Demo Mode hands over everything (weekStats picks the week). */
 export async function loadWeekInputs(source: DataSource, weekStart: Date, budget: Budget): Promise<WeekStatsInputs> {
-  const subjects = (await listSubjects(source)).map((subject) => ({ id: subject.id, name: subject.name }))
+  const [subjectRows, metricInputs] = await Promise.all([listSubjects(source), loadMetricInputs(source, weekStart)])
+  const subjects = subjectRows.map((subject) => ({ id: subject.id, name: subject.name }))
+  const metrics = weekValues(weekMetrics(metricInputs, weekStart))
   if (source.kind === 'demo') {
     return {
       weekStart,
       budget,
       subjects,
+      metrics,
       blocks: demoDb.list('plan_blocks'),
       topics: demoDb.list('topics'),
       attempts: demoDb.list('attempts'),
@@ -84,6 +89,7 @@ export async function loadWeekInputs(source: DataSource, weekStart: Date, budget
     weekStart,
     budget,
     subjects,
+    metrics,
     blocks,
     topics,
     attempts,

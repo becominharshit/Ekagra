@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { DataSource } from '@/lib/dataSource'
 import { demoDb } from '@/lib/demoDb'
 import { stubLocalStorage } from '@/test/memoryStorage'
-import { changeChallenge, listChallenges, listSnapshots, syncMetrics } from './metricsData'
+import { changeChallenge, listChallenges, listSnapshots, setWeekChallenge, syncMetrics } from './metricsData'
 
 stubLocalStorage()
 
@@ -53,6 +53,16 @@ describe('the weekly challenge in Demo Mode', () => {
 
     await syncMetrics(DEMO, new Date(2026, 10, 18, 19))
     expect(await listChallenges(DEMO)).toHaveLength(2)
+  })
+
+  it("sets a coming week's challenge from the review, and changes it while it's still open", async () => {
+    await setWeekChallenge(DEMO, { weekStart: '2026-11-16', metric: 'problem_solving', baseline: 0.5 })
+    await setWeekChallenge(DEMO, { weekStart: '2026-11-16', metric: 'memory', baseline: 0.8 })
+    expect(await listChallenges(DEMO)).toEqual([expect.objectContaining({ week_start: '2026-11-16', metric: 'memory', baseline: 0.8, target: 0.84 })])
+    const [row] = await listChallenges(DEMO)
+    demoDb.update('challenges', row?.id ?? '', { achieved: true })
+    await setWeekChallenge(DEMO, { weekStart: '2026-11-16', metric: 'processing_speed', baseline: 20 })
+    expect((await listChallenges(DEMO))[0]).toMatchObject({ metric: 'memory', achieved: true })
   })
 
   it('can challenge another metric, with a new target 5% better than its last value', async () => {

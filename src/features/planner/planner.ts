@@ -48,6 +48,23 @@ export const PEAK_WINDOWS: Record<Chronotype, Interval> = {
   night: { start: 18 * 60, end: 22 * 60 },
 }
 
+/** Parts of the day, e.g. for "Study DBMS in the mornings". */
+export const DAY_WINDOWS = ['morning', 'afternoon', 'evening', 'night'] as const
+export type DayWindow = (typeof DAY_WINDOWS)[number]
+
+/** The local hours of each part of the day (for answers, night also takes the hours after midnight). */
+export const WINDOW_HOURS: Record<DayWindow, [start: number, end: number]> = {
+  morning: [6, 12],
+  afternoon: [12, 17],
+  evening: [17, 21],
+  night: [21, 24],
+}
+
+export function windowInterval(window: DayWindow): Interval {
+  const [start, end] = WINDOW_HOURS[window]
+  return { start: start * 60, end: end * 60 }
+}
+
 export const DEFAULT_PLANNER_SETTINGS: PlannerSettings = {
   budget: STANDARD_BUDGET,
   bufferPct: 12,
@@ -67,6 +84,7 @@ export const DEFAULT_PLANNER_SETTINGS: PlannerSettings = {
   gapMinutes: 5,
   maxSameSubjectInARow: 2,
   peakWindow: PEAK_WINDOWS.neutral,
+  subjectWindows: {},
 }
 
 export function resolveSettings(overrides: Partial<PlannerSettings> = {}): PlannerSettings {
@@ -618,16 +636,24 @@ function placeDay(
   }
   const chunks = allChunks.filter((chunk) => dueAt(chunk) === undefined)
 
+  // Study blocks with a set time go there first: the subject's own part of the day if the student
+  // chose one, else the best focus hours for hard topics. What doesn't fit joins the rest.
   const isHard = (chunk: Chunk) => chunk.item.kind === 'learn' && (chunk.item.difficulty ?? 0) >= 4
-  const hardLeft: Chunk[] = []
-  for (const chunk of chunks.filter(isHard)) {
-    if (!tryPut(chunk, settings.peakWindow)) hardLeft.push(chunk)
+  const windowOf = (chunk: Chunk): Interval | undefined => {
+    if (chunk.item.kind !== 'learn') return undefined
+    const own = chunk.item.subjectId === undefined ? undefined : settings.subjectWindows[chunk.item.subjectId]
+    return own ?? (isHard(chunk) ? settings.peakWindow : undefined)
+  }
+  const windowLeft: Chunk[] = []
+  for (const chunk of chunks) {
+    const window = windowOf(chunk)
+    if (window && !tryPut(chunk, window)) windowLeft.push(chunk)
   }
 
   const study = [
     ...chunks.filter((chunk) => chunk.item.area === 'academics' && chunk.item.kind === 'task'),
     ...interleave(
-      [...hardLeft, ...chunks.filter((chunk) => chunk.item.kind === 'learn' && !isHard(chunk))],
+      [...windowLeft, ...chunks.filter((chunk) => chunk.item.kind === 'learn' && !windowOf(chunk))],
       settings.maxSameSubjectInARow,
     ),
   ]

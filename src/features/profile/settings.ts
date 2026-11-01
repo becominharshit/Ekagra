@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { DEFAULT_GRADE_SCALE, scaleProblems } from '@/features/grades/gpa'
-import { PEAK_WINDOWS, STANDARD_BUDGET } from '@/features/planner/planner'
+import { DAY_WINDOWS, PEAK_WINDOWS, STANDARD_BUDGET, windowInterval } from '@/features/planner/planner'
 import { formatTime, parseTime } from '@/features/planner/time'
 import type { Area, Budget, Chronotype, PlannerSettings } from '@/features/planner/types'
 import type { Json } from '@/types/database'
@@ -29,6 +29,10 @@ const plannerSchema = z.looseObject({
   /** Best focus hours. Empty means "use the default for my rhythm". */
   peakStart: timeOfDay.optional().catch(undefined),
   peakEnd: timeOfDay.optional().catch(undefined),
+  /** The longest study block, in minutes. */
+  maxBlockMinutes: z.number().int().min(20).max(90).catch(50),
+  /** Subjects to study at a set part of the day, by subject id (from the weekly review). */
+  subjectWindows: z.record(z.string(), z.enum(DAY_WINDOWS)).catch(() => ({})),
 })
 
 const learningSchema = z.looseObject({
@@ -83,6 +87,13 @@ const gradesSchema = z.looseObject({
     .catch(() => DEFAULT_GRADE_SCALE.map((step) => ({ ...step }))),
 })
 
+const reviewSchema = z.looseObject({
+  /** The day the weekly review comes (0 = Sunday … 6 = Saturday). */
+  day: z.number().int().min(0).max(6).catch(0),
+  /** Android: a notification on that day. */
+  reminder: z.boolean().catch(true),
+})
+
 export const settingsSchema = z.looseObject({
   budget: budgetSchema.catch(() => ({ ...STANDARD_BUDGET })),
   planner: plannerSchema.catch(() => plannerSchema.parse({})),
@@ -91,6 +102,7 @@ export const settingsSchema = z.looseObject({
   tollbooth: tollboothSchema.catch(() => tollboothSchema.parse({})),
   attendance: attendanceSchema.catch(() => attendanceSchema.parse({})),
   grades: gradesSchema.catch(() => gradesSchema.parse({})),
+  review: reviewSchema.catch(() => reviewSchema.parse({})),
 })
 
 export type Settings = z.infer<typeof settingsSchema>
@@ -170,6 +182,8 @@ export function plannerSettingsFor(settings: Settings, chronotype: Chronotype): 
     maxReviewMinutes: settings.planner.maxReviewMinutes,
     maxDailyIncreasePct: settings.planner.maxDailyIncreasePct,
     peakWindow: { start: parseTime(peak.start), end: parseTime(peak.end) },
+    maxBlockMinutes: settings.planner.maxBlockMinutes,
+    subjectWindows: Object.fromEntries(Object.entries(settings.planner.subjectWindows).map(([subjectId, window]) => [subjectId, windowInterval(window)])),
   }
 }
 
