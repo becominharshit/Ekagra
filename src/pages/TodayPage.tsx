@@ -2,6 +2,7 @@ import { format } from 'date-fns'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { ClassesToday } from '@/features/attendance/ClassesToday'
 import { ReviewTodayCard } from '@/features/review/ReviewNudges'
+import { GroupFocusTodayCard } from '@/features/social/GroupFocusTodayCard'
 import { NudgesCard } from '@/features/social/NudgesCard'
 import { CrashButton, DayStatus } from '@/features/checkins/DayStatus'
 import { EveningCheckIn } from '@/features/checkins/EveningCheckIn'
@@ -26,6 +27,7 @@ export function TodayPage() {
         <NowCard />
         <ReviewTodayCard />
         <NudgesCard />
+        <GroupFocusTodayCard />
         <ClassesToday />
         <EveningCheckIn />
         <UpNext />
