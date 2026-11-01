@@ -127,7 +127,7 @@ export async function buildExport(
 }
 
 /** Keys this app keeps on the device per person (caches), besides the stores below. */
-const DEVICE_KEY_PREFIXES = ['ekagra-brief:', 'ekagra-plan-run:', 'ekagra-pdf-page:']
+const DEVICE_KEY_PREFIXES = ['ekagra-brief:', 'ekagra-plan-run:', 'ekagra-pdf-page:', 'ekagra-mock:']
 
 /** Forgets what this device kept for the person: caches, the focus timer, the Launchpad and FocusGuard's blocking. */
 export async function forgetOnDevice(): Promise<void> {

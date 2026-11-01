@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { format } from 'date-fns'
-import { ArrowLeft, FileUp, Library, LoaderCircle, Pencil, ScrollText, Target, Trash2 } from 'lucide-react'
+import { ArrowLeft, FileUp, Library, LoaderCircle, Pencil, ScrollText, Target, Timer, Trash2 } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { PageHeader } from '@/components/layout/PageHeader'
 import {
@@ -104,6 +104,12 @@ export function SubjectPage() {
             <Link to={`/academics/subjects/${current.id}/practice`}>
               <Target aria-hidden />
               Practice
+            </Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link to={`/academics/subjects/${current.id}/mock`}>
+              <Timer aria-hidden />
+              Mock test
             </Link>
           </Button>
           <Button asChild variant="outline">
