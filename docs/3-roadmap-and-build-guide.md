@@ -38,7 +38,7 @@ The current milestone is the first unchecked one.
 - ~~**M5 PDF library and AI Anchors**~~: moved into M3 (step 3)
 - ~~**M6 Learn loop**~~: moved into M3 (steps 4, 5 and 7)
 - ~~**M7 Python Coding Lab**~~: moved into M3 (step 6)
-- [ ] **M8 Hustle, in 7 steps** (task capture with `ai-capture` moved to M4; one migration, `002_hustle_mode.sql`):
+- [x] **M8 Hustle, in 7 steps** (task capture with `ai-capture` moved to M4; one migration, `002_hustle_mode.sql`). Done 2026-11-01; every step works in Demo Mode too (custom plans use the general template there). **Your one-time steps:** `npm run db:push` (migration 002), then for real AI `npm run functions:deploy` (now 7 functions, with `ai-hustle`; docs/4-setup-guide.md, steps 2 and 6)
   1. 5 templates (Freelancing, Content creation, Startup / business, Part-time / tutoring, Custom fallback) with goals and checkable phase steps; hustle list and detail screens; Demo Mode stores all hustle tables
   2. Custom hustles: `ai-hustle` (Smart) plans phases and steps from the student's description; the fallback template without AI
   3. Pipeline board (`hustle_items`) with columns per hustle type and fractional `order_index` (a card moved between 1 and 2 gets 1.5)

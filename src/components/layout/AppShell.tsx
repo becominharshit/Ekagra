@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { Outlet, useLocation } from 'react-router'
+import { LaunchpadBar } from '@/features/hustle/LaunchpadBar'
 import { ModeSwitchGuard } from '@/features/mode/ModeSwitchGuard'
 import { usePlanKeeper } from '@/features/planner/replan'
 import { CaptureButton } from '@/features/tasks/CaptureButton'
@@ -22,6 +23,8 @@ export function AppShell() {
   return (
     <div className="flex h-full flex-col">
       <TopBar />
+      {/* A running Launchpad session (10 minutes on Upwork, Instagram…) stays in view on every screen. */}
+      <LaunchpadBar />
       <main ref={mainRef} className="flex-1 overflow-y-auto">
         {/* Extra space at the bottom so the floating + button never covers the last item. */}
         <div className="mx-auto w-full max-w-2xl px-4 pt-5 pb-24">

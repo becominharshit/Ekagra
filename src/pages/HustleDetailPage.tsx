@@ -8,6 +8,7 @@ import { ClientsTab } from '@/features/hustle/ClientsTab'
 import { EditHustleDialog } from '@/features/hustle/EditHustleDialog'
 import { currentPhaseIndex, stepProgress, useHustlePlans, type Hustle, type PhaseWithSteps } from '@/features/hustle/hustles'
 import { HustleTasks } from '@/features/hustle/HustleTasks'
+import { LaunchpadCard } from '@/features/hustle/LaunchpadCard'
 import { clientWord, formatMoney, HUSTLE_STATUS_LABEL, targetLabel } from '@/features/hustle/labels'
 import { goalProgress, totals, useTransactions } from '@/features/hustle/money'
 import { MoneyTab } from '@/features/hustle/MoneyTab'
@@ -71,6 +72,7 @@ export function HustleDetailPage() {
       </div>
       <div className="grid gap-4">
         <GoalCard hustle={hustle} phases={phases} />
+        <LaunchpadCard hustle={hustle} />
         <Tabs value={tab} onValueChange={(value) => setParams({ tab: value }, { replace: true })}>
           <TabsList>
             <TabsTrigger value="plan">Plan</TabsTrigger>

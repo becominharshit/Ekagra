@@ -260,6 +260,8 @@ Each hustle has a goal (e.g. "first ₹10,000 by January"), phases with steps fr
 - **Time:** hustle focus sessions are tracked automatically; manual entries allowed.
 - **Earnings per hour** = profit ÷ hours spent, per hustle and per client: "₹6,000 in 40 h = ₹150/h".
 - **Skill bridge:** a step that needs a skill (video editing, React, copywriting) gets a **Learn this** button that creates a Skill course in Academics with a weekly time limit.
+- **Launchpad:** opening an outreach or social platform from Hustle (Upwork, Instagram, LinkedIn, your own profile links…) starts a 10-minute session with a goal ("Send 3 proposals"). A bar shows the time left on every screen; when it ends, "Did you do it?" Done, the minutes count as hustle time.
+- **Capture:** the global + button saves hustle to-dos (with their hustle) and leads, which go straight onto the hustle's pipeline board.
 - **AI coach:** weekly tips based on real data, e.g. "Your proposal reply rate is 5%. Try shorter proposals that start with the client's problem."
 - **Integrations:** YouTube/Instagram stats, Gmail, payments, GitHub, Notion, freelance platforms (technical design §12).
 

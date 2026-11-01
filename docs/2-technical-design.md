@@ -209,6 +209,7 @@ transactions        user_id, hustle_id, client_id, kind (income|expense), amount
                     occurred_on, category, note,
                     source (manual|gmail|paypal|stripe|sms), source_ref
 time_entries        user_id, hustle_id, started_at, ended_at, minutes, source (focus|manual)
+                    (focus = focus sessions on hustle blocks and 10-minute Launchpad sessions)
 
 ── Social (P2) ───────────────────────────────────────────────────────────────
 groups              name, owner_id, invite_code
@@ -312,7 +313,7 @@ const TopicTree = z.object({
 
 **g) Task capture (`ai-capture`, Fast)**
 - Input: text or image + current date, time and timezone + the subject list.
-- Output: `[{ title, area, subjectKey (a listed subject or null), dueAt (ISO 8601 with offset; 23:59 when only a day is given), estMinutes, priority, unsure: [fields it guessed] }]`.
+- Output: `[{ title, area, subjectKey (a listed subject or null), hustleKey (a listed hustle or null), lead (a possible job or client for that hustle: saved as a card on its board), dueAt (ISO 8601 with offset; 23:59 when only a day is given), estMinutes, priority, unsure: [fields it guessed] }]`.
 - The `unsure` fields are highlighted in the confirm sheet. Nothing is saved without confirmation. Demo Mode reads typed tasks on the device with simple rules (screenshots need the AI).
 
 **h) Grading (`ai-grade`, Fast):** short answer + rubric of key points → score, feedback, model answer.
