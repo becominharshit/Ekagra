@@ -33,13 +33,23 @@ describe('the 1 → 3 → 7 day ladder', () => {
     expect(firstReviewAt(NOW)).toBe(inDays(1))
   })
 
-  it('moves up after a right answer and is fixed after the second right answer on another day', () => {
+  it('climbs the whole ladder: right after 1 day, after 3 days and after 7 days, then it is fixed', () => {
     const first = reviewMistake(mistake('m'), true, NOW, '2026-11-02')
     expect(first).toEqual({ ladder_step: 1, correct_count: 1, last_correct_on: '2026-11-02', next_review_at: inDays(3) })
 
-    const later = new Date(NOW.getTime() + 3 * DAY)
-    const second = reviewMistake(mistake('m', { ladder_step: 1, correct_count: 1, last_correct_on: '2026-11-02' }), true, later, '2026-11-05')
-    expect(second).toEqual({ status: 'fixed', correct_count: 2, last_correct_on: '2026-11-05' })
+    const threeDaysLater = new Date(NOW.getTime() + 3 * DAY)
+    const second = reviewMistake(mistake('m', { ladder_step: 1, correct_count: 1, last_correct_on: '2026-11-02' }), true, threeDaysLater, '2026-11-05')
+    expect(second).toEqual({ ladder_step: 2, correct_count: 2, last_correct_on: '2026-11-05', next_review_at: inDays(7, threeDaysLater) })
+
+    const sevenDaysLater = new Date(threeDaysLater.getTime() + 7 * DAY)
+    const third = reviewMistake(mistake('m', { ladder_step: 2, correct_count: 2, last_correct_on: '2026-11-05' }), true, sevenDaysLater, '2026-11-12')
+    expect(third).toEqual({ status: 'fixed', correct_count: 3, last_correct_on: '2026-11-12' })
+  })
+
+  it('is not fixed by 2 right answers any more', () => {
+    const second = reviewMistake(mistake('m', { ladder_step: 1, correct_count: 1, last_correct_on: '2026-10-30' }), true, NOW, '2026-11-02')
+    expect(second).not.toHaveProperty('status')
+    expect(second).toMatchObject({ correct_count: 2, ladder_step: 2 })
   })
 
   it('counts two right answers on the same day once', () => {

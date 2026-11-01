@@ -385,7 +385,7 @@ Pure TypeScript in `src/features/planner/`, run in the app, saved to `plan_block
 ## 10. Spaced repetition
 - `ts-fsrs` with desired retention 0.90 (setting 0.80–0.95), 20 new cards/day (setting), and a daily review cap with a warning when reviews pile up.
 - Card state in `flashcards.fsrs` (jsonb) plus `due_at` for fast queries; every review logged.
-- Mistakes use a fixed ladder of 1 → 3 → 7 days; fixed after 2 correct answers on different days.
+- Mistakes use a fixed ladder of 1 → 3 → 7 days; fixed after 3 correct answers on different days (one at each step). A wrong answer sends it back to 1 day and the count starts again.
 
 ## 11. Android app blocker: FocusGuard (P1)
 

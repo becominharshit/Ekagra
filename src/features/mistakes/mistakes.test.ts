@@ -32,7 +32,7 @@ async function cardWithId(id: string) {
 }
 
 describe('mistake notebook (Demo Mode)', () => {
-  it('adds a mistake that comes back after 1 day, and walks it up the ladder until it is fixed', async () => {
+  it('adds a mistake that comes back after 1 day, and walks it up the whole ladder (1 → 3 → 7 days) until it is fixed', async () => {
     await addMistake(DEMO, { concept: 'BCNF vs 3NF', why_wrong: 'Mixed them up', correct_approach: 'BCNF: every determinant is a superkey' }, NOW)
     expect(await onlyMistake()).toMatchObject({ status: 'open', ladder_step: 0, next_review_at: new Date(NOW.getTime() + DAY).toISOString() })
 
@@ -40,8 +40,12 @@ describe('mistake notebook (Demo Mode)', () => {
     await recordMistakeReview(DEMO, { mistake: await onlyMistake(), right: true, now: dayOne })
     expect(await onlyMistake()).toMatchObject({ ladder_step: 1, correct_count: 1, next_review_at: new Date(dayOne.getTime() + 3 * DAY).toISOString() })
 
-    await recordMistakeReview(DEMO, { mistake: await onlyMistake(), right: true, now: new Date(dayOne.getTime() + 3 * DAY) })
-    expect(await onlyMistake()).toMatchObject({ status: 'fixed', correct_count: 2 })
+    const dayFour = new Date(dayOne.getTime() + 3 * DAY)
+    await recordMistakeReview(DEMO, { mistake: await onlyMistake(), right: true, now: dayFour })
+    expect(await onlyMistake()).toMatchObject({ status: 'open', ladder_step: 2, correct_count: 2, next_review_at: new Date(dayFour.getTime() + 7 * DAY).toISOString() })
+
+    await recordMistakeReview(DEMO, { mistake: await onlyMistake(), right: true, now: new Date(dayFour.getTime() + 7 * DAY) })
+    expect(await onlyMistake()).toMatchObject({ status: 'fixed', correct_count: 3 })
 
     await reopen(DEMO, await onlyMistake())
     expect(await onlyMistake()).toMatchObject({ status: 'open', ladder_step: 0, correct_count: 0, last_correct_on: null })

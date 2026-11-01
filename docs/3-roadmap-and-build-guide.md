@@ -27,11 +27,18 @@ The current milestone is the first unchecked one.
   5. Mistake notebook (1 → 3 → 7 day ladder)
   6. Python Coding Lab: CodeMirror 6 + Pyodide in a Web Worker (loaded from a CDN on first use, then cached), code problems with tests, saved snippets
   7. Lazy lessons and 3–5 question check quizzes (`ai-generate`); wrong answers go to the mistake notebook. Full loop: lesson → check quiz → flashcards → mistakes
-- [ ] **M4 Planner and Today:** save the 14-day plan (engine built in M2), Now card, "I Crashed", evening check-in; Mode Chip driven by real plan blocks (remove the Mode Simulator); mode switches saved to `distraction_events`
+- [ ] **M4 Planner, Today and task capture (decided 2026-11-01: task capture moves here from M8), in 7 steps:**
+  1. Mistake ladder: fixed after 3 right answers on different days (1 → 3 → 7 → fixed)
+  2. Save the 14-day plan to `plan_blocks` (engine built in M2; `plan_version` for two devices); re-plan when the app opens with an old plan, when inputs change and on "Re-plan"; work already done counts against the estimates
+  3. Mode Chip and mode-switch warning driven by the real plan blocks (remove the Mode Simulator); mode switches saved to `distraction_events`
+  4. Now card (Start Focus: a simple block timer saved to `focus_sessions`; Done / Partial / Skip), Up next, reviews waiting
+  5. Tasks and the global + Capture sheet: plain text or a screenshot → `ai-capture` → confirm sheet with unsure fields highlighted → `tasks` → planner; Due soon (72 hours)
+  6. "I Crashed" minimum day (top block ≤ 30 min + reviews ≤ 15 min, the rest spread with at most +20% a day) and the 1-minute evening check-in (blocks, energy, mood, distraction) that re-plans tomorrow with the Burnout Guard
+  7. Morning brief: 3 lines from `ai-brief` (Demo Mode: made on the device), cached for the day
 - ~~**M5 PDF library and AI Anchors**~~: moved into M3 (step 3)
 - ~~**M6 Learn loop**~~: moved into M3 (steps 4, 5 and 7)
 - ~~**M7 Python Coding Lab**~~: moved into M3 (step 6)
-- [ ] **M8 Hustle:** templates, Kanban, clients, transactions, time entries, earnings per hour, Skill Bridge, `ai-capture`
+- [ ] **M8 Hustle:** templates, Kanban, clients, transactions, time entries, earnings per hour, Skill Bridge (task capture with `ai-capture` moved to M4)
 - [ ] **M9 Focus engine:** timers, focus sessions (hustle sessions add time entries), FocusGuard plugin, Academic Tollbooth
 - [ ] **M10 Beta:** end-to-end polish, web deploy, APK for friends
 

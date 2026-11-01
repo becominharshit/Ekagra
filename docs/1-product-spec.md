@@ -135,7 +135,7 @@ Generated per topic **when the student reaches it**, not for the whole book at o
 
 ### 8.10 Mistake notebook (P1)
 - Every wrong answer, forgotten card and (P2) failed code test creates an entry: the concept, why it was wrong, the correct approach.
-- Mistakes come back after 1, 3 and 7 days and are marked fixed after 2 correct answers on different days.
+- Mistakes come back after 1, 3 and 7 days and are marked fixed after 3 correct answers on different days (right at each of the three reviews). A wrong answer starts the ladder again.
 
 ### 8.11 Coding practice (P2)
 - In-app editor with syntax highlighting; Python runs inside the app (no server).

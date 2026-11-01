@@ -6,14 +6,15 @@ import type { Tables, TablesUpdate } from '@/types/database'
 //   - A new mistake comes back after 1 day.
 //   - Each right answer moves it up the ladder: next time after 3 days, then after 7.
 //   - A wrong answer sends it back to 1 day, and the right answers are counted again from zero.
-//   - It is fixed after 2 right answers on different days (2 on one day count once).
+//   - It is fixed after 3 right answers on different days (2 on one day count once), so every
+//     mistake goes through the whole ladder: right after 1 day, after 3 days and after 7 days.
 
 export type Mistake = Tables<'mistakes'>
 
 /** Days until the next review, for each ladder_step (0, 1, 2). */
 export const LADDER_DAYS = [1, 3, 7] as const
-/** Right answers on different days (since the last wrong one) that fix a mistake. */
-export const RIGHT_ANSWERS_TO_FIX = 2
+/** Right answers on different days (since the last wrong one) that fix a mistake: one per ladder step. */
+export const RIGHT_ANSWERS_TO_FIX = 3
 
 const DAY_MS = 24 * 60 * 60 * 1000
 

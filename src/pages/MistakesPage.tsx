@@ -66,7 +66,10 @@ export function MistakesPage() {
           Academics
         </Link>
       </Button>
-      <PageHeader title="Mistake notebook" subtitle="Mistakes come back after 1, 3 and 7 days. Two right answers on different days fix them." />
+      <PageHeader
+        title="Mistake notebook"
+        subtitle="Mistakes come back after 1, 3 and 7 days. Get one right at each of those 3 reviews and it's fixed."
+      />
 
       <div className="grid gap-4">
         <Button variant="outline" className="justify-self-start" onClick={() => setAdding(true)}>
