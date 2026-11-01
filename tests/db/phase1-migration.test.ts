@@ -273,4 +273,33 @@ describe('Phase 1 migration (001_phase1_core.sql)', () => {
       expect(rows).toEqual([{ total: 3, linked: 0 }])
     })
   })
+
+  it('supports Kanban drag-and-drop order, Coding Lab attempts and the Tollbooth quiz', async () => {
+    // Fractional order: a card dropped between positions 1 and 2 is saved at 1.5.
+    const titles = await as(ALICE, async (tx) => {
+      await tx.query(
+        `insert into public.hustle_items (hustle_id, title, stage, order_index)
+         values ($1, 'First', 'lead', 1), ($1, 'Second', 'lead', 2), ($1, 'Dropped between', 'lead', 1.5)`,
+        [alice.hustle],
+      )
+      const { rows } = await tx.query<{ title: string }>(
+        `select title from public.hustle_items where hustle_id = $1 and stage = 'lead' order by order_index`,
+        [alice.hustle],
+      )
+      return rows.map((row) => row.title)
+    })
+    expect(titles).toEqual(['First', 'Dropped between', 'Second'])
+
+    // A saved Python Coding Lab attempt, and an Academic Tollbooth quiz.
+    await as(ALICE, async (tx) => {
+      await tx.query(
+        `insert into public.code_snippets (topic_id, code, last_output, passed) values ($1, 'print("hi")', 'hi', true)`,
+        [alice.topic],
+      )
+      await tx.query(`insert into public.quizzes (kind, subject_id) values ('tollbooth', $1)`, [alice.subject])
+    })
+    await expect(as(ALICE, (tx) => tx.query(`insert into public.quizzes (kind) values ('not-a-kind')`))).rejects.toThrow(
+      /check constraint/,
+    )
+  })
 })
