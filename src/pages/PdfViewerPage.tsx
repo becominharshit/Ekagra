@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ArrowLeft, ChevronLeft, ChevronRight, LoaderCircle, MessageCircleQuestion, ZoomIn, ZoomOut } from 'lucide-react'
-import { Link, useParams } from 'react-router'
+import { Link, useParams, useSearchParams } from 'react-router'
 import type { AnchorAction } from '@shared/schemas.ts'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { useAcademicsMutation, useSubjects } from '@/features/academics/subjects'
+import { announceAnchor, announceAnchorDeleted } from '@/features/bridge/studio'
 import { AnchorBar } from '@/features/materials/AnchorBar'
 import { AnchorDialog, AskDialog } from '@/features/materials/AnchorDialogs'
 import { ACTION_LABEL, createAnchor, deleteAnchor, useAnchors, type Anchor } from '@/features/materials/anchors'
@@ -22,9 +23,17 @@ function savedPage(materialId: string | undefined): number {
   return Number.isInteger(page) && page >= 1 ? page : 1
 }
 
+/** The page to open: one in the link (?page=, e.g. from Ekagra Studio), else where the student left it. */
+function startPage(material: Material, linked: string | null): number {
+  const page = Number(linked)
+  if (!Number.isInteger(page) || page < 1) return savedPage(material.id)
+  return material.page_count ? Math.min(page, material.page_count) : page
+}
+
 /** A PDF from the library with 1-click AI Anchors and "Ask about this page". */
 export function PdfViewerPage() {
   const { materialId } = useParams()
+  const [params] = useSearchParams()
   const material = useMaterial(materialId)
   const file = usePdfFile(material.data)
 
@@ -48,17 +57,20 @@ export function PdfViewerPage() {
       </div>
     )
   }
-  return <Viewer material={material.data} file={file.data} />
+  // A new link (another page or anchor) starts the viewer afresh.
+  return <Viewer key={params.toString()} material={material.data} file={file.data} linkedPage={params.get('page')} linkedAnchor={params.get('anchor')} />
 }
 
-function Viewer({ material, file }: { material: Material; file: Blob }) {
+function Viewer({ material, file, linkedPage, linkedAnchor }: { material: Material; file: Blob; linkedPage: string | null; linkedAnchor: string | null }) {
   const anchors = useAnchors(material.id)
   const subjects = useSubjects()
   const profile = useProfile()
   const create = useAcademicsMutation(createAnchor)
   const remove = useAcademicsMutation(deleteAnchor)
 
-  const [page, setPage] = useState(() => savedPage(material.id))
+  const [page, setPage] = useState(() => startPage(material, linkedPage))
+  // An anchor named in the link opens once it has loaded, until it's closed.
+  const [linkedOpen, setLinkedOpen] = useState(linkedAnchor)
   const [pageCount, setPageCount] = useState<number | null>(material.page_count)
   const [pageText, setPageText] = useState('')
   const [zoom, setZoom] = useState(0)
@@ -68,6 +80,12 @@ function Viewer({ material, file }: { material: Material; file: Blob }) {
 
   const lastPage = pageCount ?? material.page_count ?? 1
   const onPageAnchors = (anchors.data ?? []).filter((anchor) => anchor.page_no === page)
+  const linked = linkedOpen ? ((anchors.data ?? []).find((anchor) => anchor.id === linkedOpen) ?? null) : null
+  const shown = opened ?? (linked ? { anchor: linked, cardCount: 0 } : null)
+  const closeAnchor = () => {
+    setOpened(null)
+    setLinkedOpen(null)
+  }
   const subjectName = subjects.data?.find((subject) => subject.id === material.subject_id)?.name ?? null
   const handleSelection = useCallback((next: PageSelection | null) => setSelection(next), [])
 
@@ -105,6 +123,7 @@ function Viewer({ material, file }: { material: Material; file: Blob }) {
           setSelection(null)
           window.getSelection()?.removeAllRanges()
           setOpened(created)
+          announceAnchor(created.anchor, material.title)
         },
       },
     )
@@ -212,11 +231,20 @@ function Viewer({ material, file }: { material: Material; file: Blob }) {
         onClose={() => setAsking(false)}
       />
       <AnchorDialog
-        anchor={opened?.anchor ?? null}
-        cardCount={opened?.cardCount ?? 0}
+        key={shown?.anchor.id ?? 'none'}
+        anchor={shown?.anchor ?? null}
+        cardCount={shown?.cardCount ?? 0}
+        materialTitle={material.title}
         deleting={remove.isPending}
-        onDelete={(anchor) => remove.mutate(anchor.id, { onSuccess: () => setOpened(null) })}
-        onClose={() => setOpened(null)}
+        onDelete={(anchor) =>
+          remove.mutate(anchor.id, {
+            onSuccess: () => {
+              closeAnchor()
+              announceAnchorDeleted(anchor.id)
+            },
+          })
+        }
+        onClose={closeAnchor}
       />
     </>
   )

@@ -1,25 +1,30 @@
 import { useState } from 'react'
-import { LoaderCircle, Send, Trash2 } from 'lucide-react'
+import { ExternalLink, LoaderCircle, Send, Trash2 } from 'lucide-react'
 import { Markdown } from '@/components/Markdown'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
+import { openInStudio } from '@/features/bridge/studio'
 import { ACTION_LABEL, type Anchor } from './anchors'
 
 /** A saved AI answer, with what it was about. */
 export function AnchorDialog({
   anchor,
   cardCount,
+  materialTitle,
   deleting,
   onDelete,
   onClose,
 }: {
   anchor: Anchor | null
   cardCount: number
+  /** The PDF's title, sent along to Ekagra Studio. */
+  materialTitle: string | null
   deleting: boolean
   onDelete: (anchor: Anchor) => void
   onClose: () => void
 }) {
+  const [studioProblem, setStudioProblem] = useState<string | null>(null)
   const action = anchor && anchor.action in ACTION_LABEL ? ACTION_LABEL[anchor.action as keyof typeof ACTION_LABEL] : 'Answer'
   return (
     <Dialog open={anchor !== null} onOpenChange={(open) => !open && onClose()}>
@@ -40,10 +45,25 @@ export function AnchorDialog({
                 {cardCount === 1 ? '1 flashcard was' : `${cardCount} flashcards were`} added to your cards.
               </p>
             )}
+            {studioProblem && (
+              <p role="alert" className="text-sm text-destructive">
+                {studioProblem}
+              </p>
+            )}
             <DialogFooter>
               <Button variant="ghost" className="text-destructive" disabled={deleting} onClick={() => onDelete(anchor)}>
                 <Trash2 aria-hidden />
                 Delete
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setStudioProblem(null)
+                  openInStudio(anchor, materialTitle).catch(() => setStudioProblem("Ekagra Studio couldn't be opened. Check that it's running (docs/4)."))
+                }}
+              >
+                <ExternalLink aria-hidden />
+                Open in Ekagra Studio
               </Button>
               <Button onClick={onClose}>Done</Button>
             </DialogFooter>

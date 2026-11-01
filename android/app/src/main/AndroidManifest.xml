@@ -45,6 +45,15 @@
                 <data android:scheme="ekagra" android:host="focus" />
             </intent-filter>
 
+            <!-- Ekagra Studio hands an AI Anchor back: ekagra://anchor?bridge_payload=… opens its PDF at
+                 its page (src/features/bridge/). Studio itself opens on ekagra-studio://anchor. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="ekagra" android:host="anchor" />
+            </intent-filter>
+
             <!-- Health Connect (Android 9–13): "Why does this app need access?" opens the privacy page
                  (MainActivity.onNewIntent). Without it, Health Connect won't show the permission screen. -->
             <intent-filter>

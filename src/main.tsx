@@ -1,3 +1,5 @@
+// First: an anchor handed over by Ekagra Studio (?bridge_payload=…) sets the address the router starts at.
+import '@/features/bridge/launch'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { QueryClientProvider } from '@tanstack/react-query'
