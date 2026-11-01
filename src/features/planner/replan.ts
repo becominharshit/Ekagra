@@ -6,6 +6,8 @@ import { listMistakes } from '@/features/mistakes/mistakes'
 import { toPlannerRoutine } from '@/features/onboarding/routineDraft'
 import { profileRepoFor, useProfile, useRoutine } from '@/features/profile/queries'
 import { plannerSettingsFor, readSettings, toChronotype } from '@/features/profile/settings'
+import { isOpenTask, toPlannerTasks } from '@/features/tasks/taskRules'
+import { listTasks, useTasks } from '@/features/tasks/tasks'
 import { useNow } from '@/hooks/useNow'
 import { need, useDataSource, type DataSource } from '@/lib/dataSource'
 import { latestPlanVersion, listBlocks, listWorkRows, planKey, PlanConflictError, savePlan } from './planBlocks'
@@ -32,10 +34,11 @@ export interface ReplanResult {
 export async function replan(source: DataSource, { from, now = new Date() }: { from: ReplanFrom; now?: Date }): Promise<ReplanResult> {
   const today = localDateOf(now)
   const repo = profileRepoFor(source)
-  const [profile, routine, study, cards, mistakes, todayBlocks, workRows, version] = await Promise.all([
+  const [profile, routine, study, tasks, cards, mistakes, todayBlocks, workRows, version] = await Promise.all([
     repo.getProfile(),
     repo.getRoutine(),
     loadStudy(source),
+    listTasks(source),
     listCards(source),
     listMistakes(source),
     listBlocks(source, today, today),
@@ -54,7 +57,7 @@ export async function replan(source: DataSource, { from, now = new Date() }: { f
     horizonDays: 14,
     routine: toPlannerRoutine(routine),
     ...toPlannerStudy(study.subjects, study.topics, study.prereqs, done.byTopic),
-    tasks: [],
+    tasks: toPlannerTasks(tasks, done.byTask),
     reviewMinutes: reviewMinutesByDay({ cards, mistakes, today: planFrom, days: 14, newCardsPerDay: settings.learning.newCardsPerDay }),
     checkIns: [],
     doneTodayBySubject: planFrom === today ? Object.fromEntries(done.todayBySubject) : undefined,
@@ -92,8 +95,12 @@ export function usePlanFingerprint(): string | null {
   const profile = useProfile()
   const routine = useRoutine()
   const study = useStudy()
-  if (!profile.data?.onboarded_at || !routine.data || !study.data) return null
+  const tasks = useTasks()
+  if (!profile.data?.onboarded_at || !routine.data || !study.data || !tasks.data) return null
   return planFingerprint({
+    tasks: tasks.data
+      .filter(isOpenTask)
+      .map((task) => [task.id, task.due_at, task.est_minutes, task.priority, task.area, task.subject_id]),
     settings: profile.data.settings,
     chronotype: profile.data.chronotype,
     routine: routine.data.map((row) => [row.kind, row.days_of_week, row.start_time, row.end_time, row.valid_from, row.valid_to]),

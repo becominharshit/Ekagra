@@ -222,3 +222,51 @@ export type GeneratedTopic = z.infer<typeof GeneratedTopicSchema>
 /** What ai-generate returns (model and prompt version are saved with the lesson and questions). */
 export const GenerateResponseSchema = GeneratedTopicSchema.extend({ model: z.string(), promptVersion: z.string() })
 export type GenerateResponse = z.infer<typeof GenerateResponseSchema>
+
+// ---------------------------------------------------------------------------
+// Task capture: plain text or a screenshot → tasks to confirm (ai-capture)
+// ---------------------------------------------------------------------------
+
+export const TASK_AREAS = ['academics', 'hustle', 'life', 'personal'] as const
+export const CAPTURE_FIELDS = ['title', 'dueAt', 'subject', 'estMinutes', 'area'] as const
+
+export const CaptureRequestSchema = z
+  .object({
+    text: z.string().max(8000).optional(),
+    file: SourceFileSchema.optional(),
+    /** The student's current date and time with their UTC offset, e.g. 2026-11-02T14:30:00+05:30. */
+    now: z.string().min(16).max(40),
+    timezone: z.string().min(1).max(64),
+    /** The student's subjects with short keys (s1, s2, …). */
+    subjects: z
+      .array(z.object({ key: z.string().min(1).max(10), name: z.string().min(1).max(120), code: z.string().max(40).nullable() }))
+      .max(40),
+  })
+  .refine(hasSource, NO_SOURCE)
+export type CaptureRequest = z.infer<typeof CaptureRequestSchema>
+
+export const CapturedTaskSchema = z
+  .object({
+    title: z.string().min(1).max(200).describe('Short and clear, e.g. "DBMS assignment 2"'),
+    area: z.enum(TASK_AREAS).describe('academics = college work, hustle = side business or freelancing, life/personal = everything else'),
+    subjectKey: z.string().nullable().describe('Key of the subject it belongs to, or null'),
+    dueAt: z
+      .string()
+      .nullable()
+      .describe('When it is due, ISO 8601 with the student\'s UTC offset, e.g. "2026-11-06T17:00:00+05:30"; 23:59 when only a day is given; null when no date is given'),
+    estMinutes: z.number().int().min(5).max(1200).nullable().describe('Minutes of work it probably needs, or null'),
+    priority: z.number().int().min(1).max(4).describe('1 = urgent or important … 4 = whenever'),
+    unsure: z.array(z.enum(CAPTURE_FIELDS)).describe('Fields you guessed or that are unclear, so the student checks them'),
+  })
+  .superRefine((task, context) => {
+    if (task.dueAt !== null && Number.isNaN(Date.parse(task.dueAt))) {
+      context.addIssue({ code: 'custom', message: 'dueAt must be an ISO 8601 date and time', path: ['dueAt'] })
+    }
+  })
+export type CapturedTask = z.infer<typeof CapturedTaskSchema>
+
+export const CaptureAnswerSchema = z.object({ tasks: z.array(CapturedTaskSchema).max(20) })
+
+/** What ai-capture returns. Nothing is saved until the student confirms. */
+export const CaptureResponseSchema = CaptureAnswerSchema.extend({ model: z.string(), promptVersion: z.string() })
+export type CaptureResponse = z.infer<typeof CaptureResponseSchema>

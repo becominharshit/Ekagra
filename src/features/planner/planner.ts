@@ -251,7 +251,14 @@ export function buildPlan(input: PlannerInput): Plan {
       carry = [...carry, ...moved.map((item) => ({ ...item, recovered: true }))]
     }
 
-    const { blocks, unplaced } = placeDay(date, free, work, settings)
+    // Tasks due at a set time this day that is still ahead (an overdue one is simply done first).
+    const dayStart = isToday ? input.nowMinute : 0
+    const dueBy = new Map(
+      input.tasks.flatMap((task) =>
+        task.dueDate === date && task.dueMinute != null && task.dueMinute > dayStart ? [[task.id, task.dueMinute] as const] : [],
+      ),
+    )
+    const { blocks, unplaced } = placeDay(date, free, work, settings, dueBy)
     // Real work that didn't fit into the time slots is tried again first on the next days.
     carry = [...unplaced.filter(isRealWork).map((item) => ({ ...item, recovered: true })), ...carry]
 
@@ -501,8 +508,10 @@ interface Chunk {
 
 /**
  * Places a day's work into its free time:
- *   1. Hard topics (difficulty 4–5) first, inside the best focus hours.
- *   2. Then everything else in order, each block after the previous one: assignments, topics
+ *   1. Tasks due at a set time this day (`dueBy`, e.g. 5 PM) first, in the free time before
+ *      they're due. If there's no room before then, as early as possible (late, but today).
+ *   2. Hard topics (difficulty 4–5), inside the best focus hours.
+ *   3. Then everything else in order, each block after the previous one: assignments, topics
  *      (subjects mixed, prerequisites first), reviews, hustle, life. After 2 blocks of the same
  *      subject, a review, hustle or life block comes in between (while there are some left).
  * Blocks are at most 50 minutes with 5-minute gaps. A block that doesn't fit after the previous
@@ -513,11 +522,12 @@ function placeDay(
   free: Interval[],
   work: WorkItem[],
   settings: PlannerSettings,
+  dueBy: ReadonlyMap<string, Minute> = new Map(),
 ): { blocks: PlannedBlock[]; unplaced: WorkItem[] } {
   let space = free
   const blocks: PlannedBlock[] = []
   const missing = new Map<WorkItem, number>()
-  const chunks: Chunk[] = work.flatMap((item) =>
+  const allChunks: Chunk[] = work.flatMap((item) =>
     splitIntoChunks(item.minutes, settings.maxBlockMinutes).map((minutes) => ({ item, minutes })),
   )
 
@@ -535,6 +545,17 @@ function placeDay(
     put(chunk, start)
     return true
   }
+
+  const dueAt = (chunk: Chunk) => (chunk.item.taskId === undefined ? undefined : dueBy.get(chunk.item.taskId))
+  for (const chunk of allChunks) {
+    const due = dueAt(chunk)
+    if (due === undefined) continue
+    // Starting at the latest at `due - minutes` means it's finished by the time it's due.
+    if (!tryPut(chunk, { start: 0, end: due - chunk.minutes + 1 }) && !tryPut(chunk)) {
+      missing.set(chunk.item, (missing.get(chunk.item) ?? 0) + chunk.minutes)
+    }
+  }
+  const chunks = allChunks.filter((chunk) => dueAt(chunk) === undefined)
 
   const isHard = (chunk: Chunk) => chunk.item.kind === 'learn' && (chunk.item.difficulty ?? 0) >= 4
   const hardLeft: Chunk[] = []
@@ -681,7 +702,9 @@ function collectRisks(
   for (const task of input.tasks) {
     const due = task.dueDate
     if (!due || due > lastDate) continue
-    const late = sum(blocks.filter((block) => block.taskId === task.id && block.date > due).map(blockMinutes))
+    const dueMinute = task.dueMinute ?? MINUTES_PER_DAY
+    const isLate = (block: PlannedBlock) => block.date > due || (block.date === due && block.end > dueMinute)
+    const late = sum(blocks.filter((block) => block.taskId === task.id && isLate(block)).map(blockMinutes))
     const unplanned = (pool.taskLeft.get(task.id) ?? 0) + carried((item) => item.taskId === task.id)
     add(taskItem(task, 0), late + unplanned, 'deadline')
   }

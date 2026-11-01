@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest'
 import { addSampleSubjects } from '@/features/academics/sampleSubjects'
 import { defaultRoutine, routineToRows } from '@/features/onboarding/routineDraft'
 import { profileRepoFor } from '@/features/profile/queries'
+import { addTasks } from '@/features/tasks/tasks'
 import type { DataSource } from '@/lib/dataSource'
 import { demoDb } from '@/lib/demoDb'
 import { stubLocalStorage } from '@/test/memoryStorage'
 import { listBlocks, updateBlock } from './planBlocks'
 import { replan } from './replan'
+import { localToIso } from './schedule'
 
 stubLocalStorage()
 
@@ -58,6 +60,15 @@ describe('making and saving the plan (Demo Mode)', () => {
     const later = today.filter((block) => block.id !== first.id)
     expect(later.every((block) => block.start_at >= first.end_at)).toBe(true)
     expect(demoDb.list('plan_blocks').every((block) => block.plan_version === 2 || block.id === first.id)).toBe(true)
+  })
+
+  it('plans work time for a task before its due date', async () => {
+    await setUp()
+    await addTasks(DEMO, [{ title: 'DBMS assignment', area: 'academics', due_at: localToIso('2026-11-05', 17 * 60), est_minutes: 120 }])
+    await replan(DEMO, { from: 'now', now: at(MONDAY, '08:00') })
+    const taskBlocks = demoDb.list('plan_blocks').filter((block) => block.kind === 'task')
+    expect(taskBlocks.reduce((total, block) => total + block.planned_minutes, 0)).toBe(120)
+    expect(taskBlocks.every((block) => block.title === 'DBMS assignment' && block.date <= '2026-11-05')).toBe(true)
   })
 
   it('takes work already done off the estimate', async () => {

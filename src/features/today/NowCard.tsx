@@ -31,6 +31,13 @@ function WorkLink({ block }: { block: PlanBlock }) {
       </Button>
     )
   }
+  if (block.kind === 'task') {
+    return (
+      <Button asChild variant="link" className="h-auto justify-self-start p-0">
+        <Link to="/today/tasks">Your tasks</Link>
+      </Button>
+    )
+  }
   if (block.kind === 'review') {
     return (
       <div className="flex flex-wrap gap-x-4">

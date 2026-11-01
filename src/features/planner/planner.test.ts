@@ -188,6 +188,25 @@ describe('standard day (55/25/20)', () => {
     expect(startOf('lab')).toBeLessThan(firstTopic)
   })
 
+  it('does a task due at a set time before then, even one that would otherwise come late in the day', () => {
+    // A personal task (Life time) normally comes after the study blocks.
+    const call: PlannerTask = { id: 'call', area: 'personal', title: 'Call mom', dueDate: TODAY, remainingMinutes: 30, priority: 2 }
+    const callBlock = (result: Plan) => day(result, 0).blocks.find((block) => block.taskId === 'call')
+    expect(callBlock(plan({ ...STUDY, tasks: [call] }))?.end).toBeGreaterThan(10 * 60)
+
+    const dueAtTen = plan({ ...STUDY, tasks: [{ ...call, dueMinute: 10 * 60 }] })
+    expect(callBlock(dueAtTen)?.end).toBeLessThanOrEqual(10 * 60)
+    expect(dueAtTen.atRisk.some((item) => item.key === 'task:call')).toBe(false)
+  })
+
+  it('does it as early as possible (and flags it) when there is no room before the time it is due', () => {
+    // Free from 07:00, so 45 minutes of work can't be finished by 07:30.
+    const form: PlannerTask = { id: 'form', area: 'academics', title: 'Form', dueDate: TODAY, dueMinute: 7 * 60 + 30, remainingMinutes: 45, priority: 1 }
+    const result = plan({ tasks: [form] })
+    expect(day(result, 0).blocks.find((block) => block.taskId === 'form')).toMatchObject({ start: 7 * 60, end: 7 * 60 + 45 })
+    expect(result.atRisk).toEqual([expect.objectContaining({ key: 'task:form', minutes: 45, reason: 'deadline' })])
+  })
+
   it('cuts work into blocks of at most 50 minutes, in 5-minute steps', () => {
     expect(splitIntoChunks(100, 50)).toEqual([50, 50])
     expect(splitIntoChunks(30, 50)).toEqual([30])
@@ -344,6 +363,14 @@ describe('at-risk work', () => {
     expect(plan({ tasks }).atRisk).toEqual([
       expect.objectContaining({ key: 'task:project', minutes: 140, reason: 'deadline' }),
     ])
+  })
+
+  it('flags work for a task that ends after the time it is due', () => {
+    // Re-planning at 12:00 for a form that was due at 10:00: done first (late), and flagged.
+    const form: PlannerTask = { id: 'form', area: 'academics', title: 'Form', dueDate: TODAY, dueMinute: 10 * 60, remainingMinutes: 30, priority: 1 }
+    const result = plan({ tasks: [form], nowMinute: 12 * 60 })
+    expect(day(result, 0).blocks.find((block) => block.taskId === 'form')).toMatchObject({ start: 12 * 60, end: 12 * 60 + 30 })
+    expect(result.atRisk).toEqual([expect.objectContaining({ key: 'task:form', minutes: 30, reason: 'deadline' })])
   })
 
   it('flags exam topics that cannot be covered before an exam inside the plan', () => {

@@ -66,6 +66,8 @@ export interface PlannerTask {
   area: Area | 'personal'
   title: string
   dueDate: LocalDate | null
+  /** The time it's due on its due date (e.g. 5 PM = 1020). Null or missing: by the end of that day. */
+  dueMinute?: Minute | null
   remainingMinutes: number
   /** 1 = most important … 4 = least. */
   priority: number

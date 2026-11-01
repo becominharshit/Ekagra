@@ -28,6 +28,10 @@ export const router = createBrowserRouter([
         children: [
           { index: true, element: <Navigate to="/today" replace /> },
           { path: 'today', element: <TodayPage /> },
+          {
+            path: 'today/tasks',
+            lazy: async () => ({ Component: (await import('@/pages/TasksPage')).TasksPage }),
+          },
           { path: 'academics', element: <AcademicsPage /> },
           // Loaded only when opened (lazy), so the first screen of the app stays small.
           {

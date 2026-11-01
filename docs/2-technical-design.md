@@ -342,7 +342,7 @@ Pure TypeScript in `src/features/planner/`, run in the app, saved to `plan_block
 **Steps (14-day horizon)**
 1. **Free slots:** each day from wake to sleep, minus fixed blocks (classes, meals, gym, commute, calendar events), minus a 10–15% buffer.
 2. **Reviews:** time for flashcards and mistakes due (~10 s per card), in low-energy slots, max 30 min/day by default.
-3. **Deadlines, earliest first:** task work before each due date, aiming to finish a day early.
+3. **Deadlines, earliest first:** task work before each due date, aiming to finish a day early. On the due day, a task due at a set time (e.g. 5 PM) is placed first, in the free time before then; if there's no room, as early as possible and flagged at risk. A due date without a time means 23:59; a task without an estimate gets 60 minutes.
 4. **Roadmap topics:** per subject, `minutesPerDay = remainingMinutes ÷ daysUntilTarget`, where `target = examDate − revisionDays (default 10)` and `remainingMinutes = Σ estMinutes × speedFactor × (1 − progress)`. Pick by `priority × urgency`, respecting prerequisites. Topics with difficulty ≥ 4 go into peak-energy slots.
 5. **Area budgets:** reserve hustle and life time according to the weekly budget.
 6. **Block shaping:** 25–50 minute blocks with breaks; max 2 same-subject blocks in a row.

@@ -2,6 +2,8 @@ import { useEffect, useRef } from 'react'
 import { Outlet, useLocation } from 'react-router'
 import { ModeSwitchGuard } from '@/features/mode/ModeSwitchGuard'
 import { usePlanKeeper } from '@/features/planner/replan'
+import { CaptureButton } from '@/features/tasks/CaptureButton'
+import { CaptureSheet } from '@/features/tasks/CaptureSheet'
 import { BottomTabBar } from './BottomTabBar'
 import { TopBar } from './TopBar'
 
@@ -21,11 +23,14 @@ export function AppShell() {
     <div className="flex h-full flex-col">
       <TopBar />
       <main ref={mainRef} className="flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-2xl px-4 pt-5 pb-8">
+        {/* Extra space at the bottom so the floating + button never covers the last item. */}
+        <div className="mx-auto w-full max-w-2xl px-4 pt-5 pb-24">
           <Outlet />
         </div>
       </main>
       <BottomTabBar />
+      <CaptureButton />
+      <CaptureSheet />
       <ModeSwitchGuard />
     </div>
   )
