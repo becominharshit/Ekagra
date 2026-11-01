@@ -1,14 +1,23 @@
+import { useEffect } from 'react'
 import { Rocket } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useNow } from '@/hooks/useNow'
+import { focusGuard } from '@/lib/native/focusGuard'
 import { cn } from '@/lib/utils'
 import { useHustleMutation } from './hustles'
-import { finishLaunch, secondsLeft, type ActiveLaunch } from './launchpad'
+import { finishLaunch, launchReminder, secondsLeft, type ActiveLaunch } from './launchpad'
 import { useLaunchpadStore } from './launchpadStore'
 
 /** The running Launchpad session, on every screen: time left, then "Did you do it?". */
 export function LaunchpadBar() {
   const active = useLaunchpadStore((state) => state.active)
+  // Android: a notification when the time is up, even with the app closed. "5 more min" moves it; ending cancels it.
+  useEffect(() => {
+    if (!active) return
+    const reminder = launchReminder(active)
+    if (reminder.at > Date.now()) void focusGuard.scheduleReminder(reminder)
+    return () => void focusGuard.cancelReminder(reminder.id)
+  }, [active])
   return active ? <RunningLaunch launch={active} /> : null
 }
 

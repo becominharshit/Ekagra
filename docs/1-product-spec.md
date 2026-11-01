@@ -189,14 +189,15 @@ The college portal has no API, so tasks are **captured**:
 ## 10. Focus engine
 
 ### 10.1 Focus session (P1)
-- Starts from the Now card or manually. Timer styles: Pomodoro 25/5, Deep work 50/10, custom.
-- Shows the current block, links to the lesson/material, and an **"I got distracted"** button (optional reason).
-- On finish: done / partial (how much) / stopped. Actual minutes go back to the planner.
+- Starts from the Now card (one tap, your usual timer fitted to the block's time left) or manually (Study, Hustle or Life). Timer styles: Pomodoro 25/5, Deep work 50/10, custom; pause and resume; a soft chime when a phase ends.
+- Shows the current block, links to the lesson/material, and an **"I got distracted"** button (one tap on a reason, or a few words; the evening check-in suggests the day's most noted one).
+- **Idle check:** a study session pauses itself after 4 minutes without a tap, scroll or key press ("I'm studying away from the screen" turns it off for that session).
+- On finish: done / partial / stopped. The minutes focused (no breaks or pauses) go back to the planner, and to the hustle's hours for hustle work.
 
 ### 10.2 App blocking on Android (P1)
 - Chosen apps are blocked during focus sessions (option: during every Study block).
-- Opening a blocked app shows a full-screen page: "Focus: DBMS · 18 min left" → **Back to study** or **Emergency unlock**.
-- Emergency unlock asks for a reason, gives 5 minutes, is limited per day (default 3) and is logged.
+- Opening a blocked app shows a full-screen page: "Focus: DBMS · 18 min left" → **Back to study** or **Emergency unlock (Academic Tollbooth)**.
+- The **Academic Tollbooth**: answer 3 rapid-fire questions from your current subject (20 seconds each), then give a reason. All right: blocked apps open for 3 minutes (3–5 in settings), at most 3 times a day; logged. A wrong answer keeps them blocked, shows the right answer and offers the Mistake Notebook; the next try waits a minute.
 - Always allowed: phone, messages, maps, clock, this app, and any apps the student adds.
 - A setup screen explains each permission in simple words and walks through battery settings on phones that kill background apps.
 

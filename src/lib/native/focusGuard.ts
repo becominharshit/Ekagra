@@ -6,7 +6,7 @@ import { Capacitor, registerPlugin, type PluginListenerHandle } from '@capacitor
 // app list holds a few well-known apps, so the picker can be tried in Demo Mode.
 
 /** The settings screens FocusGuard can open; "appInfo" is the app's info page (battery options on many phones). */
-export type SettingsScreen = 'usageAccess' | 'overlay' | 'notifications' | 'battery' | 'appInfo'
+export type SettingsScreen = 'usageAccess' | 'overlay' | 'notifications' | 'battery' | 'exactAlarms' | 'appInfo'
 
 export interface PermissionStatus {
   /** Usage access: FocusGuard can see which app is on the screen. */
@@ -16,6 +16,8 @@ export interface PermissionStatus {
   notifications: boolean
   /** The phone doesn't put the app to sleep to save battery. */
   batteryUnrestricted: boolean
+  /** "Alarms & reminders": reminders (the Launchpad's) arrive exactly on time. */
+  exactAlarms: boolean
   /** The phone's maker, e.g. "OnePlus" (for the battery guide); empty on the web. */
   manufacturer: string
 }
@@ -59,6 +61,18 @@ interface FocusGuardPlugin {
   getStatus(): Promise<{ running: boolean; endsAt: number; unlockUntil: number }>
   takeEvents(): Promise<{ events: GuardEvent[] }>
   addListener(eventName: GuardEventType, listener: (event: Omit<GuardEvent, 'type'>) => void): Promise<PluginListenerHandle>
+  scheduleReminder(options: Reminder): Promise<void>
+  cancelReminder(options: { id: string }): Promise<void>
+}
+
+/** A notification at a set time, shown even when the app is closed. */
+export interface Reminder {
+  /** A new reminder with the same id replaces the old one. */
+  id: string
+  /** Epoch milliseconds. */
+  at: number
+  title: string
+  body: string
 }
 
 const plugin = registerPlugin<FocusGuardPlugin>('FocusGuard')
@@ -84,7 +98,7 @@ export const EXAMPLE_APPS: LaunchableApp[] = [
   example('com.google.android.youtube', 'YouTube'),
 ]
 
-const NOTHING_ON: PermissionStatus = { usageAccess: false, overlay: false, notifications: false, batteryUnrestricted: false, manufacturer: '' }
+const NOTHING_ON: PermissionStatus = { usageAccess: false, overlay: false, notifications: false, batteryUnrestricted: false, exactAlarms: false, manufacturer: '' }
 
 export const focusGuard = {
   async checkPermissions(): Promise<PermissionStatus> {
@@ -110,6 +124,13 @@ export const focusGuard = {
   /** The events FocusGuard saw that the app hasn't picked up yet (they're kept while the app is closed). */
   async takeEvents(): Promise<GuardEvent[]> {
     return focusGuardAvailable() ? (await plugin.takeEvents()).events : []
+  },
+  /** Android: a notification at `at`, even if the app is closed (the web app has its own reminders on screen). */
+  async scheduleReminder(reminder: Reminder): Promise<void> {
+    if (focusGuardAvailable()) await plugin.scheduleReminder(reminder)
+  },
+  async cancelReminder(id: string): Promise<void> {
+    if (focusGuardAvailable()) await plugin.cancelReminder({ id })
   },
   /** Calls `listener` when FocusGuard has news while the app runs. Returns a function that stops listening. */
   onEvent(listener: () => void): () => void {

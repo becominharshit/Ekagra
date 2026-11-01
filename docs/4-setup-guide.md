@@ -106,6 +106,22 @@ Supabase → **Authentication → URL Configuration**:
 
 After changing web code, run `npm run android` again, then press **Run ▶**.
 
+### FocusGuard (app blocking): test on real phones
+
+The blocking code only runs on a phone, so test it there. Do this on Android 12, 13, 14 and 15 if you can, and on at least three makers (for example OnePlus, Realme or Oppo, Xiaomi or Redmi, Samsung). Note anything that doesn't happen as described.
+
+1. **Setup:** Me → Focus and app blocking. Each "Turn on" opens the right Android screen; turn it on, come back, and the item shows a tick. On Android 13+ "Notifications" first shows Android's own question. Follow the battery guide for the phone (it picks the maker by itself).
+2. **Pick apps:** your own apps show with icons; Phone, Messages, Settings and Clock say "Always allowed". Pick Instagram and YouTube (or any two).
+3. **Blocking:** start focus on Today. A notification says "Focus: … min left · 2 apps blocked". Open Instagram: within about a second the blocker page covers it. Open Chrome or WhatsApp (not picked): no page.
+4. **Back to study:** on the blocker page tap Back to study, and separately press Android's back button. Both open Ekagra on the Focus screen.
+5. **Emergency unlock:** open Instagram, tap Emergency unlock (Academic Tollbooth). The Tollbooth opens for Instagram. Answer all 3 right, give a reason, Unlock: Instagram opens for 3 minutes, then the page comes back. Try once with a wrong answer: no unlock, and the next try waits a minute. After 3 unlocks in a day the button says none are left.
+6. **Stats:** back in Ekagra, the opened blocked apps are saved (Supabase `distraction_events`, kind `blocked_open`).
+7. **Ending:** tap Done or Stop: the notification and the blocking end. Also let a short session (Custom, 5 minutes) run out: blocking ends by itself.
+8. **Restart:** start a 25-minute session, restart the phone and unlock it: within a minute the notification is back and Instagram is blocked again.
+9. **Battery killers:** start a session, clear all recent apps and wait 10 minutes with the screen off; then open Instagram. It should still be blocked (if not, check the battery guide's steps for that phone).
+10. **Every Study block:** in Focus settings choose "Every Study block". During a Study block, blocked apps are blocked without starting focus.
+11. **Launchpad reminder:** on a hustle, open Upwork from the Launchpad and leave Ekagra. After 10 minutes a notification asks "Did you …?"; tapping it opens Ekagra with the question. With "Alarms and reminders" off (Android 14+), it may come a few minutes late.
+
 ## 6. AI features (Gemini)
 
 Demo Mode never uses this: there, AI features give sample answers made on the device. Signed-in students get real answers once these steps are done.
@@ -135,6 +151,8 @@ The Coding Lab doesn't need any of this: Python runs on the device. Its first ru
 | The sign-in page says Google sign-in turns on once Supabase is connected | `.env` is missing or has a typo. Fix it and restart `npm run dev` |
 | After sign-in: "The database tables don't exist yet" | Do step 2 (`npm run db:push`), then tap **Try again** |
 | "The database needs the latest update" | A new migration isn't on the server yet: `npm run db:push` (step 2) |
+| Android: blocked apps open normally | Me → Focus and app blocking: both "Usage access" and "Display over other apps" need a tick, and at least one app must be picked. Then follow the battery guide for your phone |
+| Android: blocking stops in the middle of a session | The phone closed FocusGuard to save battery: follow the battery guide (Autostart, no battery limits, lock the app in Recent apps) |
 | Android Studio: "SDK location not found" | Open the project through `npm run android` once; Android Studio then creates `android/local.properties` |
 | "The AI features aren't on the server yet" | Deploy them: `npm run functions:deploy` (step 6) |
 | "AI is not set up on the server yet. Check these Edge Function secrets: …" | Fill in those names in `supabase/functions/.env`, then `npm run functions:secrets` (step 6) |

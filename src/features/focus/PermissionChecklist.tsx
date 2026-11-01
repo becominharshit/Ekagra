@@ -26,6 +26,13 @@ const PERMISSIONS: { key: PermissionKey; screen: SettingsScreen; title: string; 
     needed: false,
   },
   { key: 'batteryUnrestricted', screen: 'battery', title: 'No battery limits', why: 'Stops the phone from closing FocusGuard in the middle of a session.', needed: false },
+  {
+    key: 'exactAlarms',
+    screen: 'exactAlarms',
+    title: 'Alarms and reminders',
+    why: "The Launchpad's \"time's up\" reminder arrives exactly when your 10 minutes end, not a few minutes later.",
+    needed: false,
+  },
 ]
 
 /** The permissions FocusGuard needs, each in plain words with a button to its settings screen, and the battery guide. */
@@ -60,7 +67,7 @@ export function PermissionChecklist() {
           </CardTitle>
           <CardDescription>
             {data && readyToBlock(data)
-              ? 'Blocked apps are closed during focus. The last two make it more reliable.'
+              ? 'Blocked apps are closed during focus. The recommended ones make it more reliable.'
               : 'Turn these on in Android settings. Each button opens the right screen; come back here afterwards.'}
           </CardDescription>
         </CardHeader>

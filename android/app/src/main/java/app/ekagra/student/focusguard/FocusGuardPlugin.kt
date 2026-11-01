@@ -111,6 +111,26 @@ class FocusGuardPlugin : Plugin() {
         call.resolve(result)
     }
 
+    /** A notification at a set time, even if the app is closed (the Launchpad's "time's up"). The same id replaces it. */
+    @PluginMethod
+    fun scheduleReminder(call: PluginCall) {
+        val id = call.getString("id")
+        val at = call.getLong("at")
+        if (id.isNullOrBlank() || at == null) {
+            call.reject("A reminder needs an id and a time.")
+            return
+        }
+        Reminders.schedule(context, id, at, call.getString("title") ?: "Ekagra", call.getString("body") ?: "")
+        call.resolve()
+    }
+
+    @PluginMethod
+    fun cancelReminder(call: PluginCall) {
+        val id = call.getString("id")
+        if (!id.isNullOrBlank()) Reminders.cancel(context, id)
+        call.resolve()
+    }
+
     /** Tells the web app at once, when it is running, that an event is waiting. */
     fun emitToWeb(name: String, data: JSObject) {
         notifyListeners(name, data)
@@ -124,6 +144,7 @@ class FocusGuardPlugin : Plugin() {
         result.put("overlay", Settings.canDrawOverlays(context))
         result.put("notifications", notificationsOn(context))
         result.put("batteryUnrestricted", ignoresBatteryOptimizations(context))
+        result.put("exactAlarms", Reminders.canBeExact(context))
         result.put("manufacturer", Build.MANUFACTURER.orEmpty())
         call.resolve(result)
     }
@@ -145,6 +166,11 @@ class FocusGuardPlugin : Plugin() {
             "overlay" -> Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, packageUri())
             "notifications" -> notificationSettings()
             "battery" -> Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+            "exactAlarms" -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, packageUri())
+            } else {
+                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, packageUri())
+            }
             "appInfo" -> Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, packageUri())
             else -> {
                 call.reject("Unknown settings screen: $type")

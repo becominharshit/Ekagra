@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { DataSource } from '@/lib/dataSource'
 import { demoDb } from '@/lib/demoDb'
 import { stubLocalStorage } from '@/test/memoryStorage'
-import { finishLaunch, minutesToLog, normalizeUrl, parseLinks, platformsFor, saveLinks, secondsLeft, type ActiveLaunch } from './launchpad'
+import { finishLaunch, launchReminder, minutesToLog, normalizeUrl, parseLinks, platformsFor, saveLinks, secondsLeft, type ActiveLaunch } from './launchpad'
 
 stubLocalStorage()
 
@@ -21,6 +21,16 @@ const launch: ActiveLaunch = {
 }
 
 describe('the Launchpad', () => {
+  it("reminds on the phone when the time is up (5 more minutes move it)", () => {
+    expect(launchReminder(launch)).toEqual({
+      id: launch.id,
+      at: minutesLater(10).getTime(),
+      title: "Launchpad: time's up",
+      body: 'Did you send 3 proposals on Upwork? Open Ekagra to log it.',
+    })
+    expect(launchReminder({ ...launch, minutes: 15 }).at).toBe(minutesLater(15).getTime())
+  })
+
   it('counts down from 10 minutes, and logs the time it ran (1 to 15 minutes)', () => {
     expect(secondsLeft(launch, minutesLater(2.5))).toBe(450)
     expect(secondsLeft(launch, minutesLater(12))).toBe(-120)

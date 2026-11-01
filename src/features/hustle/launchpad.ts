@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { dbError, type DataSource } from '@/lib/dataSource'
 import { demoDb } from '@/lib/demoDb'
+import type { Reminder } from '@/lib/native/focusGuard'
 import type { Json } from '@/types/database'
 import type { Hustle } from './hustles'
 import { updateHustle } from './hustles'
@@ -65,6 +66,17 @@ export function platformsFor(hustle: Pick<Hustle, 'type' | 'links'>): Platform[]
   const own = parseLinks(hustle.links)
   const names = new Set(own.map((link) => link.label.toLowerCase()))
   return [...own, ...TEMPLATES[toHustleType(hustle.type)].platforms.filter((platform) => !names.has(platform.label.toLowerCase()))]
+}
+
+/** The phone notification for when a launch's time is up (Android, through FocusGuard). */
+export function launchReminder(launch: Pick<ActiveLaunch, 'id' | 'startedAt' | 'minutes' | 'intention' | 'platform'>): Reminder {
+  const goal = launch.intention.charAt(0).toLowerCase() + launch.intention.slice(1)
+  return {
+    id: launch.id,
+    at: Date.parse(launch.startedAt) + launch.minutes * 60_000,
+    title: "Launchpad: time's up",
+    body: `Did you ${goal} on ${launch.platform}? Open Ekagra to log it.`,
+  }
 }
 
 /** Seconds left in a launch (negative once the time is up). */

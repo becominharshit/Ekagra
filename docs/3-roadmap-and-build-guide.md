@@ -46,13 +46,13 @@ The current milestone is the first unchecked one.
   5. Time entries (manual and from focus sessions on hustle blocks) and earnings per hour per hustle and per client (`hustle_earnings`)
   6. Skill Bridge: "Learn this" creates or links a skill course and skill-track topic; the planner gives skill courses their weekly time (and no more)
   7. The + capture sheet saves hustle tasks and leads; the 10-minute Launchpad when opening outreach and social platforms from Hustle
-- [ ] **M9 Focus engine, Academic Tollbooth and FocusGuard, in 6 steps** (no migration: the tables are in 001):
+- [x] **M9 Focus engine, Academic Tollbooth and FocusGuard, in 6 steps** (no migration: the tables are in 001). Done 2026-11-01; the timer, "I got distracted", the idle guard and the Tollbooth work on the web and in Demo Mode too (app blocking only on Android). **Your step:** test FocusGuard on real phones (docs/4-setup-guide.md, step 5, "FocusGuard (app blocking): test on real phones"):
   1. Focus timer: Pomodoro, Deep work and Custom (lengths from `settings.focus`), for the current plan block (fitted to the time it has left) or on its own (Study, Hustle or Life); pause and resume; the minutes focused (no breaks or pauses) go to the block's `actual_minutes` and, for a hustle, to `time_entries`; Focus screen (`/today/focus`), a focus bar on other screens, a chime when a phase ends
   2. "I got distracted" (`distraction_events`, kind `self_report`) and the idle guard: a study session pauses after 4 minutes without a tap, scroll or key press
   3. Academic Tollbooth (`quizzes.kind = 'tollbooth'`): 3 rapid-fire questions from the current subject (its questions and flashcards, or built-in ones) and a reason; 3/3 gives a 3–5 minute unlock (`tollbooth_unlock`, at most `tollbooth.dailyLimit` a day), a wrong answer denies it (`tollbooth_failed`) and offers the Mistake Notebook
   4. FocusGuard part 1: the Kotlin plugin (permissions, launchable apps), the TypeScript wrapper, the blocked-apps picker (`blocked_apps`) and the Focus setup screen with a battery guide for OnePlus, Realme, Xiaomi and Samsung
   5. FocusGuard part 2: the foreground service (`specialUse`), `UsageStatsManager` checks every second, the blocker overlay ("Back to study", "Emergency unlock (Academic Tollbooth)"), unlock passes, restoring after a restart (`BOOT_COMPLETED`)
-  6. A notification when the 10-minute Launchpad ends (through FocusGuard), docs, the Android test checklist
+  6. A notification when the 10-minute Launchpad ends (through FocusGuard: AlarmManager, exact with "Alarms & reminders"), docs, the Android test checklist
 - [ ] **M10 Beta:** end-to-end polish, web deploy, APK for friends
 
 The 12-week plan in §3 and the phases in §1 and §4 are kept for reference only.

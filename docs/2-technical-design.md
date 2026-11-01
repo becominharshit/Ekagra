@@ -400,30 +400,38 @@ Pure TypeScript in `src/features/planner/`, run in the app, saved to `plan_block
 
 ## 11. Android app blocker: FocusGuard (P1)
 
-A Capacitor plugin written in Kotlin inside `android/` (registered in `MainActivity`), with a TypeScript wrapper in `src/lib/native/focusGuard.ts`.
+A Capacitor plugin written in Kotlin in `android/app/src/main/java/app/ekagra/student/focusguard/` (registered in `MainActivity`), with a TypeScript wrapper in `src/lib/native/focusGuard.ts`. On the web the wrapper answers with a stand-in: nothing is blocked, and the app list holds example apps so the picker can be tried. Built in M9 (steps 4–6).
 
 ```ts
 interface FocusGuardPlugin {
-  checkPermissions(): Promise<{ usageAccess: boolean; overlay: boolean; notifications: boolean; batteryUnrestricted: boolean }>;
-  openPermissionSettings(opts: { type: "usageAccess" | "overlay" | "notifications" | "battery" }): Promise<void>;
-  listLaunchableApps(): Promise<{ apps: { packageName: string; label: string; iconBase64: string }[] }>;
-  start(opts: { blockedPackages: string[]; endsAt: number; title: string; emergencyUnlocksLeft: number }): Promise<void>;
+  checkPermissions(): Promise<{ usageAccess: boolean; overlay: boolean; notifications: boolean; batteryUnrestricted: boolean;
+                                exactAlarms: boolean; manufacturer: string /* for the battery guide */ }>;
+  openPermissionSettings(opts: { type: "usageAccess" | "overlay" | "notifications" | "battery" | "exactAlarms" | "appInfo" }): Promise<void>;
+  listLaunchableApps(): Promise<{ apps: { packageName: string; label: string; iconBase64: string; alwaysAllowed: boolean }[] }>;
+  start(opts: { blockedPackages: string[]; endsAt: number; title: string; emergencyUnlocksLeft: number }): Promise<void>; // also updates a running session
   stop(): Promise<void>;
-  // events: "blockedAppOpened", "emergencyUnlock"
+  unlock(opts: { minutes: number }): Promise<{ unlockUntil: number }>;      // a passed Academic Tollbooth
+  getStatus(): Promise<{ running: boolean; endsAt: number; unlockUntil: number }>;
+  takeEvents(): Promise<{ events: { type: "blockedAppOpened" | "emergencyUnlock"; packageName: string; label: string; at: number }[] }>;
+  scheduleReminder(opts: { id: string; at: number; title: string; body: string }): Promise<void>; // Launchpad "time's up"
+  cancelReminder(opts: { id: string }): Promise<void>;
+  // events (while the app runs): "blockedAppOpened", "emergencyUnlock"; they are also queued for takeEvents()
 }
 ```
 
 **How it works**
-1. Permissions: **Usage access** (`PACKAGE_USAGE_STATS`, turned on by the user in Settings), **Display over other apps** (`SYSTEM_ALERT_WINDOW`), notifications, and a **foreground service** (type `specialUse` on Android 14+).
-2. App list: a `<queries>` entry for launcher apps, not `QUERY_ALL_PACKAGES` (restricted by Google Play).
-3. `start()` launches a foreground service with a visible notification: "Focus: DBMS · 18 min left".
-4. About every second, the service reads recent usage events to find the app in front.
-5. Blocked app in front → full-screen overlay with title, minutes left, **Back to study** (opens our app) and **Emergency unlock** (reason + 5 minutes, limited per day).
-6. Events go to JavaScript and are saved as `distraction_events`.
-7. The service stops at `endsAt` or on `stop()`. If the phone restarts mid-session, a boot receiver restores it.
+1. Permissions: **Usage access** (`PACKAGE_USAGE_STATS`, turned on by the user in Settings), **Display over other apps** (`SYSTEM_ALERT_WINDOW`), notifications (Android 13 asks first; after a "no", the settings screen), no battery limits, and "Alarms & reminders" (`SCHEDULE_EXACT_ALARM`, granted automatically on Android 12–13, asked on 14+) for exact reminders. The **Focus and app blocking** screen (`/me/focus`) explains each one and opens its settings screen; it checks again when the app comes back.
+2. App list: a `<queries>` entry for launcher apps, not `QUERY_ALL_PACKAGES` (restricted by Google Play). This app, the dialer, messages, settings, the clock and maps are never blocked (`AppRules.kt`).
+3. The web app decides what to block (`src/features/focus/guardPlan.ts`): the picked apps (`blocked_apps`) while a focus session runs, until its timer ends (pauses push the end back), and with `settings.focus.blockDuring = 'study_blocks'` during every Study block too. `FocusGuardSync` calls `start()` when that changes and `stop()` when there is nothing to block.
+4. `start()` saves the session on the phone (`GuardStore`) and starts `FocusGuardService`, a foreground service (type `specialUse` on Android 14+, with its reason in the manifest) with a notification: "Focus: Normalization · 18 min left · 3 apps blocked".
+5. Every second the service reads recent usage events to find the app in front (`FocusGuardState.kt`, pure and JUnit-tested, decides allow, block or end).
+6. Blocked app in front → a full-screen window over it (`BlockerOverlay`) with the title, minutes left, **Back to study** (also the back button; opens `ekagra://focus`) and **Emergency unlock (Academic Tollbooth)** with the unlocks left today (opens `ekagra://focus/tollbooth?app=…&label=…`). The **Academic Tollbooth** replaces the reason + 5 minutes unlock: 3 rapid-fire questions from the current subject, then a reason; all right → `unlock()` opens blocked apps for `tollbooth.unlockMinutes` (3–5), at most `tollbooth.dailyLimit` a day.
+7. Blocked apps opened (and unlocks asked for) are queued on the phone and announced to JavaScript, which saves them as `distraction_events` (`blocked_open`; the Tollbooth itself saves `tollbooth_unlock` or `tollbooth_failed`).
+8. The service stops at `endsAt` or on `stop()`. Android restarts it if it closes it (`START_STICKY`), and a boot receiver restores it after a restart or an app update in the middle of a session.
+9. Reminders (`Reminders.kt`): AlarmManager wakes a receiver that shows a notification, exact when "Alarms & reminders" is allowed. The Launchpad uses it for "time's up"; ending the launch cancels it.
 
 **Real-world issues**
-- Many brands (Xiaomi, Oppo, Vivo, Realme, OnePlus, Samsung…) kill background services. Add a setup screen with brand-specific steps (dontkillmyapp.com has them) and ask to turn off battery optimization for the app.
+- Many brands (Xiaomi, Oppo, Vivo, Realme, OnePlus, Samsung…) kill background services. The setup screen has brand-specific steps for OnePlus, Realme/Oppo, Xiaomi/Redmi/POCO and Samsung (`src/features/focus/batteryGuide.ts`; dontkillmyapp.com has more) and asks to turn off battery optimization for the app.
 - Test on Android 12–15+ and at least 3 phone brands.
 - Google Play checks these permissions closely. For the beta, share the APK directly or through Firebase App Distribution. Before a Play Store release: clear permission explanations and a privacy policy.
 - An Accessibility Service detects apps faster, but Play has strict rules for it. Keep it as a later option.

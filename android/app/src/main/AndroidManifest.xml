@@ -53,6 +53,11 @@
                 android:value="App blocker: while the student runs a focus session, the apps they picked are covered by a page that sends them back to studying." />
         </service>
 
+        <!-- Reminders at a set time, e.g. when the Launchpad's 10 minutes end (Reminders.kt). -->
+        <receiver
+            android:name=".focusguard.ReminderReceiver"
+            android:exported="false" />
+
         <!-- Blocking goes on after a restart (or an app update) in the middle of a session. -->
         <receiver
             android:name=".focusguard.BootReceiver"
@@ -87,6 +92,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- The Launchpad's "time's up" reminder on time ("Alarms & reminders"; Android 14+ asks the student). -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
     <!-- Android 11+ only shows other apps to apps that ask: FocusGuard lists the ones with a launcher icon. -->
     <queries>

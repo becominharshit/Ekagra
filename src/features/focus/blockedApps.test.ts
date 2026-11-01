@@ -27,7 +27,8 @@ describe('blocked apps (Demo Mode)', () => {
 
 describe('FocusGuard outside the Android app', () => {
   it('blocks nothing, and offers example apps so the picker can be tried', async () => {
-    expect(await focusGuard.checkPermissions()).toEqual({ usageAccess: false, overlay: false, notifications: false, batteryUnrestricted: false, manufacturer: '' })
+    expect(await focusGuard.checkPermissions()).toEqual({ usageAccess: false, overlay: false, notifications: false, batteryUnrestricted: false, exactAlarms: false, manufacturer: '' })
+    await expect(focusGuard.scheduleReminder({ id: 'l1', at: Date.now() + 600_000, title: "Launchpad: time's up", body: 'Did you send 3 proposals?' })).resolves.toBeUndefined()
     expect(await focusGuard.listLaunchableApps()).toBe(EXAMPLE_APPS)
     expect(EXAMPLE_APPS.find((app) => app.label === 'Phone')?.alwaysAllowed).toBe(true)
     await expect(focusGuard.openPermissionSettings('overlay')).resolves.toBeUndefined()
