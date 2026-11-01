@@ -17,6 +17,11 @@ dist-ssr
 .env.*
 !.env.example
 
+# Android release signing keys and release builds (docs/4-setup-guide.md, step 8)
+*.jks
+*.keystore
+android/app/release/
+
 # Supabase CLI local files
 supabase/.temp
 supabase/.branches

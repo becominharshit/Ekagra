@@ -1,4 +1,4 @@
-# Setup Guide: Supabase, Google Sign-In, Android and AI
+# Setup Guide: Supabase, Google Sign-In, Android, AI and the Beta
 
 You only need this for real accounts. **Demo Mode works without any of it**: open the app and tap **Try Demo Mode**.
 
@@ -11,6 +11,8 @@ Values used below:
 | Android app ID | `app.ekagra.student` |
 | Android return link | `ekagra://auth/callback` |
 | Web return page (development) | `http://localhost:5173/auth/callback` |
+| Web return page (online, step 7) | `https://<your-site>/auth/callback` |
+| Privacy policy (online, step 7) | `https://<your-site>/privacy` |
 | Your project ref | the random part of your project URL: `https://<project-ref>.supabase.co` |
 
 ## 1. Create the Supabase project
@@ -44,7 +46,7 @@ npm run db:types
 
 - `login` opens your browser to allow the Supabase command-line tool.
 - `link` asks for the database password from step 1.
-- `db:push` creates every table, security rule (RLS) and storage bucket from the files in `supabase/migrations/` (`001_phase1_core.sql`, then `002_hustle_mode.sql` and any later ones). Run it again whenever a new migration file appears; it only applies the new ones.
+- `db:push` creates every table, security rule (RLS) and storage bucket from the files in `supabase/migrations/` (`001_phase1_core.sql`, then `002_hustle_mode.sql`, `003_beta.sql` (feedback) and any later ones). Run it again whenever a new migration file appears; it only applies the new ones.
 - `db:types` writes `src/types/database.ts` from your real database. Run it again after every new migration.
 
 **Check:** Supabase → **Table Editor** lists tables such as `profiles`, `subjects`, `hustles`, and each one says RLS is enabled.
@@ -129,15 +131,65 @@ Demo Mode never uses this: there, AI features give sample answers made on the de
 1. Get a Gemini API key at https://aistudio.google.com/apikey (**Create API key**).
 2. Copy `supabase/functions/.env.example` to `supabase/functions/.env` (it is git-ignored) and paste the key after `AI_API_KEY=`. Model names and prices are already filled in; the file links to Google's pages to check them.
 3. Send the secrets to Supabase: `npm run functions:secrets`
-4. Deploy the AI functions: `npm run functions:deploy` (no Docker needed). Run it again whenever something in `supabase/functions/` changes.
+4. Deploy the functions: `npm run functions:deploy` (no Docker needed). Run it again whenever something in `supabase/functions/` changes.
 
-**Check:** Supabase → **Edge Functions** lists `ai-syllabus`, `ai-papers`, `ai-tutor`, `ai-generate`, `ai-capture`, `ai-brief` and `ai-hustle`, and **Edge Functions → Secrets** lists the `AI_…` names. Then, signed in: import a syllabus (Academics → a subject → Import syllabus), open a topic → **Make my lesson**, add a screenshot of the portal with the **+** button, and tap refresh on Today's **Morning brief** (it should say "Written by the AI").
+**Check:** Supabase → **Edge Functions** lists the 7 AI functions (`ai-syllabus`, `ai-papers`, `ai-tutor`, `ai-generate`, `ai-capture`, `ai-brief`, `ai-hustle`) and 2 without AI: `ai-usage` (the AI usage card on Me) and `account-delete` (wiping data and deleting accounts). Those 2 need no AI secrets, but they must be deployed. **Edge Functions → Secrets** lists the `AI_…` names. Then, signed in: import a syllabus (Academics → a subject → Import syllabus), open a topic → **Make my lesson**, add a screenshot of the portal with the **+** button, and tap refresh on Today's **Morning brief** (it should say "Written by the AI"). **Me → AI usage** then shows those requests, today and this month, with their cost.
 
 The Coding Lab doesn't need any of this: Python runs on the device. Its first run downloads Python (about 13 MB) from the jsDelivr CDN, so that one needs the internet.
 
 **Limits:** every AI request goes through `supabase/functions/_shared/ai.ts`. Each student can make `AI_USER_DAILY_REQUESTS` requests in 24 hours, and the whole app can spend at most `AI_MONTHLY_BUDGET_USD` ÷ 30 in 24 hours. Every request's tokens and cost are saved in the `ai_usage` table.
 
 **Free tier:** Google may use free-tier prompts to improve its models. Turn on billing for the key before friends upload their own material.
+
+## 7. Put the web app online
+
+Any static host works. These steps use Netlify; Vercel and Cloudflare Pages are much the same. All three are free for this size.
+
+1. Push the project to a private GitHub repo, if it isn't there yet.
+2. Netlify → **Add new site → Import an existing project** → pick the repo:
+   - Build command: `npm run build`
+   - Publish directory: `dist`
+   - Environment variables: `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` (the same values as your `.env`), and optionally `VITE_CONTACT_EMAIL` (the contact address on the privacy page; without it, the page points to the feedback button).
+3. The app has its own addresses (`/academics`, `/privacy`, …), so the host must answer every address with `index.html`:
+   - Netlify: a file `public/_redirects` with the line `/* /index.html 200` (Vite copies it into `dist`).
+   - Vercel: a `vercel.json` with `{ "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }] }`.
+   - Cloudflare Pages: nothing to do.
+4. Deploy, then copy the site's address, e.g. `https://ekagra.netlify.app`.
+5. Supabase → **Authentication → URL Configuration**: set **Site URL** to the site's address, and add `https://<your-site>/auth/callback` to **Redirect URLs** (keep the `localhost` and `ekagra://` ones).
+6. Google Cloud → **Google Auth Platform → Branding**: home page `https://<your-site>`, privacy policy `https://<your-site>/privacy`, and the site's domain under authorized domains. The redirect URI from step 3a stays as it is.
+7. Updates: every push to GitHub deploys again by itself.
+
+**Check:** open the site, sign in with Google, open Academics and reload the page (it must not say "Page not found"), and open `https://<your-site>/privacy` in a private window (it shows without signing in).
+
+## 8. The APK for friends
+
+The APK that **Run ▶** installs is a debug build for your own phone. For friends, make a signed release APK:
+
+1. Before every new APK, raise `versionCode` by 1 in `android/app/build.gradle` (2, 3, …) and set `versionName` (e.g. `"0.2"`). Android only installs an update with a higher `versionCode`.
+2. Run `npm run android`: it builds the web app, copies it into the Android project and opens Android Studio.
+3. **Build → Generate Signed App Bundle or APK → APK → Next.**
+4. The first time, **Create new…** key store. Save the `.jks` file and its passwords somewhere safe **outside** the project folder (`.gitignore` also ignores `*.jks`). Every later APK must be signed with the same key; otherwise friends have to uninstall the app (losing what it kept on the phone) before they can install the new one.
+5. Pick **release** → **Create**. The APK is `android/app/release/app-release.apk` (ignored by Git).
+6. Share it through **Firebase App Distribution** (free: friends get an email and a simple way to update) or a Drive link. On the phone they allow "Install unknown apps" for the app they open it with.
+7. Each friend signs in, then does Me → Focus and app blocking and follows the battery guide for their phone. Add their Gmail as a test user first (step 3a).
+
+Me → Feedback shows when the running app was built ("App build … (UTC)"), so you can tell which APK or web version a bug report came from.
+
+## 9. Running the beta: feedback and AI spend
+
+- **Feedback:** Supabase → **Table Editor → feedback** (sort by `created_at`). Each row has the kind, the message, the screen and its address, and the device in `context`. A screenshot is in **Storage → images →** the student's user id **→ feedback**. Set `status` to `seen`, `planned`, `fixed` or `closed`; the student sees it on Me → Feedback ("Read", "Planned", "Fixed", "Closed").
+- **AI spend:** every student sees their own on Me → AI usage. For everyone, run this in Supabase → **SQL Editor**:
+
+  ```sql
+  select p.full_name, u.feature, count(*) as requests, round(sum(u.cost_usd), 4) as usd
+  from public.ai_usage u
+  left join public.profiles p on p.id = u.user_id
+  where u.created_at >= date_trunc('month', now())
+  group by p.full_name, u.feature
+  order by usd desc;
+  ```
+
+- **Account controls:** to test them, use a test account, not your own: Me → Privacy, export and delete → **Export all data** (a JSON file), **Wipe my data** (type DELETE: the app goes back to setup, and the account stays), **Delete my account** (type DELETE: you're signed out, and Supabase → **Authentication → Users** no longer lists the account).
 
 ## Troubleshooting
 
@@ -157,3 +209,8 @@ The Coding Lab doesn't need any of this: Python runs on the device. Its first ru
 | "The AI features aren't on the server yet" | Deploy them: `npm run functions:deploy` (step 6) |
 | "AI is not set up on the server yet. Check these Edge Function secrets: …" | Fill in those names in `supabase/functions/.env`, then `npm run functions:secrets` (step 6) |
 | "The app's AI budget for today is used up" | Wait up to 24 hours, or raise `AI_MONTHLY_BUDGET_USD` (see the costs in the `ai_usage` table) |
+| "The ai-usage function isn't on the server yet" (Me → AI usage) or "The account-delete function isn't on the server yet" | Deploy them: `npm run functions:deploy` (step 6) |
+| "Deleting didn't finish" | Tap the button again: it carries on with what is left. If it keeps failing, check Supabase → **Edge Functions → account-delete → Logs** |
+| The online app says "Page not found" after a reload | The host must answer every address with `index.html` (step 7, item 3) |
+| Signing in on the online app returns to `localhost` | Add the site to Supabase's Site URL and Redirect URLs (step 7, item 5) |
+| A friend's phone says "App not installed" when updating | The new APK has the same or a lower `versionCode`, or was signed with another key (step 8) |

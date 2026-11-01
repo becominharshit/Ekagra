@@ -55,7 +55,7 @@
 │  Postgres + RLS + pgvector · Auth (Google) · Storage (PDFs, images) · Vault       │
 │  Edge Functions: ai-syllabus, ai-papers, ai-capture, ai-generate, ai-grade,       │
 │    ai-tutor, ai-brief, ai-hustle, worker · P2: ai-review, ai-hint, oauth-google · │
-│    P3: integrations                                                               │
+│    ai-usage, account-delete (no AI) · P3: integrations                            │
 │  Cron: job worker every minute · P2 weekly review · P3 integration sync           │
 └──────────────┬──────────────────────────────────────────────┬────────────────────┘
                ▼                                              ▼
@@ -79,14 +79,17 @@ student-mentor-app/
 │   ├── lib/
 │   │   ├── supabase.ts          Supabase client
 │   │   ├── native/focusGuard.ts TypeScript wrapper for the Kotlin plugin
+│   │   ├── native/fileSaver.ts  saving the data export (Kotlin FileSaver on Android)
 │   │   └── dates.ts             timezone helpers
 │   └── types/database.ts        generated from the database
-├── android/                     Capacitor Android project (FocusGuard Kotlin code lives here)
+├── android/                     Capacitor Android project (Kotlin: FocusGuard, FileSaver)
 ├── supabase/
 │   ├── migrations/              SQL: tables + RLS policies
 │   └── functions/
-│       ├── _shared/             ai.ts, prompts/, schemas/ (Zod)
+│       ├── _shared/             ai.ts, prompts/, schemas.ts (Zod), respond.ts (HTTP), admin.ts (secret key),
+│       │                        userTables.ts (every table with student rows)
 │       └── ai-syllabus/ ai-papers/ ai-capture/ ai-generate/ ai-grade/ ai-tutor/ ai-brief/ ai-hustle/ worker/
+│           ai-usage/ account-delete/   (no AI call)
 ├── capacitor.config.ts
 ├── .env.example
 └── package.json
@@ -98,6 +101,7 @@ student-mentor-app/
 # App (.env): public values only
 VITE_SUPABASE_URL=
 VITE_SUPABASE_PUBLISHABLE_KEY=      # called "anon key" in older Supabase projects
+VITE_CONTACT_EMAIL=                 # optional: the contact on the privacy page (M10)
 
 # Edge Function secrets (set with the Supabase CLI or dashboard)
 AI_PROVIDER=                        # e.g. google
@@ -227,7 +231,11 @@ integrations        user_id, provider, status, scopes, external_account, vault_s
 jobs                user_id, type, payload jsonb, status (pending|running|done|failed),
                     attempts, run_after, error
 ai_usage            user_id, feature, model, input_tokens, output_tokens, cost_usd
-feedback            user_id, screen, message, screenshot_path
+feedback            user_id, kind (bug|idea|other), message (≤ 4000), screen, path,      (P1, M10)
+                    screenshot_path (images bucket: <user_id>/feedback/<id>.png), context jsonb
+                    (app, build, viewport, browser, language, timezone),
+                    status (new|seen|planned|fixed|closed). Students insert (status new),
+                    read and delete their own; only the founder changes the status (dashboard)
 ```
 
 **Storage:** private buckets `materials` and `images`; files open through short-lived signed URLs. The free plan has little storage (check current limits), so always keep the extracted text, keep very large files on the device or in Google Drive (P2), and never store lecture videos.
@@ -338,7 +346,7 @@ const TopicTree = z.object({
 - Fast tier for ~90% of calls; Smart tier only for planning and analysis.
 - Free text extraction on the device; OCR only for scanned pages.
 - Quotas per user: AI requests per day, OCR pages and video minutes per month. Start strict, loosen with real data.
-- Admin page from `ai_usage`: spend per user and per feature.
+- **Me → AI usage** (M10): each student sees their requests in the last 24 hours against the daily limit and this month's cost per AI function (read from their own `ai_usage` rows), next to the whole app's spend over 24 hours and this month (the `ai-usage` Edge Function, which adds it up with the secret key and makes no AI call). Spend per student: a SQL query in the Supabase dashboard (docs/4, step 9).
 - Provider budget alerts usually **don't stop** spending. The app's own quota check is the real limit.
 
 ## 8. Planner algorithm (P1)
@@ -433,7 +441,7 @@ interface FocusGuardPlugin {
 **Real-world issues**
 - Many brands (Xiaomi, Oppo, Vivo, Realme, OnePlus, Samsung…) kill background services. The setup screen has brand-specific steps for OnePlus, Realme/Oppo, Xiaomi/Redmi/POCO and Samsung (`src/features/focus/batteryGuide.ts`; dontkillmyapp.com has more) and asks to turn off battery optimization for the app.
 - Test on Android 12–15+ and at least 3 phone brands.
-- Google Play checks these permissions closely. For the beta, share the APK directly or through Firebase App Distribution. Before a Play Store release: clear permission explanations and a privacy policy.
+- Google Play checks these permissions closely. For the beta, share the APK directly or through Firebase App Distribution. Before a Play Store release: clear permission explanations (the privacy page at `/privacy` explains each one, M10) and Play's declaration forms.
 - An Accessibility Service detects apps faster, but Play has strict rules for it. Keep it as a later option.
 
 ## 12. Integrations
@@ -467,15 +475,20 @@ interface FocusGuardPlugin {
 - Uploaded books stay private to the uploader (copyright). Groups share notes and decks only.
 - Never store college portal passwords.
 - Blocker and usage data stay in the student's own account; explain permissions in plain words.
-- Data export and account deletion in Settings.
-- A simple privacy policy page (needed for Google OAuth and the Play Store).
+- **Privacy policy** (M10): a public page at `/privacy` (needed for Google OAuth and the Play Store): what is kept, Demo Mode, where data lives, how the AI uses it, every Android permission, the student's choices, how long data is kept. Linked from sign-in and Me. Keep it true when features change.
+- **Me → Account and privacy** (M10):
+  - *Export all data*: built on the device as one JSON file (the profile and every table in `supabase/functions/_shared/userTables.ts`, own rows only, a page at a time; Demo Mode exports the device's data). Files are listed by their storage path, not included. The web downloads it; the Android WebView can't, so the Kotlin `FileSaver` plugin (`android/.../files/FileSaverPlugin.kt`) opens Android's "Save to" screen (`ACTION_CREATE_DOCUMENT`), which needs no storage permission.
+  - *Wipe my data* and *Delete my account* (type DELETE; the server checks it too) call `account-delete` (secret key). It deletes the student's files in both buckets first (through the Storage API; Supabase doesn't allow deleting storage rows with SQL), then either every table children-first plus a profile reset (`ai_usage` stays, so wiping can't reset the AI limits) or the auth user, which deletes every row through `on delete cascade`. A PGlite test checks the table list is complete, the order works and the cascade leaves nothing. Afterwards the device forgets caches, timers and the Launchpad and stops FocusGuard; deleting the account signs out.
+  - Known gap: deleting an account also deletes its `ai_usage` rows, so the app's 24-hour spend counts less for the rest of that day.
 
 ## 14. Environments and workflow
 - One Supabase project for now (free). Free projects pause after about a week without activity; daily beta use keeps it awake.
 - Schema changes as SQL files in `supabase/migrations/`, applied with the Supabase CLI. Regenerate `src/types/database.ts` after each change.
 - Git: commit after every working step; push to a private GitHub repo.
-- Web: connect the repo to Vercel or Netlify (auto-deploy on push).
-- Android: `npx cap sync` → build in Android Studio → share the APK via Firebase App Distribution.
+- Web: connect the repo to Netlify, Vercel or Cloudflare Pages (auto-deploy on push); every address must serve `index.html` (docs/4, step 7).
+- Android: `npx cap sync` → a signed release APK from Android Studio → share it via Firebase App Distribution or a link (docs/4, step 8).
+- Build size (M10): every page is a lazy route (loaded on first open, `src/router.tsx`), and `vite.config.ts` puts the libraries every screen needs into files of their own with Rolldown's `codeSplitting.groups` (Vite 8's replacement for `manualChunks`): react, router, supabase, query, radix. CodeMirror, pdf.js and Markdown stay with their screens; Pyodide comes from a CDN. No file is over 500 kB.
+- Which build is running: Vite writes the build time into the app (`__APP_BUILD__`); Me and every feedback report show it.
 - `.env` is never committed; `.env.example` lists the variable names.
 
 ## 15. Testing

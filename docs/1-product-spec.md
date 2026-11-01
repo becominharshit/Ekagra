@@ -295,7 +295,9 @@ Each hustle has a goal (e.g. "first ₹10,000 by January"), phases with steps fr
   - Learning: new flashcards per day, target retention, explanation level, explanation language
   - Notifications: quiet / normal / persistent, quiet hours
 - Integrations: connect and disconnect accounts.
-- Account: export all data, delete account.
+- **Account and privacy** (P1, built in M10): the privacy policy with every Android permission explained, export all data (one JSON file), wipe data (keeps the account), delete account.
+- **AI usage** (P1, M10): requests in the last 24 hours against the daily limit, and this month's cost per AI feature.
+- **Feedback** (P1, M10): a button on every screen sends a bug or an idea with the screen's name and an optional screenshot; the student sees what happens to it.
 
 ## 17. Notifications
 - Block starting soon, deadline reminders, reviews due, evening check-in; partner nudges and weekly review (P2).

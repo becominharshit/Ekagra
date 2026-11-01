@@ -10,9 +10,10 @@
 3. **Academics:** subject and syllabus upload → dual-track topic tree (`exam` and `skill` tracks); past-paper priority `0.45 × examWeight + 0.35 × pyqScore + 0.20 × dependentsScore`; local pdf.js viewer with 1-click **AI Anchors** and a page tutor ("Ask about this page"); lazy topic generator (`ai-generate`: lessons, check quizzes, `ts-fsrs` flashcards); mistake notebook (1 → 3 → 7 day ladder); Python Coding Lab (CodeMirror 6 + Pyodide in a Web Worker).
 4. **Hustle (moved up from P3):** templates (Freelancing, Content Creation, Startup, Part-time / tutoring, Custom; decided 2026-11-01: part-time gets its own template), Kanban pipeline board, clients and transactions, automatic earnings per hour (net profit ÷ hours logged), Skill Bridge ("Learn this" creates a Skill-track course in Academics), AI screenshot/text task capture (`ai-capture`).
 5. **Focus engine and FocusGuard:** Pomodoro and Deep Work timers; mode-switch warning when switching between Academics and Hustle during a scheduled block; Kotlin FocusGuard plugin with the **Academic Tollbooth**: answer 3 rapid-fire questions from your active subject to earn a 3-minute emergency unlock. This replaces the reason-based 5-minute unlock described in docs 1 and 2.
+6. **Beta (M10):** in-app feedback, AI usage on Me, a privacy policy, data export and account deletion, a smaller first download (code-splitting), and the guide to putting the web app online and sharing the APK.
 
 ### Phase 2: everything else
-the full AI tutor (chat threads and search across all your materials with pgvector; the page tutor is in Phase 1), YouTube lectures, weekly AI review, learning metrics and adaptive difficulty, mock tests, friends and accountability, attendance and marks, habits and the full Life section, Gmail/Calendar/Drive and the other integrations, exam season mode, strict mode, in-app feedback, the Tools app.
+the full AI tutor (chat threads and search across all your materials with pgvector; the page tutor is in Phase 1), YouTube lectures, weekly AI review, learning metrics and adaptive difficulty, mock tests, friends and accountability, attendance and marks, habits and the full Life section, Gmail/Calendar/Drive and the other integrations, exam season mode, strict mode, the Tools app. (In-app feedback moved into M10.)
 
 ### Phase 1 milestones
 The current milestone is the first unchecked one.
@@ -53,7 +54,12 @@ The current milestone is the first unchecked one.
   4. FocusGuard part 1: the Kotlin plugin (permissions, launchable apps), the TypeScript wrapper, the blocked-apps picker (`blocked_apps`) and the Focus setup screen with a battery guide for OnePlus, Realme, Xiaomi and Samsung
   5. FocusGuard part 2: the foreground service (`specialUse`), `UsageStatsManager` checks every second, the blocker overlay ("Back to study", "Emergency unlock (Academic Tollbooth)"), unlock passes, restoring after a restart (`BOOT_COMPLETED`)
   6. A notification when the 10-minute Launchpad ends (through FocusGuard: AlarmManager, exact with "Alarms & reminders"), docs, the Android test checklist
-- [ ] **M10 Beta:** end-to-end polish, web deploy, APK for friends
+- [x] **M10 Beta: feedback, AI usage, privacy and account controls, code-splitting, deploy guide, in 5 steps** (decided 2026-11-01: in-app feedback moves here from Phase 2; one migration, `003_beta.sql`). Done 2026-11-01; everything works in Demo Mode too (feedback and the export stay on the device, and nothing is counted). **Your steps:** `npm run db:push` (migrations 002 and 003) and `npm run db:types`; `npm run functions:deploy` (now 9 functions: the 7 AI ones, `ai-usage` and `account-delete`); then put the web app online and build the APK for friends (docs/4-setup-guide.md, steps 2, 6, 7 and 8; step 9 shows where to read feedback and AI spend)
+  1. In-app feedback (`feedback` table): a button in the top bar on every screen and on Me; bug, idea or other, the message, the screen's name (from the address, can be changed), an optional screenshot (private `images` bucket) and device details; students see the status you set in the dashboard
+  2. AI usage on Me (`ai-usage` Edge Function, no AI call): requests in the last 24 hours against the daily limit, this month's cost against the $10 budget (also the whole app's), per AI function (all 7)
+  3. Privacy and account controls: a public privacy page (`/privacy`: data, AI, every Android permission); Me → Account and privacy: export all data as one JSON file (Android saves it with the Kotlin `FileSaver` plugin), wipe data, delete the account (`account-delete` Edge Function)
+  4. Code-splitting: every page loads when it's first opened; React, the router, Supabase, TanStack Query and Radix get files of their own (`vite.config.ts`); the first download went from 536 kB to 154 kB and no file is over 500 kB
+  5. Docs: putting the web app online, a signed APK for friends, reading feedback and AI spend (docs/4)
 
 The 12-week plan in §3 and the phases in §1 and §4 are kept for reference only.
 
