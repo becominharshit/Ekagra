@@ -119,11 +119,16 @@ export function givenText(question: StoredCheckQuestion, given: string): string 
   return given.trim() || '(no answer)'
 }
 
-/** Mastery is the latest check-quiz score; from 80% the topic counts as learned and leaves the plan. */
-export function topicAfterQuiz(topic: Pick<Topic, 'status'>, score: number): TablesUpdate<'topics'> {
+/**
+ * Mastery is the latest check-quiz score; from 80% the topic counts as learned and leaves the plan.
+ * The first time it's learned is kept (learned_at), for the "learning speed" metric.
+ */
+export function topicAfterQuiz(topic: Pick<Topic, 'status'> & { learned_at?: string | null }, score: number, now = new Date()): TablesUpdate<'topics'> {
   const mastery = Math.round(Math.min(1, Math.max(0, score)) * 1000) / 1000
-  if (topic.status === 'mastered') return { mastery }
-  return { mastery, status: score >= LEARNED_SCORE ? 'review' : 'learning' }
+  const learned = score >= LEARNED_SCORE
+  const firstTime = learned && !topic.learned_at ? { learned_at: now.toISOString() } : {}
+  if (topic.status === 'mastered') return { mastery, ...firstTime }
+  return { mastery, status: learned ? 'review' : 'learning', ...firstTime }
 }
 
 /** The notebook entry for a wrong answer. */

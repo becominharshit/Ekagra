@@ -89,11 +89,14 @@ describe('checking answers', () => {
 })
 
 describe('after the quiz', () => {
-  it('sets mastery to the score; from 80% the topic counts as learned', () => {
-    expect(topicAfterQuiz({ status: 'learning' }, 0.75)).toEqual({ mastery: 0.75, status: 'learning' })
-    expect(topicAfterQuiz({ status: 'not_started' }, 0.8)).toEqual({ mastery: 0.8, status: 'review' })
-    expect(topicAfterQuiz({ status: 'review' }, 0.5)).toEqual({ mastery: 0.5, status: 'learning' })
-    expect(topicAfterQuiz({ status: 'mastered' }, 0.5)).toEqual({ mastery: 0.5 })
+  it('sets mastery to the score; from 80% the topic counts as learned, and the first time is kept', () => {
+    const now = new Date('2026-11-02T10:00:00.000Z')
+    const earlier = '2026-10-20T10:00:00.000Z'
+    expect(topicAfterQuiz({ status: 'learning' }, 0.75, now)).toEqual({ mastery: 0.75, status: 'learning' })
+    expect(topicAfterQuiz({ status: 'not_started' }, 0.8, now)).toEqual({ mastery: 0.8, status: 'review', learned_at: now.toISOString() })
+    expect(topicAfterQuiz({ status: 'learning', learned_at: earlier }, 1, now)).toEqual({ mastery: 1, status: 'review' })
+    expect(topicAfterQuiz({ status: 'review', learned_at: earlier }, 0.5, now)).toEqual({ mastery: 0.5, status: 'learning' })
+    expect(topicAfterQuiz({ status: 'mastered', learned_at: earlier }, 0.5, now)).toEqual({ mastery: 0.5 })
   })
 
   it('writes a wrong answer into the notebook with what was answered and the right approach', () => {

@@ -207,7 +207,7 @@ export async function saveCheckQuiz(
     score: answer.right ? 1 : 0,
     time_ms: Math.max(0, Math.round(answer.timeMs)),
   }))
-  const topicPatch = topicAfterQuiz(study.topic, score)
+  const topicPatch = topicAfterQuiz(study.topic, score, now)
 
   if (source.kind === 'demo') {
     demoDb.insert('quizzes', [quiz])
