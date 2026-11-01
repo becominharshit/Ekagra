@@ -53,6 +53,45 @@ export async function listMocks(source: DataSource, subjectId: string): Promise<
   return data.sort(newestFirst)
 }
 
+export interface LatestMock {
+  /** 0–1 */
+  score: number
+  startedAt: string
+}
+
+/** Each subject's latest finished mock test (for exam readiness). */
+export async function latestMocks(source: DataSource): Promise<Map<string, LatestMock>> {
+  let rows: Pick<MockQuiz, 'subject_id' | 'score' | 'started_at'>[]
+  if (source.kind === 'demo') {
+    rows = demoDb.list('quizzes').filter((quiz) => quiz.kind === 'mock' && quiz.finished_at !== null)
+  } else {
+    const { data, error } = await source.client
+      .from('quizzes')
+      .select('subject_id, score, started_at')
+      .eq('user_id', source.userId)
+      .eq('kind', 'mock')
+      .not('finished_at', 'is', null)
+      .order('started_at', { ascending: false })
+      .limit(1000)
+    if (error) throw dbError(error)
+    rows = data
+  }
+  const latest = new Map<string, LatestMock>()
+  for (const row of [...rows].sort((a, b) => Date.parse(b.started_at) - Date.parse(a.started_at))) {
+    if (row.subject_id && row.score !== null && !latest.has(row.subject_id)) latest.set(row.subject_id, { score: Number(row.score), startedAt: row.started_at })
+  }
+  return latest
+}
+
+export function useLatestMocks() {
+  const { source, owner } = useDataSource()
+  return useQuery({
+    queryKey: [...academicsKey(owner), 'mock-latest'],
+    queryFn: () => latestMocks(need(source)),
+    enabled: source !== null,
+  })
+}
+
 /** How many of these mocks each question was in. */
 async function usedInMocks(source: DataSource, quizIds: string[]): Promise<Map<string, number>> {
   const used = new Map<string, number>()

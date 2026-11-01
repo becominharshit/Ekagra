@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { DataSource } from '@/lib/dataSource'
 import { demoDb } from '@/lib/demoDb'
 import { stubLocalStorage } from '@/test/memoryStorage'
-import { finishedMock, keepProgress, listMocks, loadMockSetup, markMock, newProgress, readProgress, saveMock, type MockProgress } from './mockTest'
+import { finishedMock, keepProgress, latestMocks, listMocks, loadMockSetup, markMock, newProgress, readProgress, saveMock, type MockProgress } from './mockTest'
 import { buildMockTest, type ExamPattern } from './pattern'
 
 stubLocalStorage()
@@ -97,6 +97,18 @@ describe('mock tests in Demo Mode', () => {
         ['q-long', 1],
       ]),
     )
+  })
+})
+
+describe('latestMocks', () => {
+  it("keeps each subject's newest finished mock", async () => {
+    demoDb.insert('quizzes', [
+      { kind: 'mock', subject_id: 'dbms', started_at: '2026-10-20T09:00:00.000Z', finished_at: '2026-10-20T10:00:00.000Z', score: 0.4 },
+      { kind: 'mock', subject_id: 'dbms', started_at: '2026-11-01T09:00:00.000Z', finished_at: '2026-11-01T10:00:00.000Z', score: 0.62 },
+      { kind: 'mock', subject_id: 'dbms', started_at: '2026-11-02T09:00:00.000Z', finished_at: null, score: null }, // not finished
+      { kind: 'subject', subject_id: 'maths', started_at: '2026-11-02T09:00:00.000Z', finished_at: '2026-11-02T09:10:00.000Z', score: 1 }, // practice
+    ])
+    expect(await latestMocks(DEMO)).toEqual(new Map([['dbms', { score: 0.62, startedAt: '2026-11-01T09:00:00.000Z' }]]))
   })
 })
 

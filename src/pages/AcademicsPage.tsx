@@ -14,6 +14,9 @@ import { useAcademicsMutation, useSubjects } from '@/features/academics/subjects
 import { priorityLabels } from '@/features/academics/topicTree'
 import { PracticeCard } from '@/features/academics/PracticeCard'
 import { useAuthStore } from '@/features/auth/authStore'
+import { examReadiness, percentText } from '@/features/metrics/readiness'
+import { ShareBar } from '@/features/metrics/ReadinessCard'
+import { useLatestMocks } from '@/features/mock/mockTest'
 import { DEFAULT_SKILL_WEEKLY_MINUTES } from '@/features/planner/studyData'
 import { useNow } from '@/hooks/useNow'
 
@@ -22,6 +25,7 @@ export function AcademicsPage() {
   const isDemo = useAuthStore((state) => state.status === 'demo')
   const subjects = useSubjects()
   const study = useStudy()
+  const mocks = useLatestMocks()
   const [adding, setAdding] = useState(false)
   const now = useNow(60_000)
   const today = format(now, 'yyyy-MM-dd')
@@ -111,6 +115,7 @@ export function AcademicsPage() {
           const topics = topicsOf(subject.id)
           const labels = priorityLabels(topics.filter((topic) => topic.track === 'exam'))
           const high = [...labels.values()].filter((label) => label === 'High').length
+          const readiness = subject.kind === 'course' ? examReadiness(topics, mocks.data?.get(subject.id)?.score ?? null) : null
           return (
             <Link key={subject.id} to={`/academics/subjects/${subject.id}`} className="rounded-xl focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none">
               <Card className="transition-colors hover:bg-muted/40">
@@ -127,6 +132,12 @@ export function AcademicsPage() {
                       : examLabel(subject.exam_date, today)}{' '}
                     · {topics.length === 0 ? 'No roadmap yet' : `${countLabel(topics.length, 'topic')}${high > 0 ? `, ${high} high priority` : ''}`}
                   </CardDescription>
+                  {readiness && (
+                    <div className="flex items-center gap-2 pt-1 text-xs text-muted-foreground">
+                      <span className="shrink-0">Exam readiness {percentText(readiness.score)}</span>
+                      <ShareBar share={readiness.score} className="flex-1" />
+                    </div>
+                  )}
                 </CardHeader>
               </Card>
             </Link>

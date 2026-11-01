@@ -26,6 +26,7 @@ import { deleteSubject, useAcademicsMutation, useSubject } from '@/features/acad
 import { prerequisiteTitles, priorityLabels, roadmapSections, type PriorityLabel, type Topic } from '@/features/academics/topicTree'
 import { AttendanceCard } from '@/features/attendance/AttendanceCard'
 import { MarksCard } from '@/features/grades/MarksCard'
+import { ReadinessCard } from '@/features/metrics/ReadinessCard'
 import { useNow } from '@/hooks/useNow'
 import { cn } from '@/lib/utils'
 
@@ -133,7 +134,8 @@ export function SubjectPage() {
           </Button>
         </div>
 
-        {/* Skill courses have no classes to attend and no marks. */}
+        {/* Skill courses have no exam, no classes to attend and no marks. */}
+        {current.kind === 'course' && <ReadinessCard subjectId={current.id} topics={roadmap.data.topics} />}
         {current.kind === 'course' && <AttendanceCard subject={current} />}
         {current.kind === 'course' && <MarksCard subject={current} />}
 
