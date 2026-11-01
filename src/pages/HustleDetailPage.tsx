@@ -1,18 +1,26 @@
 import { ArrowLeft, LoaderCircle } from 'lucide-react'
-import { Link, useParams } from 'react-router'
+import { Link, useParams, useSearchParams } from 'react-router'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { EditHustleDialog } from '@/features/hustle/EditHustleDialog'
 import { currentPhaseIndex, stepProgress, useHustlePlans } from '@/features/hustle/hustles'
 import { HUSTLE_STATUS_LABEL, targetLabel } from '@/features/hustle/labels'
 import { PhaseList, ProgressBar } from '@/features/hustle/PhaseList'
+import { PipelineBoard } from '@/features/hustle/PipelineBoard'
 import { TEMPLATES, toHustleType } from '@/features/hustle/templates'
 
-/** One hustle: its goal and its phases with steps. */
+const TABS = ['plan', 'board'] as const
+type Tab = (typeof TABS)[number]
+
+/** One hustle: its goal, its phases with steps, and its pipeline board. */
 export function HustleDetailPage() {
   const { hustleId } = useParams()
   const plans = useHustlePlans()
+  // The open tab is part of the address, so going back or reloading keeps it.
+  const [params, setParams] = useSearchParams()
+  const tab: Tab = TABS.find((name) => name === params.get('tab')) ?? 'plan'
   const plan = plans.data?.find((entry) => entry.hustle.id === hustleId)
 
   const back = (
@@ -72,7 +80,18 @@ export function HustleDetailPage() {
             <ProgressBar value={progress.done} max={progress.total} label={`${progress.done} of ${progress.total} steps done`} />
           </CardContent>
         </Card>
-        <PhaseList phases={phases} />
+        <Tabs value={tab} onValueChange={(value) => setParams({ tab: value }, { replace: true })}>
+          <TabsList>
+            <TabsTrigger value="plan">Plan</TabsTrigger>
+            <TabsTrigger value="board">Board</TabsTrigger>
+          </TabsList>
+          <TabsContent value="plan" className="pt-2">
+            <PhaseList phases={phases} />
+          </TabsContent>
+          <TabsContent value="board" className="pt-2">
+            <PipelineBoard hustle={hustle} />
+          </TabsContent>
+        </Tabs>
       </div>
     </>
   )
