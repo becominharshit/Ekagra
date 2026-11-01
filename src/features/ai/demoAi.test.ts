@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { demoPaper, demoSyllabus } from './demoAi'
+import { demoPaper, demoSyllabus, demoTutor } from './demoAi'
 
 const SYLLABUS = `Database Management Systems (CS301)
 UNIT 1: Introduction to databases (8 hours)
@@ -67,5 +67,38 @@ Q4. What is a spinlock? (2 marks)`
 
   it('uses the year the student gave', () => {
     expect(demoPaper({ subjectName: 'DBMS', topics, text: 'Q1. ER model (5 marks)', year: 2021 }).year).toBe(2021)
+  })
+})
+
+describe('demoTutor (Demo Mode sample)', () => {
+  const page = {
+    pageNumber: 42,
+    materialTitle: 'DBMS notes',
+    pageText:
+      'A relation is in BCNF when every determinant is a superkey. Normalization removes redundancy from tables. ' +
+      'Third normal form allows some dependencies that BCNF does not. Indexes make lookups faster.',
+  }
+
+  it('explains with the sentences of the page that match the selection', () => {
+    const answer = demoTutor({ ...page, action: 'explain', selectedText: 'determinant superkey' })
+    expect(answer.answerMd).toContain('Demo Mode has no AI')
+    expect(answer.answerMd).toContain('> A relation is in BCNF when every determinant is a superkey.')
+    expect(answer.answerMd).not.toContain('Indexes')
+    expect(answer).toMatchObject({ flashcards: [], model: 'demo' })
+  })
+
+  it('makes "fill in the blank" flashcards from the selection', () => {
+    const answer = demoTutor({ ...page, action: 'flashcards', selectedText: 'Normalization removes redundancy from tables.' })
+    expect(answer.flashcards).toEqual([{ front: '_____ removes redundancy from tables.', back: 'normalization' }])
+  })
+
+  it("answers questions with the page's matching sentences, or says the page doesn't cover it", () => {
+    expect(demoTutor({ ...page, action: 'ask', question: 'What makes lookups faster?' }).answerMd).toContain('Indexes make lookups faster.')
+    expect(demoTutor({ ...page, action: 'ask', question: 'Who invented Python?' }).answerMd).toContain("doesn't seem to mention that")
+  })
+
+  it('splits a selection into short points to simplify it', () => {
+    const answer = demoTutor({ ...page, action: 'simplify', selectedText: 'atomic values, no partial dependencies; no transitive dependencies' })
+    expect(answer.answerMd).toContain('- atomic values\n- no partial dependencies\n- no transitive dependencies')
   })
 })

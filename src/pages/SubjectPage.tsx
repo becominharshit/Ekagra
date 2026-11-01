@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { format } from 'date-fns'
-import { ArrowLeft, FileUp, LoaderCircle, Pencil, ScrollText, Trash2 } from 'lucide-react'
+import { ArrowLeft, FileUp, Library, LoaderCircle, Pencil, ScrollText, Trash2 } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { PageHeader } from '@/components/layout/PageHeader'
 import {
@@ -99,6 +99,12 @@ export function SubjectPage() {
             <Link to={`/academics/subjects/${current.id}/papers`}>
               <ScrollText aria-hidden />
               Past papers{paperCount > 0 ? ` (${paperCount})` : ''}
+            </Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link to={`/academics/library?subject=${current.id}`}>
+              <Library aria-hidden />
+              Materials
             </Link>
           </Button>
           <Button variant="ghost" onClick={() => setEditing(true)}>

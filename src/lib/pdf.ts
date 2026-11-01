@@ -8,6 +8,18 @@ pdfjs.GlobalWorkerOptions.workerSrc = workerUrl
 
 export { pdfjs }
 
+/** How many pages a PDF has. Throws a plain-language error if it isn't a readable PDF. */
+export async function pdfPageCount(data: ArrayBuffer): Promise<number> {
+  const task = pdfjs.getDocument({ data: new Uint8Array(data.slice(0)) })
+  try {
+    return (await task.promise).numPages
+  } catch {
+    throw new Error("That file couldn't be opened as a PDF.")
+  } finally {
+    await task.destroy()
+  }
+}
+
 /** The text of each page (up to `maxPages`), read on this device. */
 export async function readPdfText(data: ArrayBuffer, maxPages = 80): Promise<{ pages: string[]; pageCount: number }> {
   // pdf.js takes over the buffer it is given, so it gets a copy and the caller keeps the original.

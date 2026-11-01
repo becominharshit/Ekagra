@@ -1,4 +1,12 @@
-import type { PaperAnswer, PaperRequest, SyllabusRequest, TopicTree, TreeTopic } from '@shared/schemas.ts'
+import type {
+  PaperAnswer,
+  PaperRequest,
+  SyllabusRequest,
+  TopicTree,
+  TreeTopic,
+  TutorRequest,
+  TutorResponse,
+} from '@shared/schemas.ts'
 
 // Demo Mode has no server and therefore no AI. Its "AI" answers are samples made on this device
 // from the text the student gives, good enough to try every screen. They are always labelled.
@@ -155,4 +163,84 @@ export function demoPaper(request: PaperRequest): PaperAnswer {
     questions,
     promptVersion: 'demo-sample',
   }
+}
+
+const SAMPLE = '**Sample answer (Demo Mode has no AI).**'
+
+function sentences(text: string): string[] {
+  return text
+    .replace(/\s+/g, ' ')
+    .split(/(?<=[.!?])\s+/)
+    .map((sentence) => sentence.trim())
+    .filter((sentence) => sentence.length >= 15)
+}
+
+/** The page's sentences that share the most words with `about`, in page order. */
+function relevantSentences(pageText: string, about: string, count = 3): string[] {
+  const wanted = words(about)
+  const scored = sentences(pageText).map((sentence, index) => ({
+    sentence,
+    index,
+    score: [...words(sentence)].filter((word) => wanted.has(word)).length,
+  }))
+  return scored
+    .filter((entry) => entry.score > 0)
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .slice(0, count)
+    .sort((a, b) => a.index - b.index)
+    .map((entry) => entry.sentence)
+}
+
+/** "Fill in the blank" cards: the longest word of each sentence becomes the answer. */
+function clozeCards(text: string): TutorResponse['flashcards'] {
+  return sentences(text)
+    .slice(0, 5)
+    .flatMap((sentence) => {
+      const key = [...words(sentence)].filter((word) => word.length >= 5).sort((a, b) => b.length - a.length)[0]
+      if (!key) return []
+      const blanked = sentence.replace(new RegExp(`\\b${key}\\b`, 'i'), '_____')
+      return blanked === sentence ? [] : [{ front: blanked.slice(0, 300), back: key }]
+    })
+}
+
+const quote = (lines: string[]) => lines.map((line) => `> ${line}`).join('\n>\n')
+
+/**
+ * A sample tutor answer made from the page itself: the sentences that match the selection or the
+ * question, the selection split into short points, or "fill in the blank" flashcards.
+ */
+export function demoTutor(request: TutorRequest): TutorResponse {
+  const selected = request.selectedText?.trim() ?? ''
+  const page = `p. ${request.pageNumber}`
+  let answerMd: string
+  let flashcards: TutorResponse['flashcards'] = []
+
+  switch (request.action) {
+    case 'explain': {
+      const related = relevantSentences(request.pageText, selected)
+      answerMd = related.length > 0 ? `${SAMPLE} What ${page} says around your selection:\n\n${quote(related)}` : `${SAMPLE} ${page} says:\n\n${quote([selected])}`
+      break
+    }
+    case 'simplify': {
+      const parts = selected.split(/[,;:]|\band\b/).map((part) => part.trim()).filter((part) => part.length > 2)
+      answerMd = `${SAMPLE} Your selection in shorter pieces:\n\n${parts.map((part) => `- ${part}`).join('\n')}`
+      break
+    }
+    case 'example':
+      answerMd = `${SAMPLE} Make your own example: apply “${selected.slice(0, 120)}” to a small case you know, then check it against ${page}.`
+      break
+    case 'flashcards':
+      flashcards = clozeCards(selected)
+      answerMd =
+        flashcards.length > 0
+          ? `${SAMPLE} ${flashcards.length} "fill in the blank" card${flashcards.length === 1 ? '' : 's'} from your selection.`
+          : `${SAMPLE} Select a full sentence or two to make cards.`
+      break
+    case 'ask': {
+      const related = relevantSentences(request.pageText, request.question ?? '')
+      answerMd = related.length > 0 ? `${SAMPLE} The parts of ${page} that match your question:\n\n${quote(related)}` : `${SAMPLE} ${page} doesn't seem to mention that.`
+      break
+    }
+  }
+  return { answerMd, flashcards, model: 'demo', promptVersion: 'demo-sample' }
 }

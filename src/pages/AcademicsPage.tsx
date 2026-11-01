@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { format } from 'date-fns'
-import { BookOpen, ChevronRight, FlaskConical, LoaderCircle, Plus } from 'lucide-react'
+import { BookOpen, ChevronRight, FlaskConical, Library, LoaderCircle, Plus } from 'lucide-react'
 import { Link, useNavigate } from 'react-router'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Badge } from '@/components/ui/badge'
@@ -16,8 +16,7 @@ import { useAuthStore } from '@/features/auth/authStore'
 import { useNow } from '@/hooks/useNow'
 
 const COMING = [
-  { title: 'PDF library with 1-click AI Anchors and the page tutor', when: 'M3' },
-  { title: 'Flashcards (FSRS)', when: 'M3' },
+  { title: 'Flashcard reviews (FSRS)', when: 'M3' },
   { title: 'Mistake notebook (1 → 3 → 7 days)', when: 'M3' },
   { title: 'Python Coding Lab', when: 'M3' },
   { title: 'Lessons and check quizzes', when: 'M3' },
@@ -39,10 +38,18 @@ export function AcademicsPage() {
     <>
       <PageHeader title="Academics" subtitle="Your subjects and their roadmaps." />
       <div className="grid gap-4">
-        <Button className="justify-self-start" onClick={() => setAdding(true)}>
-          <Plus aria-hidden />
-          Add subject
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={() => setAdding(true)}>
+            <Plus aria-hidden />
+            Add subject
+          </Button>
+          <Button asChild variant="outline">
+            <Link to="/academics/library">
+              <Library aria-hidden />
+              Library (PDFs)
+            </Link>
+          </Button>
+        </div>
 
         {subjects.isPending && (
           <p className="flex items-center gap-2 text-sm text-muted-foreground">

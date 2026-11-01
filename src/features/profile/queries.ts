@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '@/features/auth/authStore'
 import { dbError } from '@/lib/dataSource'
+import { deviceFiles } from '@/lib/deviceFiles'
 import { requireSupabase } from '@/lib/supabase'
 import type { Tables, TablesInsert, TablesUpdate } from '@/types/database'
 import { clearDemoData, demoProfileRepo } from './localStore'
@@ -115,6 +116,8 @@ export function useResetDemoData() {
   const queryClient = useQueryClient()
   return async () => {
     clearDemoData()
+    // Demo Mode's PDFs live in IndexedDB; if that is blocked there is nothing to delete.
+    await deviceFiles.clear().catch(() => undefined)
     // Every screen reloads its data (subjects, flashcards, …), not only the profile.
     await queryClient.invalidateQueries()
   }

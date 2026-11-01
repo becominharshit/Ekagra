@@ -101,3 +101,45 @@ export type PaperAnalysis = z.infer<typeof PaperAnalysisSchema>
 /** What ai-papers returns: the analysis plus the prompt version (saved in questions.prompt_version). */
 export const PaperAnswerSchema = PaperAnalysisSchema.extend({ promptVersion: z.string() })
 export type PaperAnswer = z.infer<typeof PaperAnswerSchema>
+
+// ---------------------------------------------------------------------------
+// 1-click AI Anchors and the page tutor in the PDF viewer (ai-tutor)
+// ---------------------------------------------------------------------------
+
+/** The ai_anchors.action values. "ask" is the page tutor ("Ask about this page"). */
+export const ANCHOR_ACTIONS = ['explain', 'simplify', 'example', 'flashcards', 'ask'] as const
+export type AnchorAction = (typeof ANCHOR_ACTIONS)[number]
+
+export const TutorRequestSchema = z
+  .object({
+    action: z.enum(ANCHOR_ACTIONS),
+    /** What the student selected on the page (not needed to ask about the whole page). */
+    selectedText: z.string().max(4000).nullable().optional(),
+    /** The student's question (only for "ask"). */
+    question: z.string().max(1000).nullable().optional(),
+    /** The page's text, read on the device: the tutor answers from it. */
+    pageText: z.string().max(20_000),
+    pageNumber: z.number().int().min(1),
+    materialTitle: z.string().min(1).max(200),
+    subjectName: z.string().max(120).nullable().optional(),
+    program: z.string().max(120).nullable().optional(),
+    year: z.number().int().min(1).max(8).nullable().optional(),
+    mentorTone: z.enum(['strict', 'balanced', 'friendly']).optional(),
+  })
+  .refine((request) => (request.action === 'ask' ? Boolean(request.question?.trim()) : Boolean(request.selectedText?.trim())), {
+    message: '"ask" needs a question; the other actions need selected text',
+    path: ['action'],
+  })
+export type TutorRequest = z.infer<typeof TutorRequestSchema>
+
+export const TutorAnswerSchema = z.object({
+  answerMd: z.string().min(1).max(6000).describe('The answer, in Markdown'),
+  flashcards: z
+    .array(z.object({ front: z.string().min(1).max(300), back: z.string().min(1).max(600) }))
+    .max(8)
+    .describe('Only for the "flashcards" action; otherwise an empty list'),
+})
+
+/** What ai-tutor returns (model and prompt version are saved with the anchor). */
+export const TutorResponseSchema = TutorAnswerSchema.extend({ model: z.string(), promptVersion: z.string() })
+export type TutorResponse = z.infer<typeof TutorResponseSchema>
