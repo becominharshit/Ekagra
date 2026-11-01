@@ -244,6 +244,42 @@ export type Database = {
         }
         Relationships: []
       }
+      challenges: {
+        Row: {
+          achieved: boolean | null
+          baseline: number | null
+          created_at: string
+          id: string
+          metric: string
+          target: number
+          updated_at: string
+          user_id: string
+          week_start: string
+        }
+        Insert: {
+          achieved?: boolean | null
+          baseline?: number | null
+          created_at?: string
+          id?: string
+          metric: string
+          target: number
+          updated_at?: string
+          user_id?: string
+          week_start: string
+        }
+        Update: {
+          achieved?: boolean | null
+          baseline?: number | null
+          created_at?: string
+          id?: string
+          metric?: string
+          target?: number
+          updated_at?: string
+          user_id?: string
+          week_start?: string
+        }
+        Relationships: []
+      }
       clients: {
         Row: {
           contact: string | null
@@ -1237,6 +1273,48 @@ export type Database = {
           },
         ]
       }
+      metric_snapshots: {
+        Row: {
+          created_at: string
+          details: Json
+          focus_minutes: number
+          id: string
+          learning_speed: number | null
+          memory: number | null
+          problem_solving: number | null
+          processing_speed: number | null
+          updated_at: string
+          user_id: string
+          week_start: string
+        }
+        Insert: {
+          created_at?: string
+          details?: Json
+          focus_minutes?: number
+          id?: string
+          learning_speed?: number | null
+          memory?: number | null
+          problem_solving?: number | null
+          processing_speed?: number | null
+          updated_at?: string
+          user_id?: string
+          week_start: string
+        }
+        Update: {
+          created_at?: string
+          details?: Json
+          focus_minutes?: number
+          id?: string
+          learning_speed?: number | null
+          memory?: number | null
+          problem_solving?: number | null
+          processing_speed?: number | null
+          updated_at?: string
+          user_id?: string
+          week_start?: string
+        }
+        Relationships: []
+      }
       mistakes: {
         Row: {
           code_snippet_id: string | null
@@ -1751,6 +1829,44 @@ export type Database = {
         }
         Relationships: []
       }
+      subject_ratings: {
+        Row: {
+          attempts_count: number
+          created_at: string
+          id: string
+          rating: number
+          subject_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          attempts_count?: number
+          created_at?: string
+          id?: string
+          rating?: number
+          subject_id: string
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          attempts_count?: number
+          created_at?: string
+          id?: string
+          rating?: number
+          subject_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subject_ratings_subject_id_user_id_fkey"
+            columns: ["subject_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
+            referencedColumns: ["id", "user_id"]
+          },
+        ]
+      }
       subjects: {
         Row: {
           archived_at: string | null
@@ -2008,6 +2124,7 @@ export type Database = {
           exam_weight: number
           id: string
           last_asked_year: number | null
+          learned_at: string | null
           mastery: number
           order_index: number
           parent_id: string | null
@@ -2030,6 +2147,7 @@ export type Database = {
           exam_weight?: number
           id?: string
           last_asked_year?: number | null
+          learned_at?: string | null
           mastery?: number
           order_index?: number
           parent_id?: string | null
@@ -2052,6 +2170,7 @@ export type Database = {
           exam_weight?: number
           id?: string
           last_asked_year?: number | null
+          learned_at?: string | null
           mastery?: number
           order_index?: number
           parent_id?: string | null

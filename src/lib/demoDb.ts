@@ -43,6 +43,9 @@ export const DEMO_TABLES = [
   'attendance',
   'marks',
   'semester_results',
+  'subject_ratings',
+  'metric_snapshots',
+  'challenges',
 ] as const satisfies readonly (keyof PublicTables)[]
 
 export type DemoTable = (typeof DEMO_TABLES)[number]
@@ -82,6 +85,7 @@ const DEFAULTS: { [T in DemoTable]: (now: Date) => Partial<DemoRow<T>> } = {
     status: 'not_started',
     mastery: 0,
     target_date: null,
+    learned_at: null,
   }),
   topic_prereqs: () => ({}),
   materials: () => ({
@@ -284,6 +288,16 @@ const DEFAULTS: { [T in DemoTable]: (now: Date) => Partial<DemoRow<T>> } = {
   attendance: () => ({ start_time: null }),
   marks: () => ({ date: null }),
   semester_results: () => ({}),
+  subject_ratings: () => ({ rating: 1000, attempts_count: 0 }),
+  metric_snapshots: () => ({
+    memory: null,
+    learning_speed: null,
+    processing_speed: null,
+    problem_solving: null,
+    focus_minutes: 0,
+    details: {},
+  }),
+  challenges: () => ({ baseline: null, achieved: null }),
 }
 
 interface ForeignKey {
@@ -349,6 +363,7 @@ const FOREIGN_KEYS: ForeignKey[] = [
   { table: 'focus_sessions', column: 'hustle_id', references: 'hustles', onDelete: 'set null' },
   { table: 'attendance', column: 'subject_id', references: 'subjects', onDelete: 'cascade' },
   { table: 'marks', column: 'subject_id', references: 'subjects', onDelete: 'cascade' },
+  { table: 'subject_ratings', column: 'subject_id', references: 'subjects', onDelete: 'cascade' },
 ]
 
 /** Inside this file rows are plain objects; the public functions below give them their table's type. */

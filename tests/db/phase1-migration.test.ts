@@ -53,6 +53,7 @@ beforeAll(async () => {
   await db.exec(readSql('../../supabase/migrations/002_hustle_mode.sql'))
   await db.exec(readSql('../../supabase/migrations/003_beta.sql'))
   await db.exec(readSql('../../supabase/migrations/004_attendance_grades.sql'))
+  await db.exec(readSql('../../supabase/migrations/005_adaptive.sql'))
 
   // Two people sign up. The sign-up trigger creates their profiles.
   await db.exec(`
@@ -147,6 +148,9 @@ beforeAll(async () => {
     ])
     await insertId(tx, `insert into public.marks (subject_id, assessment, max_marks, obtained) values ($1, 'Internal 1', 30, 24)`, [alice.subject])
     await insertId(tx, `insert into public.semester_results (semester, sgpa, credits) values (1, 8.2, 22)`)
+    await insertId(tx, `insert into public.subject_ratings (subject_id, rating, attempts_count) values ($1, 1040, 3)`, [alice.subject])
+    await insertId(tx, `insert into public.metric_snapshots (week_start, memory, focus_minutes) values ('2026-10-26', 0.9, 120)`)
+    await insertId(tx, `insert into public.challenges (week_start, metric, baseline, target) values ('2026-11-02', 'memory', 0.85, 0.9)`)
   })
 })
 
@@ -547,6 +551,51 @@ describe('Attendance and grades migration (004_attendance_grades.sql)', () => {
     await expect(
       as(BOB, (tx) => tx.query(`insert into public.marks (subject_id, assessment, max_marks, obtained) values ($1, 'Quiz', 10, 5)`, [alice.subject])),
     ).rejects.toThrow(/foreign key/)
+  })
+})
+
+describe('Adaptive practice migration (005_adaptive.sql)', () => {
+  it('keeps one rating per subject (starting at 1000), deleted with the subject', async () => {
+    await as(BOB, async (tx) => {
+      const subject = await insertId(tx, `insert into public.subjects (name) values ('Statistics')`)
+      const { rows } = await tx.query<{ rating: string; attempts_count: number }>(
+        `insert into public.subject_ratings (subject_id) values ($1) returning rating, attempts_count`,
+        [subject],
+      )
+      expect(rows).toEqual([{ rating: '1000.0', attempts_count: 0 }])
+      await expect(tx.query(`insert into public.subject_ratings (subject_id) values ($1)`, [subject])).rejects.toThrow(/duplicate key/)
+    })
+    await as(BOB, async (tx) => {
+      const subject = await insertId(tx, `insert into public.subjects (name) values ('Economics')`)
+      await tx.query(`insert into public.subject_ratings (subject_id, rating) values ($1, 1100)`, [subject])
+      await tx.query('delete from public.subjects where id = $1', [subject])
+      const { rows } = await tx.query('select 1 from public.subject_ratings where subject_id = $1', [subject])
+      expect(rows).toEqual([])
+    })
+  })
+
+  it('records when a topic was learned', async () => {
+    await as(BOB, async (tx) => {
+      const subject = await insertId(tx, `insert into public.subjects (name) values ('Algorithms')`)
+      const topic = await insertId(tx, `insert into public.topics (subject_id, title) values ($1, 'Sorting')`, [subject])
+      await tx.query(`update public.topics set status = 'review', learned_at = '2026-11-02T10:00:00Z' where id = $1`, [topic])
+      const { rows } = await tx.query<{ learned: boolean }>('select learned_at is not null as learned from public.topics where id = $1', [topic])
+      expect(rows).toEqual([{ learned: true }])
+    })
+  })
+
+  it('keeps one snapshot and one challenge per week, with metrics in range', async () => {
+    const bob = (sql: string) => as(BOB, (tx) => tx.query(sql))
+    await bob(`insert into public.metric_snapshots (week_start, memory, problem_solving) values ('2026-11-02', 0.8, 0.5)`)
+    await expect(bob(`insert into public.metric_snapshots (week_start) values ('2026-11-02')`)).rejects.toThrow(/duplicate key/)
+    await expect(bob(`insert into public.metric_snapshots (week_start, memory) values ('2026-11-09', 1.5)`)).rejects.toThrow(/check constraint/)
+    await expect(bob(`insert into public.metric_snapshots (week_start, details) values ('2026-11-09', '[]')`)).rejects.toThrow(/check constraint/)
+    await bob(`insert into public.challenges (week_start, metric, target) values ('2026-11-02', 'problem_solving', 0.55)`)
+    await expect(bob(`insert into public.challenges (week_start, metric, target) values ('2026-11-09', 'iq', 1)`)).rejects.toThrow(/check constraint/)
+  })
+
+  it("stops Bob from rating himself on Alice's subject", async () => {
+    await expect(as(BOB, (tx) => tx.query(`insert into public.subject_ratings (subject_id) values ($1)`, [alice.subject]))).rejects.toThrow(/foreign key/)
   })
 })
 

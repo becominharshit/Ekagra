@@ -22,6 +22,7 @@ function topic(id: string, values: Partial<Topic> = {}): Topic {
     status: 'not_started',
     mastery: 0,
     target_date: null,
+    learned_at: null,
     created_at: '',
     updated_at: '',
     ...values,

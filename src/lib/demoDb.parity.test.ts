@@ -4,6 +4,7 @@ import migration from '../../supabase/migrations/001_phase1_core.sql?raw'
 import hustleMigration from '../../supabase/migrations/002_hustle_mode.sql?raw'
 import betaMigration from '../../supabase/migrations/003_beta.sql?raw'
 import attendanceMigration from '../../supabase/migrations/004_attendance_grades.sql?raw'
+import adaptiveMigration from '../../supabase/migrations/005_adaptive.sql?raw'
 import supabaseStubs from '../../tests/db/supabase-stubs.sql?raw'
 import { stubLocalStorage } from '@/test/memoryStorage'
 import { DEMO_TABLES, demoDb, type DemoTable } from './demoDb'
@@ -93,13 +94,18 @@ const ROWS: [DemoTable, Record<string, unknown>][] = [
   ['attendance', { id: id(35), subject_id: SUBJECT, date: '2026-11-03', start_time: '09:00:00', status: 'absent' }],
   ['marks', { id: id(36), subject_id: SUBJECT, assessment: 'Internal 1', max_marks: 30, obtained: 24.5 }],
   ['semester_results', { id: id(37), semester: 1, sgpa: 8.4, credits: 22 }],
+  ['subject_ratings', { id: id(39), subject_id: SUBJECT }],
+  ['subject_ratings', { id: id(40), subject_id: id(38), rating: 1087.5, attempts_count: 12 }],
+  ['metric_snapshots', { id: id(41), week_start: '2026-10-26' }],
+  ['metric_snapshots', { id: id(42), week_start: '2026-11-02', memory: 0.85, learning_speed: 1.2, processing_speed: 42.5, problem_solving: 0.6, focus_minutes: 300, details: { reviews: 40 } }],
+  ['challenges', { id: id(43), week_start: '2026-11-02', metric: 'memory', target: 0.88 }],
 ]
 
 /**
  * Columns that hold "now" (or "now + 1 day"), so their values differ by a few milliseconds, and
  * dates and times we set ourselves (Postgres gives them back as Date objects, the demo as text).
  */
-const TIME_COLUMNS = new Set(['created_at', 'updated_at', 'started_at', 'due_at', 'reviewed_at', 'next_review_at', 'at', 'date', 'start_at', 'end_at', 'occurred_on'])
+const TIME_COLUMNS = new Set(['created_at', 'updated_at', 'started_at', 'due_at', 'reviewed_at', 'next_review_at', 'at', 'date', 'start_at', 'end_at', 'occurred_on', 'week_start'])
 
 /** Makes Postgres and demo values comparable: the app gets numbers and plain JSON from Supabase. */
 function comparable(row: Record<string, unknown>): Record<string, unknown> {
@@ -135,6 +141,7 @@ beforeAll(async () => {
   await db.exec(hustleMigration)
   await db.exec(betaMigration)
   await db.exec(attendanceMigration)
+  await db.exec(adaptiveMigration)
   await db.exec(`insert into auth.users (id, email, raw_user_meta_data) values ('${USER}', 'demo@example.com', '{}')`)
 })
 

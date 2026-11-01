@@ -29,8 +29,8 @@ export function need(source: DataSource | null): DataSource {
 /** Checks added by later migrations: failing one means the server's database is older than the app. */
 const NEWER_CHECKS = ['hustles_type_check', 'hustles_links_is_list']
 
-/** Tables added by later migrations (003_beta.sql, 004_attendance_grades.sql). */
-const NEWER_TABLES = /\b(feedback|attendance|marks|semester_results)\b/
+/** Tables added by later migrations (003_beta.sql onwards). */
+const NEWER_TABLES = /\b(feedback|attendance|marks|semester_results|subject_ratings|metric_snapshots|challenges)\b/
 
 const NEEDS_UPDATE = 'The database needs the latest update. Run `npm run db:push` (docs/4-setup-guide.md, step 2), then try again.'
 
