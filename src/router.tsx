@@ -97,6 +97,10 @@ export const router = createBrowserRouter([
           },
           { path: 'life', element: <LifePage /> },
           { path: 'me', element: <MePage /> },
+          {
+            path: 'me/focus',
+            lazy: async () => ({ Component: (await import('@/pages/FocusSetupPage')).FocusSetupPage }),
+          },
           { path: '*', element: <Navigate to="/today" replace /> },
         ],
       },

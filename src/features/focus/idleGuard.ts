@@ -13,7 +13,8 @@ import { timerAt, type Pause, type Phase, type TimerView } from './timer'
 
 export const IDLE_SECONDS = 4 * 60
 
-const ACTIVITY_EVENTS = ['pointerdown', 'keydown', 'wheel', 'touchstart', 'scroll'] as const
+// "click" too: screen readers press buttons with a click and no pointer.
+const ACTIVITY_EVENTS = ['pointerdown', 'click', 'keydown', 'wheel', 'touchstart', 'scroll'] as const
 /** The last activity is saved on the device at most this often. */
 const SAVE_EVERY_MS = 15_000
 

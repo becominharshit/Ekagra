@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { LogOut, RotateCcw, SlidersHorizontal, UserRound } from 'lucide-react'
-import { useNavigate } from 'react-router'
+import { LogOut, RotateCcw, ShieldCheck, SlidersHorizontal, UserRound } from 'lucide-react'
+import { Link, useNavigate } from 'react-router'
 import { PageHeader } from '@/components/layout/PageHeader'
 import {
   AlertDialog,
@@ -13,11 +13,11 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { signOut } from '@/features/auth/auth'
 import { useAuthStore } from '@/features/auth/authStore'
+import { blockedPackages, useBlockedApps } from '@/features/focus/blockedApps'
 import { useProfile, useResetDemoData, useRoutine } from '@/features/profile/queries'
 import {
   CHRONOTYPE_LABEL,
@@ -28,8 +28,6 @@ import {
   toMentorTone,
 } from '@/features/profile/settings'
 
-const COMING = [{ title: 'FocusGuard setup and blocked apps', when: 'M9' }]
-
 export function MePage() {
   return (
     <>
@@ -37,24 +35,33 @@ export function MePage() {
       <div className="grid gap-4">
         <AccountCard />
         <PlanSettingsCard />
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Coming to Me</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ul className="grid gap-2">
-              {COMING.map((item) => (
-                <li key={item.title} className="flex items-center justify-between gap-3">
-                  <span>{item.title}</span>
-                  <Badge variant="secondary">{item.when}</Badge>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
+        <FocusCard />
       </div>
     </>
+  )
+}
+
+/** Focus and app blocking: FocusGuard setup, blocked apps and the focus settings. */
+function FocusCard() {
+  const blocked = useBlockedApps()
+  const count = blockedPackages(blocked.data ?? []).length
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Focus and app blocking</CardTitle>
+        <CardDescription>
+          {count === 0 ? 'No apps blocked yet.' : `${count} ${count === 1 ? 'app' : 'apps'} blocked during focus.`} FocusGuard setup, the timer and the emergency unlock.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Button asChild variant="outline">
+          <Link to="/me/focus">
+            <ShieldCheck aria-hidden />
+            Set up focus and app blocking
+          </Link>
+        </Button>
+      </CardContent>
+    </Card>
   )
 }
 

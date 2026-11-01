@@ -38,6 +38,7 @@ export const DEMO_TABLES = [
   'hustle_items',
   'transactions',
   'time_entries',
+  'blocked_apps',
 ] as const satisfies readonly (keyof PublicTables)[]
 
 export type DemoTable = (typeof DEMO_TABLES)[number]
@@ -262,6 +263,10 @@ const DEFAULTS: { [T in DemoTable]: (now: Date) => Partial<DemoRow<T>> } = {
     ended_at: null,
     source: 'manual',
     note: null,
+  }),
+  blocked_apps: () => ({
+    label: null,
+    active: true,
   }),
 }
 

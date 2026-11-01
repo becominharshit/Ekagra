@@ -82,6 +82,8 @@ const ROWS: [DemoTable, Record<string, unknown>][] = [
   ['distraction_events', { id: id(21), kind: 'mode_switch', focus_session_id: FOCUS, quiz_id: QUIZ, from_mode: 'study', to_mode: 'hustle', reason: 'urgent' }],
   ['transactions', { id: id(27), hustle_id: HUSTLE, client_id: CLIENT, hustle_item_id: ITEM, kind: 'income', amount: 500 }],
   ['time_entries', { id: id(28), hustle_id: HUSTLE, client_id: CLIENT, focus_session_id: FOCUS, started_at: '2026-11-02T04:00:00.000Z', minutes: 60 }],
+  ['blocked_apps', { id: id(30), package_name: 'com.instagram.android' }],
+  ['blocked_apps', { id: id(31), package_name: 'com.google.android.youtube', label: 'YouTube', active: false }],
 ]
 
 /**
