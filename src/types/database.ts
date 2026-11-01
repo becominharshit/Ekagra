@@ -738,6 +738,89 @@ export type Database = {
           },
         ]
       }
+      habit_logs: {
+        Row: {
+          created_at: string
+          date: string
+          done: boolean
+          habit_id: string
+          id: string
+          updated_at: string
+          user_id: string
+          value: number
+        }
+        Insert: {
+          created_at?: string
+          date: string
+          done?: boolean
+          habit_id: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+          value?: number
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          done?: boolean
+          habit_id?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "habit_logs_habit_id_user_id_fkey"
+            columns: ["habit_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "habits"
+            referencedColumns: ["id", "user_id"]
+          },
+        ]
+      }
+      habits: {
+        Row: {
+          archived_at: string | null
+          created_at: string
+          days_of_week: number[]
+          id: string
+          kind: string
+          order_index: number
+          target: number | null
+          title: string
+          unit: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          archived_at?: string | null
+          created_at?: string
+          days_of_week?: number[]
+          id?: string
+          kind?: string
+          order_index?: number
+          target?: number | null
+          title: string
+          unit?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          archived_at?: string | null
+          created_at?: string
+          days_of_week?: number[]
+          id?: string
+          kind?: string
+          order_index?: number
+          target?: number | null
+          title?: string
+          unit?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       hustle_items: {
         Row: {
           amount: number | null
@@ -1272,6 +1355,51 @@ export type Database = {
             referencedColumns: ["id", "user_id"]
           },
         ]
+      }
+      meals: {
+        Row: {
+          calories: number | null
+          carbs_g: number | null
+          created_at: string
+          description: string
+          eaten_at: string
+          fat_g: number | null
+          id: string
+          meal: string
+          protein_g: number | null
+          source: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          calories?: number | null
+          carbs_g?: number | null
+          created_at?: string
+          description: string
+          eaten_at?: string
+          fat_g?: number | null
+          id?: string
+          meal: string
+          protein_g?: number | null
+          source?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          calories?: number | null
+          carbs_g?: number | null
+          created_at?: string
+          description?: string
+          eaten_at?: string
+          fat_g?: number | null
+          id?: string
+          meal?: string
+          protein_g?: number | null
+          source?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       metric_snapshots: {
         Row: {
@@ -1829,6 +1957,126 @@ export type Database = {
         }
         Relationships: []
       }
+      sleep_logs: {
+        Row: {
+          bed_at: string
+          created_at: string
+          date: string
+          id: string
+          minutes: number
+          source: string
+          updated_at: string
+          user_id: string
+          wake_at: string
+        }
+        Insert: {
+          bed_at: string
+          created_at?: string
+          date: string
+          id?: string
+          minutes: number
+          source?: string
+          updated_at?: string
+          user_id?: string
+          wake_at: string
+        }
+        Update: {
+          bed_at?: string
+          created_at?: string
+          date?: string
+          id?: string
+          minutes?: number
+          source?: string
+          updated_at?: string
+          user_id?: string
+          wake_at?: string
+        }
+        Relationships: []
+      }
+      speaking_sessions: {
+        Row: {
+          created_at: string
+          duration_sec: number
+          feedback: Json
+          filler_count: number
+          fillers: Json
+          id: string
+          prompt: string
+          scenario: string
+          scores: Json
+          source: string
+          transcript: string
+          updated_at: string
+          user_id: string
+          words: number
+          wpm: number | null
+        }
+        Insert: {
+          created_at?: string
+          duration_sec: number
+          feedback?: Json
+          filler_count?: number
+          fillers?: Json
+          id?: string
+          prompt: string
+          scenario: string
+          scores?: Json
+          source?: string
+          transcript?: string
+          updated_at?: string
+          user_id?: string
+          words?: number
+          wpm?: number | null
+        }
+        Update: {
+          created_at?: string
+          duration_sec?: number
+          feedback?: Json
+          filler_count?: number
+          fillers?: Json
+          id?: string
+          prompt?: string
+          scenario?: string
+          scores?: Json
+          source?: string
+          transcript?: string
+          updated_at?: string
+          user_id?: string
+          words?: number
+          wpm?: number | null
+        }
+        Relationships: []
+      }
+      step_counts: {
+        Row: {
+          created_at: string
+          date: string
+          id: string
+          source: string
+          steps: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          date: string
+          id?: string
+          source?: string
+          steps: number
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          id?: string
+          source?: string
+          steps?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       subject_ratings: {
         Row: {
           attempts_count: number
@@ -2328,6 +2576,48 @@ export type Database = {
           updated_at?: string
           user_id?: string
           week_start?: string
+        }
+        Relationships: []
+      }
+      workouts: {
+        Row: {
+          created_at: string
+          date: string
+          day_key: string | null
+          duration_min: number | null
+          exercises: Json
+          id: string
+          notes: string | null
+          program: string | null
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          date: string
+          day_key?: string | null
+          duration_min?: number | null
+          exercises?: Json
+          id?: string
+          notes?: string | null
+          program?: string | null
+          title: string
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          day_key?: string | null
+          duration_min?: number | null
+          exercises?: Json
+          id?: string
+          notes?: string | null
+          program?: string | null
+          title?: string
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }

@@ -138,7 +138,7 @@ export const router = createBrowserRouter([
                 lazy: async () => ({ Component: (await import('@/pages/HustleDetailPage')).HustleDetailPage }),
               },
               {
-                path: 'life',
+                path: 'life/:tab?',
                 lazy: async () => ({ Component: (await import('@/pages/LifePage')).LifePage }),
               },
               {

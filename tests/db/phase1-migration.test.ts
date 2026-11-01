@@ -15,7 +15,7 @@ const CAROL = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc' // signed up before the mig
 
 let db: PGlite
 let tables: string[] = [] // every table in the "public" schema
-const alice = { subject: '', topic: '', material: '', hustle: '', client: '' }
+const alice = { subject: '', topic: '', material: '', hustle: '', client: '', habit: '' }
 
 /** Run queries as a signed-in user (like the app does through Supabase). `null` = signed out. */
 function as<T>(userId: string | null, run: (tx: Transaction) => Promise<T>): Promise<T> {
@@ -55,6 +55,7 @@ beforeAll(async () => {
   await db.exec(readSql('../../supabase/migrations/004_attendance_grades.sql'))
   await db.exec(readSql('../../supabase/migrations/005_adaptive.sql'))
   await db.exec(readSql('../../supabase/migrations/006_weekly_review.sql'))
+  await db.exec(readSql('../../supabase/migrations/007_life.sql'))
 
   // Two people sign up. The sign-up trigger creates their profiles.
   await db.exec(`
@@ -153,6 +154,13 @@ beforeAll(async () => {
     await insertId(tx, `insert into public.metric_snapshots (week_start, memory, focus_minutes) values ('2026-10-26', 0.9, 120)`)
     await insertId(tx, `insert into public.challenges (week_start, metric, baseline, target) values ('2026-11-02', 'memory', 0.85, 0.9)`)
     await insertId(tx, `insert into public.weekly_reviews (week_start, insights) values ('2026-11-02', '["Mornings went best."]')`)
+    alice.habit = await insertId(tx, `insert into public.habits (title, kind, target, unit) values ('Drink water', 'water', 8, 'glasses')`)
+    await insertId(tx, `insert into public.habit_logs (habit_id, date, value) values ($1, '2026-11-02', 6)`, [alice.habit])
+    await insertId(tx, `insert into public.workouts (date, title, program, day_key) values ('2026-11-02', 'Hostel A', 'hostel', 'A')`)
+    await insertId(tx, `insert into public.meals (meal, description, calories, source) values ('lunch', 'Mess thali', 650, 'preset')`)
+    await insertId(tx, `insert into public.sleep_logs (date, bed_at, wake_at, minutes) values ('2026-11-02', '2026-11-01 23:30+05:30', '2026-11-02 07:00+05:30', 450)`)
+    await insertId(tx, `insert into public.step_counts (date, steps) values ('2026-11-02', 6400)`)
+    await insertId(tx, `insert into public.speaking_sessions (scenario, prompt, duration_sec) values ('interview', 'Tell me about yourself.', 75)`)
   })
 })
 
@@ -610,6 +618,45 @@ describe('Weekly review migration (006_weekly_review.sql)', () => {
     await expect(bob(`insert into public.weekly_reviews (week_start, changes) values ('2026-11-09', '{}')`)).rejects.toThrow(/check constraint/)
     const { rows } = await as(BOB, (tx) => tx.query(`select stats, insights, changes, completed_at from public.weekly_reviews where week_start = '2026-11-02'`))
     expect(rows).toEqual([{ stats: {}, insights: [], changes: [], completed_at: null }])
+  })
+})
+
+describe('Life migration (007_life.sql)', () => {
+  it('keeps one log per habit and day, deleted with the habit', async () => {
+    await as(BOB, async (tx) => {
+      const habit = await insertId(tx, `insert into public.habits (title) values ('Stretch')`)
+      await tx.query(`insert into public.habit_logs (habit_id, date, done) values ($1, '2026-11-02', true)`, [habit])
+      await expect(tx.query(`insert into public.habit_logs (habit_id, date) values ($1, '2026-11-02')`, [habit])).rejects.toThrow(/duplicate key/)
+    })
+    await as(BOB, async (tx) => {
+      const habit = await insertId(tx, `insert into public.habits (title, days_of_week) values ('Run', '{1,3,5}')`)
+      await tx.query(`insert into public.habit_logs (habit_id, date, done) values ($1, '2026-11-02', true)`, [habit])
+      await tx.query('delete from public.habits where id = $1', [habit])
+      const { rows } = await tx.query('select 1 from public.habit_logs where habit_id = $1', [habit])
+      expect(rows).toEqual([])
+    })
+  })
+
+  it('rejects impossible values: unknown days, waking before bed, too many steps, unknown kinds', async () => {
+    const bob = (sql: string) => as(BOB, (tx) => tx.query(sql))
+    await expect(bob(`insert into public.habits (title, days_of_week) values ('Bad', '{7}')`)).rejects.toThrow(/check constraint/)
+    await expect(bob(`insert into public.habits (title, days_of_week) values ('None', '{}')`)).rejects.toThrow(/check constraint/)
+    await expect(bob(`insert into public.sleep_logs (date, bed_at, wake_at, minutes) values ('2026-11-02', '2026-11-02 07:00+00', '2026-11-01 23:00+00', 480)`)).rejects.toThrow(/check constraint/)
+    await expect(bob(`insert into public.step_counts (date, steps) values ('2026-11-02', 500000)`)).rejects.toThrow(/check constraint/)
+    await expect(bob(`insert into public.meals (meal, description) values ('brunch', 'Eggs')`)).rejects.toThrow(/check constraint/)
+    await expect(bob(`insert into public.speaking_sessions (scenario, prompt, duration_sec) values ('karaoke', 'Sing', 30)`)).rejects.toThrow(/check constraint/)
+    await expect(bob(`insert into public.workouts (date, title, program) values ('2026-11-02', 'Yoga', 'yoga')`)).rejects.toThrow(/check constraint/)
+  })
+
+  it('keeps one sleep and step count per day for each source (typed in, or from Health Connect)', async () => {
+    const bob = (sql: string) => as(BOB, (tx) => tx.query(sql))
+    await bob(`insert into public.step_counts (date, steps) values ('2026-11-03', 5000)`)
+    await bob(`insert into public.step_counts (date, steps, source) values ('2026-11-03', 5600, 'health_connect')`)
+    await expect(bob(`insert into public.step_counts (date, steps, source) values ('2026-11-03', 5700, 'health_connect')`)).rejects.toThrow(/duplicate key/)
+  })
+
+  it("stops Bob from logging Alice's habit", async () => {
+    await expect(as(BOB, (tx) => tx.query(`insert into public.habit_logs (habit_id, date) values ($1, '2026-11-02')`, [alice.habit]))).rejects.toThrow(/foreign key/)
   })
 })
 

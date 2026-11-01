@@ -6,6 +6,7 @@ import betaMigration from '../../supabase/migrations/003_beta.sql?raw'
 import attendanceMigration from '../../supabase/migrations/004_attendance_grades.sql?raw'
 import adaptiveMigration from '../../supabase/migrations/005_adaptive.sql?raw'
 import reviewMigration from '../../supabase/migrations/006_weekly_review.sql?raw'
+import lifeMigration from '../../supabase/migrations/007_life.sql?raw'
 import supabaseStubs from '../../tests/db/supabase-stubs.sql?raw'
 import { stubLocalStorage } from '@/test/memoryStorage'
 import { DEMO_TABLES, demoDb, type DemoTable } from './demoDb'
@@ -114,13 +115,61 @@ const ROWS: [DemoTable, Record<string, unknown>][] = [
       prompt_version: 'review-v1',
     },
   ],
+  ['habits', { id: id(46), title: 'Read 20 minutes' }],
+  ['habits', { id: id(47), title: 'Drink water', kind: 'water', days_of_week: [1, 2, 3], target: 8, unit: 'glasses', order_index: 2 }],
+  ['habit_logs', { id: id(48), habit_id: id(46), date: '2026-11-02' }],
+  ['habit_logs', { id: id(49), habit_id: id(47), date: '2026-11-02', value: 5, done: false }],
+  ['workouts', { id: id(50), date: '2026-11-02', title: 'My own workout' }],
+  [
+    'workouts',
+    { id: id(51), date: '2026-11-03', title: 'Gym A', program: 'gym', day_key: 'A', exercises: [{ name: 'Bench press', sets: [{ reps: 8, kg: 40 }] }], duration_min: 45, notes: 'Felt strong' },
+  ],
+  ['meals', { id: id(52), meal: 'lunch', description: 'Mess thali' }],
+  ['meals', { id: id(53), meal: 'dinner', description: '2 roti and dal', calories: 420, protein_g: 16.5, carbs_g: 70, fat_g: 9, source: 'preset' }],
+  ['sleep_logs', { id: id(54), date: '2026-11-02', bed_at: '2026-11-01T17:30:00.000Z', wake_at: '2026-11-02T01:00:00.000Z', minutes: 450 }],
+  ['step_counts', { id: id(55), date: '2026-11-02', steps: 6500 }],
+  ['step_counts', { id: id(56), date: '2026-11-02', steps: 7200, source: 'health_connect' }],
+  ['speaking_sessions', { id: id(57), scenario: 'interview', prompt: 'Tell me about yourself.', duration_sec: 75 }],
+  [
+    'speaking_sessions',
+    {
+      id: id(58),
+      scenario: 'small_talk',
+      prompt: 'Any plans for the weekend?',
+      duration_sec: 60,
+      transcript: 'Um, so like, I want to go home.',
+      words: 120,
+      wpm: 120,
+      filler_count: 3,
+      fillers: { um: 1, like: 2 },
+      scores: { clarity: 7 },
+      feedback: ['Pause instead of saying um.'],
+      source: 'ai',
+    },
+  ],
 ]
 
 /**
  * Columns that hold "now" (or "now + 1 day"), so their values differ by a few milliseconds, and
  * dates and times we set ourselves (Postgres gives them back as Date objects, the demo as text).
  */
-const TIME_COLUMNS = new Set(['created_at', 'updated_at', 'started_at', 'due_at', 'reviewed_at', 'next_review_at', 'at', 'date', 'start_at', 'end_at', 'occurred_on', 'week_start'])
+const TIME_COLUMNS = new Set([
+  'created_at',
+  'updated_at',
+  'started_at',
+  'due_at',
+  'reviewed_at',
+  'next_review_at',
+  'at',
+  'date',
+  'start_at',
+  'end_at',
+  'occurred_on',
+  'week_start',
+  'eaten_at',
+  'bed_at',
+  'wake_at',
+])
 
 /** Makes Postgres and demo values comparable: the app gets numbers and plain JSON from Supabase. */
 function comparable(row: Record<string, unknown>): Record<string, unknown> {
@@ -158,6 +207,7 @@ beforeAll(async () => {
   await db.exec(attendanceMigration)
   await db.exec(adaptiveMigration)
   await db.exec(reviewMigration)
+  await db.exec(lifeMigration)
   await db.exec(`insert into auth.users (id, email, raw_user_meta_data) values ('${USER}', 'demo@example.com', '{}')`)
 })
 

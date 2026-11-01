@@ -47,6 +47,13 @@ export const DEMO_TABLES = [
   'metric_snapshots',
   'challenges',
   'weekly_reviews',
+  'habits',
+  'habit_logs',
+  'workouts',
+  'meals',
+  'sleep_logs',
+  'step_counts',
+  'speaking_sessions',
 ] as const satisfies readonly (keyof PublicTables)[]
 
 export type DemoTable = (typeof DEMO_TABLES)[number]
@@ -308,6 +315,13 @@ const DEFAULTS: { [T in DemoTable]: (now: Date) => Partial<DemoRow<T>> } = {
     prompt_version: null,
     completed_at: null,
   }),
+  habits: () => ({ kind: 'custom', days_of_week: [0, 1, 2, 3, 4, 5, 6], target: null, unit: null, order_index: 0, archived_at: null }),
+  habit_logs: () => ({ value: 0, done: false }),
+  workouts: () => ({ program: null, day_key: null, exercises: [], duration_min: null, notes: null }),
+  meals: () => ({ eaten_at: new Date().toISOString(), calories: null, protein_g: null, carbs_g: null, fat_g: null, source: 'manual' }),
+  sleep_logs: () => ({ source: 'manual' }),
+  step_counts: () => ({ source: 'manual' }),
+  speaking_sessions: () => ({ transcript: '', words: 0, wpm: null, filler_count: 0, fillers: {}, scores: {}, feedback: [], source: 'device' }),
 }
 
 interface ForeignKey {
@@ -374,6 +388,7 @@ const FOREIGN_KEYS: ForeignKey[] = [
   { table: 'attendance', column: 'subject_id', references: 'subjects', onDelete: 'cascade' },
   { table: 'marks', column: 'subject_id', references: 'subjects', onDelete: 'cascade' },
   { table: 'subject_ratings', column: 'subject_id', references: 'subjects', onDelete: 'cascade' },
+  { table: 'habit_logs', column: 'habit_id', references: 'habits', onDelete: 'cascade' },
 ]
 
 /** Inside this file rows are plain objects; the public functions below give them their table's type. */
