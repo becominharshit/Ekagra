@@ -96,3 +96,29 @@ Add a dated line whenever an important decision is made or changed.
   - "Ask the AI again" appears only when the device wrote it.
   - Reminders: a Today card on the review day and the day after, until the review is done. On Android, a notification at 18:00 through FocusGuard's existing `scheduleReminder` (no new library), skipped when that week's review is done.
   - New settings `review { day, reminder }`.
+- 2026-11-02: M14 done (migration `007_life.sql`, Edge Functions `ai-meal` and `ai-speak`, Fast tier, now 13 functions; Health Connect plugin). **Tables:**
+  - `habit_logs` is unique per user, habit and day. A global unique rule would let another user's insert hit "duplicate key" before the ownership check, which leaks whether a habit had a log.
+  - Habits use `days_of_week smallint[]` instead of a schedule JSON. There is a new `step_counts` table.
+  - `meals` has no photo column and `speaking_sessions` no audio column: photos and recordings are never stored.
+
+  **Habits and workouts:**
+  - Streaks count the scheduled days done in a row. Days off don't break them, and today only breaks them once it's over.
+  - Workouts use three fixed programs (hostel room, dumbbells, gym push/pull/legs) as a rotation of days, with no AI. Settings `life { program, workoutDays, calories, protein, stepGoal }`.
+
+  **Meals:**
+  - The phone shrinks the photo to 1280 px JPEG (`shrinkPhoto`) and sends it in the request only. The student checks the estimate before saving.
+  - 24 mess and hostel quick adds. Demo Mode gives a sample that's clearly marked.
+
+  **Speaking:**
+  - The browser's own MediaRecorder at 32 kbit/s (no library); the recording stops by itself at 3 minutes. Gemini reads WebM/Ogg/M4A inline.
+  - The AI only writes the transcript (fillers kept), the scores and the tips. Words per minute and fillers are counted in code with simple rules ("like" isn't counted after "I", "looks" or "was"; "you know" isn't counted in questions).
+  - Typing what you said works everywhere (Demo Mode too).
+
+  **Health Connect:**
+  - `connect-client` 1.1.0 (minSdk 26) with `tools:overrideLibrary`, so the app keeps minSdk 24. The plugin checks for Android 9+ before loading the one class that uses Health Connect.
+  - Suspend calls run with the standard library's `startCoroutine`. Reading only sleep and steps; steps are Health Connect's daily totals, so there's no double counting.
+  - One night per morning: the longest session, so naps are left out. A typed value wins over a synced one for that day.
+  - Regularity is 0–100, from the standard deviation of bed times (measured from noon) and wake times; it reaches 0 at 2 hours.
+  - The privacy links Health Connect requires open `/privacy` (MainActivity).
+
+  **Not done yet:** sleep in the weekly review. The Life tabs load on demand.

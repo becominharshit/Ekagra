@@ -79,7 +79,11 @@ Built in this order (M12 comes first: attendance helps students in the middle of
   6. Exam readiness (0.4 coverage + 0.4 mastery + 0.2 latest mock) and the weekly challenge (`challenges`); a Progress page with hand-drawn SVG charts (no chart library). Committed in two parts: 6a readiness, 6b challenge and Progress page
   7. Docs
 - [x] **M13 Sunday AI weekly review, in 5 steps** (migration `006_weekly_review.sql`, Edge Function `ai-review`, Smart): the week's numbers, a fixed list of changes the app can apply in one tap (and the planner settings they need), 3 insights and 3 changes from the AI (Demo Mode: rules on the device), the review screen from Sunday with a reminder, docs. Done 2026-11-02; everything works in Demo Mode too (the device writes the review from fixed rules). **Your steps:** `npm run db:push` (migration 006), then `npm run db:types`; `npm run functions:deploy` (now 11 functions: the 9 AI ones with the new `ai-review`, `ai-usage` and `account-delete`)
-- [ ] **M14 Full Life, in 7 steps** (migration `007_life.sql`, Edge Functions `ai-meal` and `ai-speak`, Fast): tables and Life tabs; habits; workout planner and logger (templates for hostel, dumbbells and gym, no AI); meals from a photo (`ai-meal`; the photo is analysed and not stored) and hostel/mess quick-add; speaking partner (microphone, `ai-speak`; only the transcript and scores are kept; words per minute and filler words such as "um", "like", "basically" and Hinglish "matlab" are counted in code); Health Connect sleep and steps (Kotlin plugin with `androidx.health.connect:connect-client`, approved); privacy page and docs
+- [x] **M14 Full Life, in 7 steps** (migration `007_life.sql`, Edge Functions `ai-meal` and `ai-speak`, Fast): tables and Life tabs; habits; workout planner and logger (templates for hostel, dumbbells and gym, no AI); meals from a photo (`ai-meal`; the photo is analysed and not stored) and hostel/mess quick-add; speaking partner (microphone, `ai-speak`; only the transcript and scores are kept; words per minute and filler words such as "um", "like", "basically" and Hinglish "matlab" are counted in code); Health Connect sleep and steps (Kotlin plugin with `androidx.health.connect:connect-client`, approved); privacy page and docs. Done 2026-11-02; everything works in Demo Mode too (meal estimates are marked samples, speaking practice is typed, Health Connect works in the Android app in both modes). Not done yet: sleep in the weekly review. **Your steps:**
+  1. `npm run db:push` (migration 007), then `npm run db:types`.
+  2. `npm run functions:deploy` (now 13 functions: the 11 AI ones with the new `ai-meal` and `ai-speak`, `ai-usage` and `account-delete`).
+  3. On an Android phone: build and install the APK, then try Life → Speaking (allow the microphone) and Life → Sleep & steps (docs/4).
+  4. Before the Play Store: fill in Google's Health Connect declaration form.
 - [ ] **M15 Partner, groups and the Studio Bridge, in 6 steps** (migration `008_social.sql`): sharing only the numbers each student picks (RLS, `shared_stats_view`); accountability partner with in-app and local-notification nudges (no push service yet); study groups with "studying now" and group focus (Supabase Realtime); the Studio Bridge to App #2 (`ekagra-studio`): `BroadcastChannel` for same-origin `/studio` tabs, Supabase Realtime sync of `ai_anchors`, and handoff by link (`http://localhost:5174/?bridge=<encoded payload>` in development) or deep link (`ekagra-studio://anchor`); docs
 
 The 12-week plan in §3 and the phases in §1 and §4 are kept for reference only.
@@ -235,10 +239,10 @@ Move these to Phase 2, in this order: YouTube processing → tutor Socratic/Exam
 - [ ] Integrations: YouTube Analytics, Instagram, GitHub, Notion, PayPal/Stripe, Gmail parsing for freelance platforms; apply for the Upwork API; optional SMS parsing (direct APK only)
 
 ### Phase 4: Full Life section
-- [ ] Workout plans and logging
-- [ ] Meal logging by photo with estimates; daily targets
-- [ ] Health Connect: sleep, steps, workouts
-- [ ] AI speaking partner with feedback and progress
+- [x] Workout plans and logging (M14: fixed programs, no AI)
+- [x] Meal logging by photo with estimates; daily targets (M14)
+- [ ] Health Connect: sleep, steps, workouts (M14: sleep and steps; workouts not read yet)
+- [x] AI speaking partner with feedback and progress (M14)
 - [ ] Burnout guard; sleep vs study results in the weekly review
 
 ### Phase 5: Tools app and beyond

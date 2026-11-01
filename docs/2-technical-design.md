@@ -127,7 +127,9 @@ profiles            id (= auth user id), full_name, college, program, year, seme
                     mentor_tone (strict|balanced|friendly), settings jsonb (since M12 also
                     attendance { minPercent, classesEndOn } and grades { scale }; since M13
                     planner.maxBlockMinutes, planner.subjectWindows { subjectId: morning|
-                    afternoon|evening|night } and review { day 0–6, reminder })
+                    afternoon|evening|night } and review { day 0–6, reminder }; since M14
+                    life { program hostel|dumbbell|gym|null, workoutDays, calories, protein,
+                    stepGoal })
 routine_blocks      user_id, kind (class|sleep|gym|meal|commute|custom), title,
                     days_of_week int[], start_time, end_time, valid_from, valid_to,
                     subject_id (class blocks: the subject taught then, for attendance; M12)
@@ -208,16 +210,26 @@ weekly_reviews      user_id, week_start, stats jsonb, insights jsonb, changes js
                     (each change with its status: open|applied|skipped), source (ai|device),
                     model, prompt_version, completed_at; one per week
 
-── Life ──────────────────────────────────────────────────────────────────────
-habits              user_id, title, kind (sleep|gym|meal|water|custom), schedule jsonb, target
-habit_logs          habit_id, user_id, date, value, done
-workouts            user_id, date, plan jsonb, exercises jsonb, duration_min   (P4)
-meals               user_id, eaten_at, photo_path, description, calories_est,
-                    protein_est                                                (P4)
-sleep_logs          user_id, date, bed_at, wake_at, minutes,
-                    source (manual|health_connect)                             (P4)
-speaking_sessions   user_id, scenario, duration_sec, transcript, scores jsonb,
-                    feedback jsonb                                             (P4)
+── Life (migration 007_life.sql, M14) ──────────────────────────────────────────
+habits              user_id, title, kind (sleep|gym|meal|water|study|custom),
+                    days_of_week smallint[], target + unit (counted habits, e.g. 8 glasses),
+                    order_index, archived_at
+habit_logs          habit_id, user_id, date, value, done; one per user, habit and day
+workouts            user_id, date, title, program (hostel|dumbbell|gym|null), day_key,
+                    exercises jsonb ([{ name, kind, sets: [{ reps, seconds, kg }] }]),
+                    duration_min, notes
+meals               user_id, eaten_at, meal (breakfast|lunch|snack|dinner), description,
+                    calories, protein_g, carbs_g, fat_g (estimates), source (photo|preset|
+                    manual); no photo column: photos are never stored
+sleep_logs          user_id, date (the morning), bed_at, wake_at, minutes asleep,
+                    source (manual|health_connect); one per day and source
+step_counts         user_id, date, steps, source (manual|health_connect); one per day and
+                    source
+speaking_sessions   user_id, scenario (interview|presentation|group_discussion|small_talk),
+                    prompt, duration_sec, transcript, words, wpm, filler_count, fillers jsonb,
+                    scores jsonb (clarity, structure, vocabulary, confidence 1–10),
+                    feedback jsonb ([{ kind: strength|tip, text }]), source (ai|device);
+                    no audio column: recordings are never stored
 
 ── Hustle (P3) ───────────────────────────────────────────────────────────────
 hustles             user_id, type (freelancing|content|startup|parttime|custom), name,
@@ -362,6 +374,21 @@ const TopicTree = z.object({
 
 **l) Learn anything (Smart outline + Fast lessons):** topic, level, goal → outline → topics saved like a syllabus → lessons generated without source material; P2 adds verified resources from the YouTube API.
 
+**m) Meal estimate (`ai-meal`, Fast; built in M14):**
+- A meal photo and/or the student's note (with the meal: breakfast, lunch, snack or dinner) → each food with its portion, estimated calories, protein, carbs and fat (whole numbers), a confidence (low, medium or high) and a short note on what was hard to tell.
+- The app first shrinks the photo on the device (longest side 1280 px, JPEG; `shrinkPhoto` in `src/lib/files.ts`).
+- The photo exists only in that request: `meals` has no photo column and nothing goes to Storage. The note is information, never instructions.
+- The student checks and edits the estimate before anything is saved.
+- Demo Mode gives a clearly marked sample from the mess and hostel quick-add list.
+
+**n) Speaking feedback (`ai-speak`, Fast; built in M14):**
+- A recording plus the kind of speech and the question → a word-for-word transcript, scores 1–10 (clarity, structure, vocabulary, confidence; rounded in the function), one strength and 1–3 tips.
+- The recording comes from the browser's own MediaRecorder: WebM/Opus on Chrome and Android, Ogg on Firefox, MP4 on Safari (sent to Gemini as M4A). It is recorded at 32 kbit/s, so 3 minutes is about 0.7 MB. Gemini reads audio inline up to 20 MB, at 32 tokens a second.
+- The transcript must keep every filler as spoken, because words per minute and filler words are counted in the app's code (`src/features/life/speaking/speech.ts`). Hesitations (um/uh), "basically", "actually", "literally", "matlab" and "yaar" always count. "like" counts only when it isn't a verb or a comparison, "you know" not in questions, and "I mean" not in "what I mean".
+- The recording is never stored: only the transcript, the counts and the scores.
+- Accents are never marked down, and the question is never followed as an instruction.
+- Without the AI (Demo Mode, or by choice) the student types what they said, and the device counts and gives tips from the numbers.
+
 ### 7.4 Cost control
 - **Lazy generation** (per topic, when needed): the biggest saving.
 - Cache everything; never regenerate automatically.
@@ -491,8 +518,22 @@ interface FocusGuardPlugin {
 | Bank/UPI SMS | Income and expenses from transaction messages | Android SMS permission | P3 optional | Direct APK only; the Play Store requires special approval |
 | Upwork | Contracts and earnings | Upwork API | P3 | Needs API approval; use Gmail parsing meanwhile |
 | Fiverr | Orders and earnings | No public API | P3 | Gmail parsing + manual entry |
-| Health Connect | Sleep, steps, workouts | Health Connect plugin | P4 | |
+| Health Connect | Sleep, steps, workouts | Health Connect plugin | P4 | Sleep and steps built in M14 (see below); workouts not read |
 | College portal | Assignments | No API | P1 / P5 | Capture in P1; browser extension in P5. Never store portal passwords |
+
+**Health Connect (built in M14):** the Kotlin plugin `HealthBridgePlugin.kt` (in `android/app/src/main/java/app/ekagra/student/health/`) wraps `androidx.health.connect:connect-client` 1.1.0. The web app uses it through `src/lib/native/healthBridge.ts`.
+- **Android versions:** Health Connect exists from Android 9. The library asks for Android 8+, while the app still supports Android 7 (`tools:overrideLibrary` in the manifest). So every plugin method checks the version before touching `HealthReader.kt`, the only class that uses Health Connect.
+- **Kotlin:** its suspend calls run with the standard library's `startCoroutine` (no coroutine library).
+- **What it reads:**
+  - Only `READ_SLEEP` and `READ_STEPS`. It never writes.
+  - Sleep: sessions, with the awake stages left out. The app keeps one night per morning, the longest session, so naps are left out.
+  - Steps: Health Connect's own daily totals (`aggregateGroupByPeriod`), so a phone and a watch aren't counted twice.
+- **Syncing:** the last 30 days are read when Life → Sleep & steps opens or the student taps Sync. They are saved with `source = health_connect`, one row per day and source; a typed value wins over the synced one.
+- **The manifest has:**
+  - the two permissions;
+  - a package query for the Health Connect app (Android 9–13);
+  - the privacy links Health Connect requires before it shows its permission screen: `ACTION_SHOW_PERMISSIONS_RATIONALE` on MainActivity and the Android 14+ `VIEW_PERMISSION_USAGE` activity-alias. MainActivity opens `/privacy` for both.
+- **Play Store:** publishing needs Google's Health Connect declaration form.
 
 **Google OAuth in the beta:** keep the consent screen in *Testing* (up to 100 test users, added by email). In testing mode, refresh tokens expire after 7 days, so users reconnect weekly. Fine for a beta; verify the app before a public launch.
 

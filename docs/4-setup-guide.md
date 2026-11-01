@@ -46,7 +46,7 @@ npm run db:types
 
 - `login` opens your browser to allow the Supabase command-line tool.
 - `link` asks for the database password from step 1.
-- `db:push` creates every table, security rule (RLS) and storage bucket from the files in `supabase/migrations/` (`001_phase1_core.sql`, then `002_hustle_mode.sql`, `003_beta.sql` (feedback), `004_attendance_grades.sql`, `005_adaptive.sql` (practice ratings, weekly metrics and challenges), `006_weekly_review.sql` and any later ones). Run it again whenever a new migration file appears; it only applies the new ones.
+- `db:push` creates every table, security rule (RLS) and storage bucket from the files in `supabase/migrations/` (`001_phase1_core.sql`, then `002_hustle_mode.sql`, `003_beta.sql` (feedback), `004_attendance_grades.sql`, `005_adaptive.sql` (practice ratings, weekly metrics and challenges), `006_weekly_review.sql`, `007_life.sql` (habits, workouts, meals, sleep, steps and speaking practice) and any later ones). Run it again whenever a new migration file appears; it only applies the new ones.
 - `db:types` writes `src/types/database.ts` from your real database. Run it again after every new migration.
 
 **Check:** Supabase → **Table Editor** lists tables such as `profiles`, `subjects`, `hustles`, and each one says RLS is enabled.
@@ -124,6 +124,19 @@ The blocking code only runs on a phone, so test it there. Do this on Android 12,
 10. **Every Study block:** in Focus settings choose "Every Study block". During a Study block, blocked apps are blocked without starting focus.
 11. **Launchpad reminder:** on a hustle, open Upwork from the Launchpad and leave Ekagra. After 10 minutes a notification asks "Did you …?"; tapping it opens Ekagra with the question. With "Alarms and reminders" off (Android 14+), it may come a few minutes late.
 
+### Health Connect and the microphone: test on real phones
+
+Health Connect, the microphone and the camera only work on a phone. Try Android 13 (Health Connect is an app from the Play Store) and Android 14 or 15 (it's part of Android) if you can.
+
+1. **Health Connect:** Life → **Sleep & steps**.
+   - On Android 9–13 without it, the card says **Install Health Connect** and opens the Play Store. Install it, come back, and the card says **Connect**.
+   - **Connect** opens Health Connect's own screen with "Sleep" and "Steps". Allow both; the card then says "Connected" and "Brought in … nights … days".
+   - With no data yet, walk with the phone (or open Google Fit or a watch app that writes to Health Connect), then tap **Sync now**.
+2. **Privacy link:** on Health Connect's permission screen (or Android 14+ Settings → Security and privacy → Privacy → Health Connect → Ekagra), tap the link about the app's privacy policy. Ekagra opens on its privacy page.
+3. **Taking access back:** **Health Connect settings** → Ekagra → turn both off. Back in Ekagra, the card says **Connect** again, and the typed nights and steps still show.
+4. **Microphone:** Life → **Speaking** → **Start speaking**. Android asks once for the microphone; allow it. Speak for 20 seconds, **Stop**, play it back, then **Get feedback** (signed in) or type what you said (Demo Mode).
+5. **Camera:** Life → **Meals** → **Take a photo** opens Android's camera; take a photo of food. The estimate appears (a marked sample in Demo Mode).
+
 ## 6. AI features (Gemini)
 
 Demo Mode never uses this: there, AI features give sample answers made on the device. Signed-in students get real answers once these steps are done.
@@ -133,7 +146,7 @@ Demo Mode never uses this: there, AI features give sample answers made on the de
 3. Send the secrets to Supabase: `npm run functions:secrets`
 4. Deploy the functions: `npm run functions:deploy` (no Docker needed). Run it again whenever something in `supabase/functions/` changes.
 
-**Check:** Supabase → **Edge Functions** lists the 9 AI functions (`ai-syllabus`, `ai-papers`, `ai-tutor`, `ai-generate`, `ai-capture`, `ai-brief`, `ai-hustle`, `ai-grade`, `ai-review`) and 2 without AI: `ai-usage` (the AI usage card on Me) and `account-delete` (wiping data and deleting accounts). Those 2 need no AI secrets, but they must be deployed. **Edge Functions → Secrets** lists the `AI_…` names. Then, signed in: import a syllabus (Academics → a subject → Import syllabus), open a topic → **Make my lesson**, add a screenshot of the portal with the **+** button, and tap refresh on Today's **Morning brief** (it should say "Written by the AI"). **Me → AI usage** then shows those requests, today and this month, with their cost. To try `ai-grade`: Academics → a subject with a past paper → **Mock test** → Start, write an answer or two, **Hand in**: the written answers should say "Marked by the AI". To try `ai-review`: Me → **Weekly review** → **Make my review**; the card should say "written by the AI".
+**Check:** Supabase → **Edge Functions** lists the 11 AI functions (`ai-syllabus`, `ai-papers`, `ai-tutor`, `ai-generate`, `ai-capture`, `ai-brief`, `ai-hustle`, `ai-grade`, `ai-review`, `ai-meal`, `ai-speak`) and 2 without AI: `ai-usage` (the AI usage card on Me) and `account-delete` (wiping data and deleting accounts). Those 2 need no AI secrets, but they must be deployed. **Edge Functions → Secrets** lists the `AI_…` names. Then, signed in: import a syllabus (Academics → a subject → Import syllabus), open a topic → **Make my lesson**, add a screenshot of the portal with the **+** button, and tap refresh on Today's **Morning brief** (it should say "Written by the AI"). **Me → AI usage** then shows those requests, today and this month, with their cost. To try `ai-grade`: Academics → a subject with a past paper → **Mock test** → Start, write an answer or two, **Hand in**: the written answers should say "Marked by the AI". To try `ai-review`: Me → **Weekly review** → **Make my review**; the card should say "written by the AI". To try `ai-meal`: Life → **Meals** → **Choose a photo** (any food photo); the estimate should say "AI estimate". To try `ai-speak`: Life → **Speaking** → **Start speaking**, answer for 30 seconds, **Stop**, **Get feedback**; the session should say "feedback from the AI", with scores.
 
 The Coding Lab doesn't need any of this: Python runs on the device. Its first run downloads Python (about 13 MB) from the jsDelivr CDN, so that one needs the internet.
 

@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button'
 /** Optional: VITE_CONTACT_EMAIL in .env (docs/4-setup-guide.md). Without it, students use Send feedback. */
 const CONTACT_EMAIL: string | undefined = import.meta.env.VITE_CONTACT_EMAIL
 
-const UPDATED = '1 November 2026'
+const UPDATED = '2 November 2026'
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -59,7 +59,8 @@ export function PrivacyPage() {
           <List>
             <li>Your data is private to your account. It is never sold or used for ads.</li>
             <li>AI features send only what a request needs to Google's Gemini, through Ekagra's server.</li>
-            <li>FocusGuard's app checks stay on your phone.</li>
+            <li>Meal photos and voice recordings are used once for feedback and never stored.</li>
+            <li>FocusGuard's app checks stay on your phone. Health Connect is only read, and only sleep and steps, when you allow it.</li>
             <li>You can export all your data or delete it at any time: Me → Account and privacy.</li>
           </List>
         </Section>
@@ -80,6 +81,15 @@ export function PrivacyPage() {
               expenses and hours; the apps you chose to block.
             </li>
             <li>
+              Your progress: attendance, marks and semester results, mock tests and how they were marked, your weekly learning metrics and
+              challenges, and your weekly reviews with the changes you applied.
+            </li>
+            <li>
+              Life: your habits and the days you did them; workouts with their sets; meals as you describe them, with estimated calories, protein,
+              carbs and fat (never the photo); sleep (bedtime, wake time and minutes asleep) and steps per day, typed in or brought in from Health
+              Connect; speaking practice as the transcript, the words per minute, filler words and scores (never the recording).
+            </li>
+            <li>
               Feedback you send, with the screen it came from, an optional screenshot and a few device details (web or Android, app build, screen
               size, browser, language and timezone).
             </li>
@@ -88,7 +98,53 @@ export function PrivacyPage() {
               app's budget.
             </li>
           </List>
-          <p>Photos and screenshots you give the AI to read (a syllabus, a task list) are sent for that request and are not stored.</p>
+          <p>
+            Photos and screenshots you give the AI to read (a syllabus, a task list, a meal) and voice recordings for speaking practice are sent for
+            that one request and are not stored, on Ekagra's server or anywhere else.
+          </p>
+        </Section>
+
+        <Section title="Meal photos and speaking practice">
+          <List>
+            <li>
+              <strong>Meal photos</strong>: your phone makes the photo smaller first, then sends it once to estimate the food in it. The photo isn't
+              uploaded to storage or kept; you check the estimate, and only the description and the numbers are saved.
+            </li>
+            <li>
+              <strong>Recordings</strong>: the microphone records only after you tap Start speaking, and stops when you tap Stop (or after 3
+              minutes). The recording stays in your phone's memory so you can play it back. For AI feedback it is sent once to write the transcript
+              and scores, then dropped; it is never saved. In Demo Mode it never leaves your device.
+            </li>
+          </List>
+        </Section>
+
+        <Section title="Health Connect (Android)">
+          <List>
+            <li>
+              Ekagra reads two kinds of data from Health Connect, and only after you allow them on Health Connect's own screen: <strong>sleep</strong>{' '}
+              (when you fell asleep and woke up, and how long you slept) and <strong>steps</strong> (a total per day).
+            </li>
+            <li>
+              It reads the last 30 days when you open Life → Sleep & steps or tap Sync, to show your sleep, its regularity and your steps. It never
+              writes to Health Connect and reads nothing else.
+            </li>
+            <li>
+              What it reads is saved like the rest of your data (on your device in Demo Mode). It isn't sent to the AI, sold, used for ads or shared
+              with anyone.
+            </li>
+            <li>
+              You can take the access back at any time in Health Connect's settings (there's a button in Life → Sleep & steps), and delete the data
+              with Wipe my data.
+            </li>
+            <li>Ekagra's use of data from Health Connect follows the Health Connect Permissions policy, including its Limited Use requirements.</li>
+          </List>
+        </Section>
+
+        <Section title="Health features are not medical advice">
+          <p>
+            Calorie and protein estimates, sleep and step numbers, workout programs and speaking scores are there to guide you. They are not medical,
+            nutrition or fitness advice, and estimates can be wrong. If you have a health condition or plan a big change, talk to a doctor.
+          </p>
         </Section>
 
         <Section title="Demo Mode">
@@ -109,7 +165,8 @@ export function PrivacyPage() {
         <Section title="How the AI uses your data">
           <p>
             When you use an AI feature (reading a syllabus or past paper, AI Anchors and the page tutor, lessons and quizzes, task capture, the
-            morning brief, custom hustle plans), the app sends only what that request needs, such as the selected text, the page or the photo, to
+            morning brief, custom hustle plans, marking mock tests, the weekly review, meal estimates, speaking feedback), the app sends only what
+            that request needs, such as the selected text, the page, the photo, the recording or the week's numbers, to
             Ekagra's server (Supabase Edge Functions). The server asks Google's Gemini API and sends the answer back. Your name and email address
             are not sent with it. Google processes these requests under the Gemini API terms (ai.google.dev/gemini-api/terms). Ekagra does not use
             your data to train AI models.
@@ -129,7 +186,14 @@ export function PrivacyPage() {
               <strong>Display over other apps</strong>: shows the blocker screen on top of a blocked app.
             </li>
             <li>
-              <strong>Notifications</strong>: FocusGuard's "focus is on" notification and the Launchpad's time's-up reminder.
+              <strong>Notifications</strong>: FocusGuard's "focus is on" notification, the Launchpad's time's-up reminder and the weekly review
+              reminder.
+            </li>
+            <li>
+              <strong>Microphone</strong>: records your answer during speaking practice, only after you tap Start speaking.
+            </li>
+            <li>
+              <strong>Health Connect: read sleep and read steps</strong>: brings your sleep and steps into Life → Sleep & steps (see above).
             </li>
             <li>
               <strong>Foreground service</strong>: keeps FocusGuard running while you focus.
@@ -148,8 +212,8 @@ export function PrivacyPage() {
               that in Android's settings; it isn't a permission.
             </li>
             <li>
-              <strong>Files and photos</strong>: Ekagra has no storage permission. You pick PDFs and screenshots with Android's file picker, and an
-              export is saved where you choose.
+              <strong>Files, photos and camera</strong>: Ekagra has no storage or camera permission. You pick PDFs and photos with Android's file
+              picker, meal photos are taken with Android's own camera screen, and an export is saved where you choose.
             </li>
           </List>
           <p>You can turn any of these off at any time in Android's settings; the features that need them then stop working.</p>

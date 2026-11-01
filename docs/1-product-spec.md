@@ -276,11 +276,23 @@ Each hustle has a goal (e.g. "first ₹10,000 by January"), phases with steps fr
 - Sleep window, gym, meals and water as habits and fixed blocks in the plan.
 - Daily check-off and the evening check-in (energy and mood).
 
-### 14.2 Full section (P4)
+### 14.2 Full section (P4; built early in M14, except where noted)
 - **Fitness:** AI workout plans by goal, level and equipment (gym, home, hostel); log sets and reps; progress charts.
+  - As built: three fixed programs instead of AI plans: hostel room with no equipment, a pair of dumbbells, and a gym push/pull/legs split. Each is a rotation of days on the weekdays the student picks; the next workout follows the last one logged.
+  - The logger keeps sets (reps or seconds, plus kg for weights); workouts of your own can be logged too. Progress shows workouts per week and personal bests.
 - **Diet:** log meals by photo (AI estimates calories and protein, shown as estimates); daily targets; simple meal ideas for a student budget and hostel/canteen food.
+  - As built: a photo (taken or picked; made smaller on the phone) or a typed description goes to `ai-meal`, which estimates each food. The student checks and edits the estimate before saving; the photo is never stored.
+  - 24 mess and hostel foods are one-tap quick adds. Daily calorie and protein targets (editable), cheap protein ideas when protein is short, and the last 7 days.
+  - Demo Mode gives a clearly marked sample from the quick-add list.
 - **Sleep and steps:** from Health Connect (works with many phones, watches and fitness apps); sleep consistency score; the weekly review shows how sleep affects study results.
+  - As built: on Android, Health Connect's sleep sessions and daily step totals for the last 30 days (read only, after the student allows it). Anyone can type nights and steps in; a typed value wins over Health Connect's for that day.
+  - Sleep shows the 7-night average against 7–9 hours and a regularity score (0–100, from how much bed and wake times wander). Steps show today against a goal (8,000 by default) and the 7-day average.
+  - **Not built yet:** sleep in the weekly review.
 - **Communication:** AI speaking partner for 5–10 minutes of daily voice practice (interviews, presentations, group discussions, small talk) with feedback on clarity, filler words, pace and vocabulary, and progress over time.
+  - As built: pick the kind of speech and a question (or your own), record up to 3 minutes and play it back. `ai-speak` writes a word-for-word transcript with scores for clarity, structure, vocabulary and confidence, one strength and tips.
+  - Words per minute and filler words ("um", "like", "basically", "actually", "you know", Hinglish "matlab", "yaar") are counted in code. Only the transcript, the counts and the scores are kept, never the recording.
+  - In Demo Mode, or any time, the student can type what they said and the counting happens on the device. Progress charts show pace (110–160 words a minute is good), fillers a minute and the AI score.
+- **Habits** (M14): daily habits on chosen weekdays, ticked off or counted (8 glasses of water); streaks count scheduled days in a row; the last 7 days at a glance.
 - **Burnout guard:** several low-energy days in a row → lighter plan and a check-in message.
 - Health features are not medical advice, and the app says so.
 
