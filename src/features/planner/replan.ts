@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { loadStudy, useStudy } from '@/features/academics/roadmap'
+import { CHECK_IN_DAYS, listCheckIns, toPlannerCheckIns, useCheckIns } from '@/features/checkins/checkins'
 import { listCards } from '@/features/flashcards/flashcards'
 import { listMistakes } from '@/features/mistakes/mistakes'
 import { toPlannerRoutine } from '@/features/onboarding/routineDraft'
@@ -15,6 +16,7 @@ import { buildPlan } from './planner'
 import { reviewMinutesByDay } from './reviewLoad'
 import { localDateOf, minuteOf, planFingerprint, planIsFresh, planRows, replanStart, workDone, type PlanRun } from './schedule'
 import { toPlannerStudy } from './studyData'
+import { addDays } from './time'
 import type { LocalDate } from './types'
 
 // Making the plan: load what the planner needs, run it, save the blocks. It runs when the app
@@ -34,13 +36,14 @@ export interface ReplanResult {
 export async function replan(source: DataSource, { from, now = new Date() }: { from: ReplanFrom; now?: Date }): Promise<ReplanResult> {
   const today = localDateOf(now)
   const repo = profileRepoFor(source)
-  const [profile, routine, study, tasks, cards, mistakes, todayBlocks, workRows, version] = await Promise.all([
+  const [profile, routine, study, tasks, cards, mistakes, checkIns, todayBlocks, workRows, version] = await Promise.all([
     repo.getProfile(),
     repo.getRoutine(),
     loadStudy(source),
     listTasks(source),
     listCards(source),
     listMistakes(source),
+    listCheckIns(source, addDays(today, -CHECK_IN_DAYS)),
     listBlocks(source, today, today),
     listWorkRows(source),
     latestPlanVersion(source),
@@ -59,7 +62,8 @@ export async function replan(source: DataSource, { from, now = new Date() }: { f
     ...toPlannerStudy(study.subjects, study.topics, study.prereqs, done.byTopic),
     tasks: toPlannerTasks(tasks, done.byTask),
     reviewMinutes: reviewMinutesByDay({ cards, mistakes, today: planFrom, days: 14, newCardsPerDay: settings.learning.newCardsPerDay }),
-    checkIns: [],
+    // "I Crashed" makes today a minimum day; low-energy check-ins turn on the Burnout Guard.
+    checkIns: toPlannerCheckIns(checkIns),
     doneTodayBySubject: planFrom === today ? Object.fromEntries(done.todayBySubject) : undefined,
     settings: plannerSettingsFor(settings, toChronotype(profile.chronotype)),
   })
@@ -92,12 +96,16 @@ function writePlanRun(owner: string, run: PlanRun): void {
 
 /** A fingerprint of everything that changes the plan. Null until it's all loaded (or before setup is done). */
 export function usePlanFingerprint(): string | null {
+  const today = localDateOf(useNow(60_000))
   const profile = useProfile()
   const routine = useRoutine()
   const study = useStudy()
   const tasks = useTasks()
-  if (!profile.data?.onboarded_at || !routine.data || !study.data || !tasks.data) return null
+  const checkIns = useCheckIns(today)
+  if (!profile.data?.onboarded_at || !routine.data || !study.data || !tasks.data || !checkIns.data) return null
   return planFingerprint({
+    // "I Crashed" (and its Undo) re-plans today. Energy isn't here: the evening check-in plans tomorrow itself.
+    minimumDay: checkIns.data.some((row) => row.date === today && row.minimum_day),
     tasks: tasks.data
       .filter(isOpenTask)
       .map((task) => [task.id, task.due_at, task.est_minutes, task.priority, task.area, task.subject_id]),

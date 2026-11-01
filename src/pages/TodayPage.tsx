@@ -2,14 +2,14 @@ import { format } from 'date-fns'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { CrashButton, DayStatus } from '@/features/checkins/DayStatus'
+import { EveningCheckIn } from '@/features/checkins/EveningCheckIn'
 import { DayTimeline } from '@/features/planner/DayTimeline'
 import { DueSoon } from '@/features/today/DueSoon'
 import { NowCard, UpNext } from '@/features/today/NowCard'
 import { useNow } from '@/hooks/useNow'
 
 const COMING = [
-  { title: 'Capture tasks from text or a screenshot', when: 'M4' },
-  { title: '"I Crashed" and the evening check-in', when: 'M4' },
   { title: 'Morning brief', when: 'M4' },
   { title: 'Pomodoro and Deep Work focus timer', when: 'M9' },
 ]
@@ -19,9 +19,14 @@ export function TodayPage() {
 
   return (
     <>
-      <PageHeader title="Today" subtitle={format(now, 'EEEE, d MMMM')} />
+      <div className="flex items-start justify-between gap-3">
+        <PageHeader title="Today" subtitle={format(now, 'EEEE, d MMMM')} />
+        <CrashButton />
+      </div>
       <div className="grid gap-4">
+        <DayStatus />
         <NowCard />
+        <EveningCheckIn />
         <UpNext />
         <DueSoon />
         <DayTimeline />

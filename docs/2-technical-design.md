@@ -350,7 +350,9 @@ Pure TypeScript in `src/features/planner/`, run in the app, saved to `plan_block
 
 **Auto-recovery:** unfinished minutes go back to the pool → re-run steps 3–6 for the coming days, never adding more than +20% to a single day.
 
-**Minimum day:** keep the highest-priority block (≤30 min) + reviews (≤15 min); the rest goes back to the pool.
+**Minimum day:** keep the highest-priority block (≤30 min) + reviews (≤15 min); the rest goes back to the pool. "I Crashed" can be undone the same day.
+
+**Evening check-in:** shown from 8 PM (or once the day's last block has started). It ends the day: blocks that aren't marked count as missed, then the plan is made again from tomorrow. The **Burnout Guard** (30% less capacity when the 3 most recent check-ins of the last 7 days had energy ≤ 2) applies to the first day of a plan.
 
 **Speed factor:** per subject, the median of (actual minutes to mastery ÷ estimated minutes) over recent topics, clamped 0.5–2.0, starting at 1.0.
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { addSampleSubjects } from '@/features/academics/sampleSubjects'
 import { defaultRoutine, routineToRows } from '@/features/onboarding/routineDraft'
+import { crashToday, saveCheckIn, saveEveningCheckIn, undoCrash } from '@/features/checkins/checkins'
 import { profileRepoFor } from '@/features/profile/queries'
 import { addTasks } from '@/features/tasks/tasks'
 import type { DataSource } from '@/lib/dataSource'
@@ -24,6 +25,8 @@ async function setUp() {
 }
 
 const planned = () => demoDb.list('plan_blocks').filter((block) => block.status === 'planned')
+const total = (blocks: { planned_minutes: number }[]) => blocks.reduce((sum, block) => sum + block.planned_minutes, 0)
+const isRealWork = (block: { kind: string }) => block.kind === 'learn' || block.kind === 'task'
 const minutesFor = (topicTitle: string) => {
   const topic = demoDb.list('topics').find((row) => row.title === topicTitle)
   return planned()
@@ -100,5 +103,70 @@ describe('making and saving the plan (Demo Mode)', () => {
     expect(result.plannedFrom).toBe('2026-11-04')
     expect((await listBlocks(DEMO, '2026-11-03', '2026-11-03')).map((block) => block.id)).toEqual(tuesdayIds)
     expect((await listBlocks(DEMO, '2026-11-04', '2026-11-04')).every((block) => block.plan_version === result.version)).toBe(true)
+  })
+})
+
+describe('the plan after a check-in (Demo Mode)', () => {
+  it('"I Crashed" shrinks today to the top block (≤ 30 min) and reviews (≤ 15 min); the rest moves to the next days', async () => {
+    await setUp()
+    const replanAtEight = () => replan(DEMO, { from: 'now', now: at(MONDAY, '08:00') })
+    await replanAtEight()
+    const normal = planned()
+    const onMonday = (blocks: typeof normal) => blocks.filter((block) => block.date === MONDAY)
+    const realWorkLater = (blocks: typeof normal) => total(blocks.filter((block) => block.date > MONDAY && isRealWork(block)))
+    expect(total(onMonday(normal).filter(isRealWork))).toBeGreaterThan(30)
+
+    await crashToday(DEMO, at(MONDAY, '08:00'))
+    await replanAtEight()
+    const minimum = onMonday(planned())
+    expect(total(minimum.filter(isRealWork))).toBeGreaterThan(0)
+    expect(total(minimum.filter(isRealWork))).toBeLessThanOrEqual(30)
+    expect(total(minimum.filter((block) => block.kind === 'review'))).toBeLessThanOrEqual(15)
+    expect(minimum.every((block) => isRealWork(block) || block.kind === 'review')).toBe(true) // no general Hustle/Life time
+    expect(realWorkLater(planned())).toBeGreaterThan(realWorkLater(normal))
+
+    // Undo: today gets its normal plan back.
+    await undoCrash(DEMO, MONDAY)
+    await replanAtEight()
+    expect(onMonday(planned()).map((block) => [block.title, block.start_at])).toEqual(onMonday(normal).map((block) => [block.title, block.start_at]))
+  })
+
+  it('the evening check-in ends the day: unmarked blocks are missed and their work is planned once, from tomorrow', async () => {
+    await setUp()
+    await addTasks(DEMO, [{ title: 'Essay', area: 'academics', due_at: localToIso('2026-11-05', 17 * 60), est_minutes: 120 }])
+    await replan(DEMO, { from: 'now', now: at(MONDAY, '08:00') })
+    const essay = () => planned().filter((block) => block.title === 'Essay')
+    expect(total(essay())).toBe(120)
+
+    // An early check-in where nothing was done: every block of today counts as missed.
+    const today = await listBlocks(DEMO, MONDAY, MONDAY)
+    await saveEveningCheckIn(DEMO, {
+      date: MONDAY,
+      energy: 3,
+      mood: 3,
+      topDistraction: null,
+      outcomes: today.map((block) => ({ block, outcome: 'missed' as const })),
+      session: null,
+      now: at(MONDAY, '08:30'),
+    })
+    await replan(DEMO, { from: 'tomorrow', now: at(MONDAY, '08:30') })
+    expect(total(essay())).toBe(120)
+    expect(essay().every((block) => block.date > MONDAY)).toBe(true)
+  })
+
+  it('after 3 check-ins with energy ≤ 2, tomorrow is planned lighter (Burnout Guard)', async () => {
+    await setUp()
+    const tuesday = () => planned().filter((block) => block.date === '2026-11-03')
+    const hustleAndLife = (blocks: ReturnType<typeof tuesday>) => total(blocks.filter((block) => block.area === 'hustle' || block.area === 'life'))
+    await replan(DEMO, { from: 'tomorrow', now: at(MONDAY, '21:30') })
+    const normal = tuesday()
+
+    for (const date of ['2026-10-31', '2026-11-01', MONDAY]) {
+      await saveCheckIn(DEMO, date, { energy: 2, mood: 2, checked_in_at: at(date, '21:30').toISOString() })
+    }
+    await replan(DEMO, { from: 'tomorrow', now: at(MONDAY, '21:30') })
+    expect(total(tuesday())).toBeLessThan(total(normal))
+    // Hustle and Life fill their share of the day, so they show the 30% cut directly.
+    expect(hustleAndLife(tuesday())).toBeLessThanOrEqual(Math.ceil(hustleAndLife(normal) * 0.75))
   })
 })
