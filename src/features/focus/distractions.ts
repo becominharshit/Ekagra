@@ -26,6 +26,17 @@ export async function logDistraction(source: DataSource, { sessionId, reason, at
   if (error) throw dbError(error)
 }
 
+/** FocusGuard (Android) covered a blocked app: saved as kind blocked_open, for the weekly stats. */
+export async function logBlockedOpen(source: DataSource, { packageName, at, sessionId }: { packageName: string; at: Date; sessionId: string | null }): Promise<void> {
+  const row = { kind: 'blocked_open', focus_session_id: sessionId, app_package: packageName.slice(0, 200), at: at.toISOString() }
+  if (source.kind === 'demo') {
+    demoDb.insert('distraction_events', [row])
+    return
+  }
+  const { error } = await source.client.from('distraction_events').insert(row)
+  if (error) throw dbError(error)
+}
+
 /** Distraction events from `since` (an ISO timestamp) on, oldest first. */
 export async function listDistractions(source: DataSource, since: string): Promise<DistractionEvent[]> {
   if (source.kind === 'demo') return demoDb.list('distraction_events').filter((row) => Date.parse(row.at) >= Date.parse(since)).sort(byTime)

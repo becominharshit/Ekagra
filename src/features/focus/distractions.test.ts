@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { DataSource } from '@/lib/dataSource'
 import { demoDb } from '@/lib/demoDb'
 import { stubLocalStorage } from '@/test/memoryStorage'
-import { listDistractions, logDistraction, topReason } from './distractions'
+import { listDistractions, logBlockedOpen, logDistraction, topReason } from './distractions'
 
 stubLocalStorage()
 
@@ -17,6 +17,11 @@ describe('"I got distracted" (Demo Mode)', () => {
     expect(demoDb.list('distraction_events')[0]).toMatchObject({ kind: 'self_report', focus_session_id: 'f1', reason: 'Phone or social media', at: at('09:10').toISOString() })
     expect((await listDistractions(DEMO, at('12:00').toISOString())).map((event) => event.reason)).toEqual(['Noise or people'])
     expect(await listDistractions(DEMO, at('00:00').toISOString())).toHaveLength(2)
+  })
+
+  it('saves blocked apps FocusGuard covered (Android) as blocked_open', async () => {
+    await logBlockedOpen(DEMO, { packageName: 'com.instagram.android', at: at('15:05'), sessionId: null })
+    expect(demoDb.list('distraction_events')).toEqual([expect.objectContaining({ kind: 'blocked_open', app_package: 'com.instagram.android', reason: null, at: at('15:05').toISOString() })])
   })
 })
 

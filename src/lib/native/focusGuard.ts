@@ -1,4 +1,4 @@
-import { Capacitor, registerPlugin } from '@capacitor/core'
+import { Capacitor, registerPlugin, type PluginListenerHandle } from '@capacitor/core'
 
 // FocusGuard: the Kotlin app blocker in the Android app (android/app/src/main/java/app/ekagra/
 // student/focusguard/, docs/2-technical-design.md §11). Screens use `focusGuard` below, never the
@@ -29,10 +29,36 @@ export interface LaunchableApp {
   alwaysAllowed: boolean
 }
 
+export interface StartOptions {
+  blockedPackages: string[]
+  /** When blocking ends (epoch milliseconds); FocusGuard stops by itself then. */
+  endsAt: number
+  /** Shown on the blocker screen and in the notification. */
+  title: string
+  emergencyUnlocksLeft: number
+}
+
+export type GuardEventType = 'blockedAppOpened' | 'emergencyUnlock'
+
+/** What FocusGuard saw: a blocked app was opened, or an emergency unlock was asked for on the blocker screen. */
+export interface GuardEvent {
+  type: GuardEventType
+  packageName: string
+  label: string
+  /** Epoch milliseconds. */
+  at: number
+}
+
 interface FocusGuardPlugin {
   checkPermissions(): Promise<PermissionStatus>
   openPermissionSettings(options: { type: SettingsScreen }): Promise<void>
   listLaunchableApps(): Promise<{ apps: LaunchableApp[] }>
+  start(options: StartOptions): Promise<void>
+  stop(): Promise<void>
+  unlock(options: { minutes: number }): Promise<{ unlockUntil: number }>
+  getStatus(): Promise<{ running: boolean; endsAt: number; unlockUntil: number }>
+  takeEvents(): Promise<{ events: GuardEvent[] }>
+  addListener(eventName: GuardEventType, listener: (event: Omit<GuardEvent, 'type'>) => void): Promise<PluginListenerHandle>
 }
 
 const plugin = registerPlugin<FocusGuardPlugin>('FocusGuard')
@@ -69,5 +95,28 @@ export const focusGuard = {
   },
   async listLaunchableApps(): Promise<LaunchableApp[]> {
     return focusGuardAvailable() ? (await plugin.listLaunchableApps()).apps : EXAMPLE_APPS
+  },
+  /** Starts blocking, or updates the running session. */
+  async start(options: StartOptions): Promise<void> {
+    if (focusGuardAvailable()) await plugin.start(options)
+  },
+  async stop(): Promise<void> {
+    if (focusGuardAvailable()) await plugin.stop()
+  },
+  /** An emergency unlock (a passed Academic Tollbooth): blocked apps open for a few minutes. */
+  async unlock(minutes: number): Promise<void> {
+    if (focusGuardAvailable()) await plugin.unlock({ minutes })
+  },
+  /** The events FocusGuard saw that the app hasn't picked up yet (they're kept while the app is closed). */
+  async takeEvents(): Promise<GuardEvent[]> {
+    return focusGuardAvailable() ? (await plugin.takeEvents()).events : []
+  },
+  /** Calls `listener` when FocusGuard has news while the app runs. Returns a function that stops listening. */
+  onEvent(listener: () => void): () => void {
+    if (!focusGuardAvailable()) return () => undefined
+    const handles = [plugin.addListener('blockedAppOpened', listener), plugin.addListener('emergencyUnlock', listener)]
+    return () => {
+      for (const handle of handles) void handle.then((listening) => listening.remove())
+    }
   },
 }

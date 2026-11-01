@@ -14,10 +14,13 @@ import { useProfile } from '@/features/profile/queries'
 import { readSettings } from '@/features/profile/settings'
 import { useTodayMutation } from '@/features/today/todayMutation'
 import { WorkLink } from '@/features/today/WorkLink'
+import { focusGuardAvailable } from '@/lib/native/focusGuard'
 import { cn } from '@/lib/utils'
+import { blockedPackages, useBlockedApps } from './blockedApps'
 import { DistractionButton } from './DistractionButton'
 import { useDistractions } from './distractions'
 import { useFocusStore, useFocusTimer } from './focusStore'
+import { readyToBlock, usePermissionStatus } from './guard'
 import { guardsSession } from './idleGuard'
 import { finishBlock, finishSession, sessionTitle, stopFocus, toFocusMode, type FocusSession } from './sessions'
 import { clockLabel, phaseLabel, TIMER_LABEL } from './timer'
@@ -41,6 +44,8 @@ export function RunningFocus({ session }: { session: FocusSession }) {
   const guarded = guardsSession(session, readSettings(profile.data?.settings).focus.idleCheck, idleOff)
   const distractions = useDistractions(session.started_at)
   const [lastNoted, setLastNoted] = useState<string | null>(null)
+  const permissions = usePermissionStatus()
+  const blockedApps = useBlockedApps()
   const navigate = useNavigate()
   const finish = useTodayMutation(finishBlock)
   const finishOwn = useTodayMutation(finishSession)
@@ -61,6 +66,15 @@ export function RunningFocus({ session }: { session: FocusSession }) {
   const planned = Math.round(view.plannedFocus / 60)
   const percent = view.plannedFocus > 0 ? Math.round((view.focused / view.plannedFocus) * 100) : 0
   const noted = (distractions.data ?? []).filter((event) => event.focus_session_id === session.id && event.kind === 'self_report').length
+  // Android: whether FocusGuard blocks apps during this session.
+  const picked = blockedPackages(blockedApps.data ?? []).length
+  const guardReady = permissions.data !== undefined && readyToBlock(permissions.data)
+  let blocking: string | null = null
+  if (focusGuardAvailable() && permissions.data && blockedApps.data) {
+    if (picked === 0) blocking = 'No apps are blocked yet.'
+    else if (!guardReady) blocking = 'App blocking is off: FocusGuard needs two permissions.'
+    else blocking = `${picked} ${picked === 1 ? 'app is' : 'apps are'} blocked until the session ends.`
+  }
   /** Reading a book or writing on paper: the idle guard stays off for this session (an idle pause ends). */
   const awayFromScreen = () => {
     if (view.idle) resume(session.id, new Date())
@@ -193,6 +207,14 @@ export function RunningFocus({ session }: { session: FocusSession }) {
           </p>
         )}
         <div className="grid justify-items-center gap-1 border-t pt-3 text-center text-xs text-muted-foreground">
+          {blocking && (
+            <p>
+              {blocking}{' '}
+              <Link to="/me/focus" className="underline underline-offset-4 hover:text-foreground">
+                {picked > 0 && guardReady ? 'Change' : 'Set it up'}
+              </Link>
+            </p>
+          )}
           {pass && Date.parse(pass.until) > now.getTime() && (
             <p>
               Emergency unlock: {pass.app ?? 'blocked apps'} open until {format(new Date(pass.until), 'HH:mm')}

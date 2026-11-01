@@ -28,17 +28,93 @@ import com.getcapacitor.annotation.CapacitorPlugin
 import com.getcapacitor.annotation.Permission
 import com.getcapacitor.annotation.PermissionCallback
 import java.io.ByteArrayOutputStream
+import org.json.JSONException
 
 /**
  * FocusGuard: blocks the apps the student picked during focus (docs/2-technical-design.md §11).
- * This part: the permissions it needs and the list of apps to pick from. The web app calls it
- * through src/lib/native/focusGuard.ts. Capacitor runs these methods off the main thread.
+ * The web app calls it through src/lib/native/focusGuard.ts: permissions, the apps to pick from,
+ * start/stop/unlock (the blocking itself is FocusGuardService) and the events it queued.
+ * Capacitor runs these methods off the main thread.
  */
 @CapacitorPlugin(
     name = "FocusGuard",
     permissions = [Permission(strings = [Manifest.permission.POST_NOTIFICATIONS], alias = "notifications")],
 )
 class FocusGuardPlugin : Plugin() {
+
+    override fun load() {
+        active = this
+    }
+
+    override fun handleOnDestroy() {
+        if (active === this) active = null
+        super.handleOnDestroy()
+    }
+
+    /** Starts blocking, or updates a running session: which apps, until when, the title and the unlocks left. */
+    @PluginMethod
+    fun start(call: PluginCall) {
+        if (!hasUsageAccess(context) || !Settings.canDrawOverlays(context)) {
+            call.reject("FocusGuard needs usage access and display over other apps. Turn them on in Me → Focus and app blocking.", "NOT_READY")
+            return
+        }
+        val endsAt = call.getLong("endsAt")
+        if (endsAt == null || endsAt <= System.currentTimeMillis()) {
+            call.reject("endsAt must be in the future.")
+            return
+        }
+        val packages = try {
+            call.getArray("blockedPackages")?.toList<String>().orEmpty()
+        } catch (broken: JSONException) {
+            emptyList()
+        }
+        // An emergency unlock still running carries over when the session is only updated.
+        val unlockUntil = GuardStore.load(context)?.unlockUntil ?: 0L
+        GuardStore.save(context, GuardSession(packages.toSet(), endsAt, call.getString("title") ?: "Focus", call.getInt("emergencyUnlocksLeft") ?: 0, unlockUntil))
+        FocusGuardService.start(context)
+        call.resolve()
+    }
+
+    @PluginMethod
+    fun stop(call: PluginCall) {
+        GuardStore.clear(context)
+        FocusGuardService.stop(context)
+        call.resolve()
+    }
+
+    /** An emergency unlock (a passed Academic Tollbooth): blocked apps open for a few minutes. */
+    @PluginMethod
+    fun unlock(call: PluginCall) {
+        val minutes = (call.getInt("minutes") ?: 3).coerceIn(1, 15)
+        val until = System.currentTimeMillis() + minutes * 60_000L
+        if (GuardStore.load(context) != null) GuardStore.setUnlockUntil(context, until)
+        val result = JSObject()
+        result.put("unlockUntil", until)
+        call.resolve(result)
+    }
+
+    @PluginMethod
+    fun getStatus(call: PluginCall) {
+        val session = GuardStore.load(context)
+        val result = JSObject()
+        result.put("running", session != null && System.currentTimeMillis() < session.endsAt)
+        result.put("endsAt", session?.endsAt ?: 0L)
+        result.put("unlockUntil", session?.unlockUntil ?: 0L)
+        call.resolve(result)
+    }
+
+    /** The events the web app hasn't picked up yet (blocked apps opened, emergency unlocks asked for), oldest first. */
+    @PluginMethod
+    fun takeEvents(call: PluginCall) {
+        val result = JSObject()
+        result.put("events", JSArray(GuardStore.takeEvents(context).toString()))
+        call.resolve(result)
+    }
+
+    /** Tells the web app at once, when it is running, that an event is waiting. */
+    fun emitToWeb(name: String, data: JSObject) {
+        notifyListeners(name, data)
+    }
 
     /** Which permissions are on, and the phone's maker (for the battery guide). */
     @PluginMethod
@@ -152,15 +228,25 @@ class FocusGuardPlugin : Plugin() {
     }
 
     companion object {
+        /** The plugin of the running app, if any (the service tells the web app through it). */
+        @Volatile
+        private var active: FocusGuardPlugin? = null
+
+        /** Called by the service; the event itself is queued in GuardStore, so nothing is lost while the app is closed. */
+        fun emit(name: String, packageName: String, label: String, at: Long) {
+            val data = JSObject()
+            data.put("packageName", packageName)
+            data.put("label", label)
+            data.put("at", at)
+            active?.emitToWeb(name, data)
+        }
+
         /** Usage access: lets FocusGuard see which app is on the screen. Turned on by the student in Settings. */
         fun hasUsageAccess(context: Context): Boolean {
             val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
-            val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                appOps.unsafeCheckOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), context.packageName)
-            } else {
-                @Suppress("DEPRECATION")
-                appOps.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), context.packageName)
-            }
+            // Android 10–15 preferred unsafeCheckOpNoThrow; Android 16 prefers this one again. Both work everywhere.
+            @Suppress("DEPRECATION")
+            val mode = appOps.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), context.packageName)
             if (mode == AppOpsManager.MODE_DEFAULT) {
                 return context.checkCallingOrSelfPermission(Manifest.permission.PACKAGE_USAGE_STATS) == PackageManager.PERMISSION_GRANTED
             }

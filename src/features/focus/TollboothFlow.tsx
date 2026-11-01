@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import { Capacitor } from '@capacitor/core'
 import { useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { Check, LoaderCircle, NotebookPen, ShieldCheck, X } from 'lucide-react'
@@ -16,6 +15,7 @@ import { useProfile } from '@/features/profile/queries'
 import { readSettings } from '@/features/profile/settings'
 import { useNow } from '@/hooks/useNow'
 import { useDataSource } from '@/lib/dataSource'
+import { focusGuard, focusGuardAvailable } from '@/lib/native/focusGuard'
 import { distractionsKey, useDistractions } from './distractions'
 import { useFocusStore } from './focusStore'
 import { useActiveFocus } from './sessions'
@@ -102,6 +102,8 @@ export function TollboothFlow({ appPackage, appLabel }: { appPackage: string | n
         onSuccess: (until) => {
           if (!until) return
           setPass({ until, app: appLabel })
+          // Android: FocusGuard lets blocked apps open for these minutes.
+          void focusGuard.unlock(settings.unlockMinutes)
           setStep({ kind: 'unlocked', until })
         },
       },
@@ -293,7 +295,7 @@ export function TollboothFlow({ appPackage, appLabel }: { appPackage: string | n
             : `No emergency unlocks left today (${status.used} of ${settings.dailyLimit} used). The block stays until the session ends.`}
         </p>
         {status.wait > 0 && status.left > 0 && <p className="text-sm text-amber-700 dark:text-amber-400">After a wrong answer, wait {status.wait} s before trying again.</p>}
-        {!Capacitor.isNativePlatform() && (
+        {!focusGuardAvailable() && (
           <p className="text-xs text-muted-foreground">Apps are only blocked in the Android app. Here the Tollbooth is practice, but an unlock still counts for today.</p>
         )}
         <div className="flex flex-wrap gap-2">

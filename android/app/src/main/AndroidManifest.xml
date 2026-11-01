@@ -33,7 +33,35 @@
                 <data android:scheme="ekagra" android:host="auth" />
             </intent-filter>
 
+            <!-- FocusGuard's blocker screen opens the focus screens: ekagra://focus (Back to study) and
+                 ekagra://focus/tollbooth?app=…&label=… (Emergency unlock). See src/features/focus/guardPlan.ts. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="ekagra" android:host="focus" />
+            </intent-filter>
+
         </activity>
+
+        <!-- FocusGuard: checks which app is on the screen during a focus session and covers blocked ones. -->
+        <service
+            android:name=".focusguard.FocusGuardService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="App blocker: while the student runs a focus session, the apps they picked are covered by a page that sends them back to studying." />
+        </service>
+
+        <!-- Blocking goes on after a restart (or an app update) in the middle of a session. -->
+        <receiver
+            android:name=".focusguard.BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
 
         <provider
             android:name="androidx.core.content.FileProvider"
@@ -56,6 +84,9 @@
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!-- Android 11+ only shows other apps to apps that ask: FocusGuard lists the ones with a launcher icon. -->
     <queries>
