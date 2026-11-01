@@ -18,7 +18,6 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { signOut } from '@/features/auth/auth'
 import { useAuthStore } from '@/features/auth/authStore'
-import { ModeSimulator } from '@/features/mode/ModeSimulator'
 import { useProfile, useResetDemoData, useRoutine } from '@/features/profile/queries'
 import {
   CHRONOTYPE_LABEL,
@@ -38,7 +37,6 @@ export function MePage() {
       <div className="grid gap-4">
         <AccountCard />
         <PlanSettingsCard />
-        <ModeSimulator />
 
         <Card>
           <CardHeader>

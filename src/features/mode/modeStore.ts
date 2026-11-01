@@ -1,16 +1,10 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { ModeSwitchEvent, ScheduledBlock } from './modes'
 
 interface ModeState {
-  /** The plan block for right now. Set by the Mode Simulator until the planner exists (Milestone 4). */
-  block: ScheduledBlock | null
-  /** Blocks where you already confirmed a switch, so the warning doesn't repeat. */
+  /** Blocks where you already confirmed a switch, so the warning doesn't repeat during that block. */
   acknowledgedBlockIds: string[]
-  /** Confirmed switches, newest first. Milestone 4 saves these to the database. */
-  switchLog: ModeSwitchEvent[]
-  setBlock: (block: ScheduledBlock | null) => void
-  recordSwitch: (event: ModeSwitchEvent) => void
+  acknowledge: (blockId: string) => void
 }
 
 // Zustand = a small shared "box" of state that any component can read.
@@ -18,16 +12,15 @@ interface ModeState {
 export const useModeStore = create<ModeState>()(
   persist(
     (set) => ({
-      block: null,
       acknowledgedBlockIds: [],
-      switchLog: [],
-      setBlock: (block) => set({ block }),
-      recordSwitch: (event) =>
-        set((state) => ({
-          acknowledgedBlockIds: [...state.acknowledgedBlockIds, event.blockId].slice(-20),
-          switchLog: [event, ...state.switchLog].slice(0, 50),
-        })),
+      acknowledge: (blockId) => set((state) => ({ acknowledgedBlockIds: [...state.acknowledgedBlockIds, blockId].slice(-20) })),
     }),
-    { name: 'sma-mode' },
+    {
+      name: 'sma-mode',
+      partialize: (state) => ({ acknowledgedBlockIds: state.acknowledgedBlockIds }),
+      // Version 0 also kept the Mode Simulator's block and a switch log on the device; they're gone.
+      version: 1,
+      migrate: () => ({ acknowledgedBlockIds: [] }),
+    },
   ),
 )

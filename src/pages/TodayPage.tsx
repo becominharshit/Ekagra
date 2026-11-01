@@ -2,10 +2,9 @@ import { format } from 'date-fns'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { activeBlock, MODE_LABEL } from '@/features/mode/modes'
-import { useModeStore } from '@/features/mode/modeStore'
+import { useCurrentBlock } from '@/features/mode/currentBlock'
+import { MODE_LABEL } from '@/features/mode/modes'
 import { DayTimeline } from '@/features/planner/DayTimeline'
-import { useNow } from '@/hooks/useNow'
 
 const COMING = [
   { title: 'Now card with Start Focus, Done, Partial and Skip', when: 'M4' },
@@ -16,11 +15,7 @@ const COMING = [
 ]
 
 export function TodayPage() {
-  const now = useNow()
-  const block = activeBlock(
-    useModeStore((state) => state.block),
-    now,
-  )
+  const { block, now } = useCurrentBlock()
 
   return (
     <>

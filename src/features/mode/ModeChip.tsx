@@ -1,10 +1,9 @@
 import { format } from 'date-fns'
 import { BookOpen, Coffee, HeartPulse, Rocket, type LucideIcon } from 'lucide-react'
 import { Link } from 'react-router'
-import { useNow } from '@/hooks/useNow'
 import { cn } from '@/lib/utils'
-import { activeBlock, MODE_LABEL, MODE_TONE, type Mode } from './modes'
-import { useModeStore } from './modeStore'
+import { useCurrentBlock } from './currentBlock'
+import { MODE_LABEL, MODE_TONE, type Mode } from './modes'
 
 const MODE_ICON: Record<Mode, LucideIcon> = {
   study: BookOpen,
@@ -15,11 +14,7 @@ const MODE_ICON: Record<Mode, LucideIcon> = {
 
 /** The chip in the top bar: what your plan says right now, e.g. "Study · until 6:00 PM". */
 export function ModeChip() {
-  const now = useNow()
-  const block = activeBlock(
-    useModeStore((state) => state.block),
-    now,
-  )
+  const { block } = useCurrentBlock()
   const mode: Mode = block?.mode ?? 'free'
   const Icon = MODE_ICON[mode]
   const until = block ? format(new Date(block.endsAt), 'h:mm a') : null

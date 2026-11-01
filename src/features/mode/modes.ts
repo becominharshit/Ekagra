@@ -5,8 +5,7 @@
 export type Mode = 'study' | 'hustle' | 'life' | 'free'
 export type Section = 'today' | 'academics' | 'hustle' | 'life' | 'me'
 
-/** One block of the plan, e.g. "DBMS revision, 4–5 PM, Study".
- *  Until the planner exists (Milestone 4) the Mode Simulator on the Me tab creates these. */
+/** One block of the plan, e.g. "DBMS revision, 4–5 PM, Study" (made from a saved plan block, see currentBlock.ts). */
 export interface ScheduledBlock {
   id: string
   mode: Exclude<Mode, 'free'>
@@ -100,8 +99,7 @@ export const SWITCH_REASONS: readonly { value: SwitchReason; label: string }[] =
   { value: 'other', label: 'Other' },
 ]
 
-/** A confirmed switch. Kept on the device for now; Milestone 4 saves it to the
- *  distraction_events table (kind = 'mode_switch', from_mode, to_mode, reason). */
+/** A confirmed switch, saved to distraction_events (kind = 'mode_switch', from_mode, to_mode, reason). */
 export interface ModeSwitchEvent {
   blockId: string
   fromMode: Mode
