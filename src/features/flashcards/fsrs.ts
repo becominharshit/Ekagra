@@ -1,7 +1,4 @@
-import { format } from 'date-fns'
 import type { DefaultScheduler } from 'ts-fsrs'
-import { addDays } from '@/features/planner/time'
-import type { LocalDate } from '@/features/planner/types'
 import type { Json, Tables } from '@/types/database'
 
 // Spaced repetition with FSRS (the ts-fsrs library): every review moves a card's next due date so
@@ -60,6 +57,11 @@ export function isNew(card: Pick<Flashcard, 'fsrs'>): boolean {
 
 function stateOf(card: Pick<Flashcard, 'fsrs'>): number {
   return isRecord(card.fsrs) && typeof card.fsrs.state === 'number' ? card.fsrs.state : CARD_STATE.new
+}
+
+/** "Again" on a card that was already learned: it was forgotten. (Again while learning is normal.) */
+export function isLapse(card: Pick<Flashcard, 'fsrs'>, grade: Grade): boolean {
+  return grade === 1 && stateOf(card) === CARD_STATE.review
 }
 
 export interface ReviewOutcome {
@@ -135,39 +137,4 @@ export function reviewQueue(cards: Flashcard[], now: Date, newLeftToday: number,
     .filter((card) => due(card) > now.getTime() && due(card) <= now.getTime() + LEARN_AHEAD_MS)
     .sort(byDue)
   return [...learningNow, ...reviews.sort(byDue), ...fresh, ...learningSoon]
-}
-
-/** About 12 seconds per card. */
-const SECONDS_PER_CARD = 12
-
-/**
- * Review minutes per day for the planner: cards due that day (today also gets overdue ones),
- * and new cards spread over the days at the daily limit. Rounded up to 5 minutes, like the
- * plan's other blocks.
- */
-export function reviewMinutesByDay(
-  cards: Flashcard[],
-  today: LocalDate,
-  days: number,
-  newPerDay: number,
-  localDate: (iso: string) => LocalDate = (iso) => format(new Date(iso), 'yyyy-MM-dd'),
-): Record<LocalDate, number> {
-  const active = cards.filter((card) => !card.suspended)
-  let newLeft = active.filter((card) => isNew(card)).length
-  const counts = new Map<LocalDate, number>()
-  for (const card of active) {
-    if (isNew(card)) continue
-    const day = localDate(card.due_at)
-    const key = day < today ? today : day
-    counts.set(key, (counts.get(key) ?? 0) + 1)
-  }
-  const minutes: Record<LocalDate, number> = {}
-  for (let index = 0; index < days; index++) {
-    const date = addDays(today, index)
-    const fresh = Math.min(newPerDay, newLeft)
-    newLeft -= fresh
-    const total = (counts.get(date) ?? 0) + fresh
-    if (total > 0) minutes[date] = Math.ceil((total * SECONDS_PER_CARD) / 60 / 5) * 5
-  }
-  return minutes
 }

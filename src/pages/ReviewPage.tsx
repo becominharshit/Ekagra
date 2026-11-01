@@ -18,6 +18,7 @@ import {
   GRADE_LABEL,
   GRADES,
   intervalLabel,
+  isLapse,
   isNew,
   previewIntervals,
   type Flashcard,
@@ -160,6 +161,9 @@ function Session({ cards, reviewsToday, scheduler, newPerDay, now }: SessionProp
           <Eye aria-hidden />
           Show answer
         </Button>
+      )}
+      {showingAnswer && isLapse(card, 1) && (
+        <p className="text-xs text-muted-foreground">You had learned this card: Again also puts it in your mistake notebook.</p>
       )}
       {review.error && (
         <p role="alert" className="text-sm text-destructive">

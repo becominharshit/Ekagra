@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useFlashcards } from '@/features/flashcards/flashcards'
-import { reviewMinutesByDay } from '@/features/flashcards/fsrs'
+import { useMistakes } from '@/features/mistakes/mistakes'
 import { MODE_TONE, type Mode } from '@/features/mode/modes'
 import { toPlannerRoutine } from '@/features/onboarding/routineDraft'
 import { useProfile, useRoutine } from '@/features/profile/queries'
@@ -12,6 +12,7 @@ import { plannerSettingsFor, readSettings, toChronotype } from '@/features/profi
 import { useNow } from '@/hooks/useNow'
 import { cn } from '@/lib/utils'
 import { buildPlan, minutesByArea, plannedMinutes } from './planner'
+import { reviewMinutesByDay } from './reviewLoad'
 import { useStudyData } from './studyData'
 import { formatTime } from './time'
 import type { Area } from './types'
@@ -36,6 +37,7 @@ export function PlanPreview() {
   const routine = useRoutine()
   const study = useStudyData()
   const cards = useFlashcards()
+  const mistakes = useMistakes()
   const [showTomorrow, setShowTomorrow] = useState(false)
 
   const today = format(now, 'yyyy-MM-dd')
@@ -53,12 +55,18 @@ export function PlanPreview() {
       subjects: study.data.subjects,
       topics: study.data.topics,
       tasks: [],
-      // Flashcards due each day (and new ones at the daily limit) become a review block.
-      reviewMinutes: cards.data ? reviewMinutesByDay(cards.data, today, 14, settings.learning.newCardsPerDay) : undefined,
+      // Flashcards and mistakes due each day (and new cards at the daily limit) become a review block.
+      reviewMinutes: reviewMinutesByDay({
+        cards: cards.data ?? [],
+        mistakes: mistakes.data ?? [],
+        today,
+        days: 14,
+        newCardsPerDay: settings.learning.newCardsPerDay,
+      }),
       checkIns: [],
       settings: plannerSettingsFor(settings, chronotype),
     })
-  }, [profile.data, routine.data, study.data, cards.data, today, nowMinute])
+  }, [profile.data, routine.data, study.data, cards.data, mistakes.data, today, nowMinute])
 
   if (!plan) return null
   const hasTopics = (study.data?.topics.length ?? 0) > 0

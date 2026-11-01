@@ -5,8 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { leafTopics } from '@/features/academics/pastPapers'
-import { useStudy } from '@/features/academics/roadmap'
+import { useTopicChoices } from '@/features/academics/roadmap'
 import { useAcademicsMutation } from '@/features/academics/subjects'
 import { addCards, updateCard } from './flashcards'
 import type { Flashcard } from './fsrs'
@@ -33,7 +32,7 @@ export function FlashcardDialog({ open, onOpenChange, card }: FlashcardDialogPro
 }
 
 function CardForm({ card, onDone }: { card: Flashcard | null; onDone: () => void }) {
-  const study = useStudy()
+  const topics = useTopicChoices()
   const [front, setFront] = useState(card?.front ?? '')
   const [back, setBack] = useState(card?.back ?? '')
   const [topicId, setTopicId] = useState(card?.topic_id ?? NO_TOPIC)
@@ -44,13 +43,6 @@ function CardForm({ card, onDone }: { card: Flashcard | null; onDone: () => void
     if (card) await updateCard(source, { id: card.id, patch: values })
     else await addCards(source, [{ ...values, source: 'manual' }])
   })
-
-  const topics = (study.data?.subjects ?? []).flatMap((subject) =>
-    leafTopics(study.data?.topics.filter((topic) => topic.subject_id === subject.id) ?? []).map((topic) => ({
-      id: topic.id,
-      label: `${subject.code ?? subject.name}: ${topic.title}`,
-    })),
-  )
 
   /** `next`: keep the dialog open for another card (same topic). */
   function submit(next: boolean) {

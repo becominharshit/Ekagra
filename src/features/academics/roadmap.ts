@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { dbError, need, useDataSource, type DataSource } from '@/lib/dataSource'
 import { demoDb } from '@/lib/demoDb'
 import type { TablesUpdate } from '@/types/database'
-import { priorityChanges, type Question } from './pastPapers'
+import { leafTopics, priorityChanges, type Question } from './pastPapers'
 import { academicsKey, listSubjects, type Subject } from './subjects'
 import { planSave, type DraftTree, type Roadmap, type SavePlan, type Topic, type TopicPrereq } from './topicTree'
 
@@ -138,4 +138,15 @@ export function useStudy() {
     queryFn: () => loadStudy(need(source)),
     enabled: source !== null,
   })
+}
+
+/** Every topic as a choice for a picker ("DBMS: SQL queries"), subject by subject in syllabus order. */
+export function useTopicChoices(): { id: string; label: string }[] {
+  const study = useStudy()
+  return (study.data?.subjects ?? []).flatMap((subject) =>
+    leafTopics(study.data?.topics.filter((topic) => topic.subject_id === subject.id) ?? []).map((topic) => ({
+      id: topic.id,
+      label: `${subject.code ?? subject.name}: ${topic.title}`,
+    })),
+  )
 }

@@ -4,7 +4,8 @@ import { academicsKey } from '@/features/academics/subjects'
 import { dbError, need, useDataSource, type DataSource } from '@/lib/dataSource'
 import { demoDb } from '@/lib/demoDb'
 import type { Tables, TablesInsert, TablesUpdate } from '@/types/database'
-import { CARD_STATE, reviewCard, reviewQueue, type Flashcard, type Grade, type Scheduler } from './fsrs'
+import { noteMistake } from '@/features/mistakes/mistakes'
+import { CARD_STATE, isLapse, reviewCard, reviewQueue, type Flashcard, type Grade, type Scheduler } from './fsrs'
 
 // Flashcards and their reviews, saved in Supabase or (Demo Mode) on the device.
 
@@ -87,8 +88,24 @@ export interface Review {
   now?: Date
 }
 
-/** Saves one review: the card's new FSRS state and due date, and a row in flashcard_reviews. */
-export async function recordReview(source: DataSource, { card, grade, durationMs, scheduler, now = new Date() }: Review): Promise<void> {
+/**
+ * Saves one review: the card's new FSRS state and due date, and a row in flashcard_reviews.
+ * A forgotten card (a lapse) also goes to the mistake notebook.
+ */
+export async function recordReview(source: DataSource, review: Review): Promise<void> {
+  const now = review.now ?? new Date()
+  await saveReview(source, { ...review, now })
+  const { card, grade } = review
+  if (!isLapse(card, grade)) return
+  try {
+    await noteMistake(source, { concept: card.front, correct_approach: card.back, topic_id: card.topic_id, flashcard_id: card.id }, now)
+  } catch (error) {
+    // The review itself is saved; a missing notebook entry must not undo it or block the session.
+    console.error('Could not add the forgotten card to the mistake notebook:', error)
+  }
+}
+
+async function saveReview(source: DataSource, { card, grade, durationMs, scheduler, now = new Date() }: Review): Promise<void> {
   const outcome = reviewCard(scheduler, card.fsrs, grade, now)
   const review = {
     flashcard_id: card.id,

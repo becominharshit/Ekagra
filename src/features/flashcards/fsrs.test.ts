@@ -4,10 +4,10 @@ import {
   CARD_STATE,
   dueLabel,
   intervalLabel,
+  isLapse,
   isNew,
   previewIntervals,
   reviewCard,
-  reviewMinutesByDay,
   reviewQueue,
   type Flashcard,
   type Scheduler,
@@ -133,17 +133,11 @@ describe('reviewQueue', () => {
   })
 })
 
-describe('reviewMinutesByDay', () => {
-  it('counts overdue cards today, due cards on their day, and new cards at the daily limit (in 5-minute steps)', () => {
-    const utcDay = (iso: string) => iso.slice(0, 10)
-    const cards = [
-      learned('overdue', new Date('2026-10-30T09:00:00Z')),
-      learned('due-today', new Date('2026-11-02T15:00:00Z')),
-      learned('due-in-two-days', new Date('2026-11-04T08:00:00Z')),
-      ...Array.from({ length: 70 }, (_, i) => card(`new-${i}`)),
-    ]
-    // Today: 2 reviews + 30 new = 32 cards × 12 s = 6.4 min → 10. Tomorrow: 30 new = 6 min → 10.
-    // Day 3: 1 review + the last 10 new = 2.2 min → 5. Day 4: nothing.
-    expect(reviewMinutesByDay(cards, '2026-11-02', 4, 30, utcDay)).toEqual({ '2026-11-02': 10, '2026-11-03': 10, '2026-11-04': 5 })
+describe('isLapse', () => {
+  it('only counts Again on a learned card as forgetting it', () => {
+    const due = learned('due', NOW)
+    expect(isLapse(due, 1)).toBe(true)
+    expect(isLapse(due, 3)).toBe(false)
+    expect(isLapse(card('new'), 1)).toBe(false) // still learning: Again is normal
   })
 })

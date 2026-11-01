@@ -62,6 +62,10 @@ export const router = createBrowserRouter([
             path: 'academics/cards',
             lazy: async () => ({ Component: (await import('@/pages/FlashcardsPage')).FlashcardsPage }),
           },
+          {
+            path: 'academics/mistakes',
+            lazy: async () => ({ Component: (await import('@/pages/MistakesPage')).MistakesPage }),
+          },
           { path: 'hustle', element: <HustlePage /> },
           { path: 'life', element: <LifePage /> },
           { path: 'me', element: <MePage /> },

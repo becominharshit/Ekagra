@@ -12,12 +12,11 @@ import { addSampleSubjects } from '@/features/academics/sampleSubjects'
 import { SubjectDialog } from '@/features/academics/SubjectDialog'
 import { useAcademicsMutation, useSubjects } from '@/features/academics/subjects'
 import { priorityLabels } from '@/features/academics/topicTree'
+import { PracticeCard } from '@/features/academics/PracticeCard'
 import { useAuthStore } from '@/features/auth/authStore'
-import { FlashcardsCard } from '@/features/flashcards/FlashcardsCard'
 import { useNow } from '@/hooks/useNow'
 
 const COMING = [
-  { title: 'Mistake notebook (1 → 3 → 7 days)', when: 'M3' },
   { title: 'Python Coding Lab', when: 'M3' },
   { title: 'Lessons and check quizzes', when: 'M3' },
 ]
@@ -52,7 +51,7 @@ export function AcademicsPage() {
           </Button>
         </div>
 
-        <FlashcardsCard now={now} />
+        <PracticeCard now={now} />
 
         {subjects.isPending && (
           <p className="flex items-center gap-2 text-sm text-muted-foreground">
