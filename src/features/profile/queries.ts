@@ -119,12 +119,12 @@ export function useSaveOnboarding() {
   })
 }
 
-/** Demo Mode only: deletes the demo profile and routine from this device, so setup starts again. */
+/** Demo Mode only: deletes all demo data from this device, so setup starts again. */
 export function useResetDemoData() {
   const queryClient = useQueryClient()
   return async () => {
     clearDemoData()
-    await queryClient.invalidateQueries({ queryKey: ['profile', 'demo'] })
-    await queryClient.invalidateQueries({ queryKey: ['routine', 'demo'] })
+    // Every screen reloads its data (subjects, flashcards, …), not only the profile.
+    await queryClient.invalidateQueries()
   }
 }

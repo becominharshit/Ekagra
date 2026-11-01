@@ -1,4 +1,5 @@
 import { DEMO_USER } from '@/features/auth/demo'
+import { demoDb } from '@/lib/demoDb'
 import type { ProfileRepo, ProfileRow, RoutineRow } from './queries'
 import { deviceTimezone } from './settings'
 
@@ -80,11 +81,12 @@ export const demoProfileRepo: ProfileRepo = {
   },
 }
 
-/** Deletes the demo profile and routine from this device. */
+/** Deletes all Demo Mode data from this device: the profile, the routine and every demo table. */
 export function clearDemoData(): void {
   try {
     localStorage.removeItem(STORAGE_KEY)
   } catch {
     // Storage is blocked: there is nothing saved to clear.
   }
+  demoDb.clear()
 }

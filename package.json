@@ -12,6 +12,8 @@
     "preview": "vite preview",
     "db:push": "supabase db push",
     "db:types": "supabase gen types typescript --linked --schema public > src/types/database.ts",
+    "functions:secrets": "supabase secrets set --env-file supabase/functions/.env",
+    "functions:deploy": "supabase functions deploy --use-api",
     "android": "npm run build && cap sync android && cap open android"
   },
   "dependencies": {
@@ -36,6 +38,7 @@
     "zustand": "^5.0.16"
   },
   "devDependencies": {
+    "@ai-sdk/google": "4.0.109",
     "@capacitor/cli": "^8.6.0",
     "@electric-sql/pglite": "^0.5.14",
     "@tailwindcss/vite": "^4.3.3",
@@ -43,6 +46,7 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
+    "ai": "7.0.159",
     "oxlint": "^1.89.0",
     "supabase": "^2.122.0",
     "tailwindcss": "^4.3.3",

@@ -1,32 +1,8 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
+import { stubLocalStorage } from '@/test/memoryStorage'
 import { clearDemoData, demoProfileRepo } from './localStore'
 
-/** A small stand-in for the browser's localStorage (tests run in Node, which doesn't have one). */
-function memoryStorage(): Storage {
-  const items = new Map<string, string>()
-  return {
-    get length() {
-      return items.size
-    },
-    clear: () => items.clear(),
-    getItem: (key) => items.get(key) ?? null,
-    key: (index) => [...items.keys()][index] ?? null,
-    removeItem: (key) => {
-      items.delete(key)
-    },
-    setItem: (key, value) => {
-      items.set(key, String(value))
-    },
-  }
-}
-
-beforeEach(() => {
-  vi.stubGlobal('localStorage', memoryStorage())
-})
-
-afterEach(() => {
-  vi.unstubAllGlobals()
-})
+stubLocalStorage()
 
 describe('demoProfileRepo', () => {
   it('starts with a fresh demo profile that still needs onboarding, and no routine', async () => {

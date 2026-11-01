@@ -1,4 +1,4 @@
-# Setup Guide: Supabase, Google Sign-In and Android
+# Setup Guide: Supabase, Google Sign-In, Android and AI
 
 You only need this for real accounts. **Demo Mode works without any of it**: open the app and tap **Try Demo Mode**.
 
@@ -45,7 +45,7 @@ npm run db:types
 - `login` opens your browser to allow the Supabase command-line tool.
 - `link` asks for the database password from step 1.
 - `db:push` creates every table, security rule (RLS) and storage bucket from `supabase/migrations/001_phase1_core.sql`.
-- `db:types` writes `src/types/database.ts` from your real database (it replaces the temporary hand-written file).
+- `db:types` writes `src/types/database.ts` from your real database. Run it again after every new migration.
 
 **Check:** Supabase → **Table Editor** lists tables such as `profiles`, `subjects`, `hustles`, and each one says RLS is enabled.
 
@@ -106,6 +106,21 @@ Supabase → **Authentication → URL Configuration**:
 
 After changing web code, run `npm run android` again, then press **Run ▶**.
 
+## 6. AI features (Gemini)
+
+Demo Mode never uses this: there, AI features give sample answers made on the device. Signed-in students get real answers once these steps are done.
+
+1. Get a Gemini API key at https://aistudio.google.com/apikey (**Create API key**).
+2. Copy `supabase/functions/.env.example` to `supabase/functions/.env` (it is git-ignored) and paste the key after `AI_API_KEY=`. Model names and prices are already filled in; the file links to Google's pages to check them.
+3. Send the secrets to Supabase: `npm run functions:secrets`
+4. Deploy the AI functions: `npm run functions:deploy` (no Docker needed). Run it again whenever something in `supabase/functions/` changes.
+
+**Check:** Supabase → **Edge Functions** lists the `ai-…` functions, and **Edge Functions → Secrets** lists the `AI_…` names.
+
+**Limits:** every AI request goes through `supabase/functions/_shared/ai.ts`. Each student can make `AI_USER_DAILY_REQUESTS` requests in 24 hours, and the whole app can spend at most `AI_MONTHLY_BUDGET_USD` ÷ 30 in 24 hours. Every request's tokens and cost are saved in the `ai_usage` table.
+
+**Free tier:** Google may use free-tier prompts to improve its models. Turn on billing for the key before friends upload their own material.
+
 ## Troubleshooting
 
 | What you see | What to do |
@@ -118,3 +133,6 @@ After changing web code, run `npm run android` again, then press **Run ▶**.
 | The sign-in page says Google sign-in turns on once Supabase is connected | `.env` is missing or has a typo. Fix it and restart `npm run dev` |
 | After sign-in: "The database tables don't exist yet" | Do step 2 (`npm run db:push`), then tap **Try again** |
 | Android Studio: "SDK location not found" | Open the project through `npm run android` once; Android Studio then creates `android/local.properties` |
+| "The AI features aren't on the server yet" | Deploy them: `npm run functions:deploy` (step 6) |
+| "AI is not set up on the server yet. Check these Edge Function secrets: …" | Fill in those names in `supabase/functions/.env`, then `npm run functions:secrets` (step 6) |
+| "The app's AI budget for today is used up" | Wait up to 24 hours, or raise `AI_MONTHLY_BUDGET_USD` (see the costs in the `ai_usage` table) |

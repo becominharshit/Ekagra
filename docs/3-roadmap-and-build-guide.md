@@ -7,23 +7,30 @@
 ### Phase 1: the working app
 1. **Shell and auth:** React + TypeScript + Vite + Tailwind CSS + shadcn/ui + React Router + TanStack Query + Zustand + Capacitor (Android) + Supabase (Auth + Postgres with strict RLS).
 2. **Today and the deterministic planner** (`src/features/planner/`): pure TypeScript 14-day scheduler (default budget 55% Academics, 25% Hustle, 20% Life), Now card, Minimum Day ("I Crashed" one-tap reset; missed work is spread out with at most +20% on any day), evening energy check-in (1–5 sliders).
-3. **Academics:** subject and syllabus upload → dual-track topic tree (`exam` and `skill` tracks); past-paper priority `0.45 × examWeight + 0.35 × pyqScore + 0.20 × dependentsScore`; local pdf.js viewer with 1-click **AI Anchors**; lazy topic generator (`ai-generate`: lessons, check quizzes, `ts-fsrs` flashcards); mistake notebook (1 → 3 → 7 day ladder); Python Coding Lab (CodeMirror 6 + Pyodide in a Web Worker).
+3. **Academics:** subject and syllabus upload → dual-track topic tree (`exam` and `skill` tracks); past-paper priority `0.45 × examWeight + 0.35 × pyqScore + 0.20 × dependentsScore`; local pdf.js viewer with 1-click **AI Anchors** and a page tutor ("Ask about this page"); lazy topic generator (`ai-generate`: lessons, check quizzes, `ts-fsrs` flashcards); mistake notebook (1 → 3 → 7 day ladder); Python Coding Lab (CodeMirror 6 + Pyodide in a Web Worker).
 4. **Hustle (moved up from P3):** templates (Freelancing, Content Creation, Startup, Custom; part-time work uses Custom), Kanban pipeline board, clients and transactions, automatic earnings per hour (net profit ÷ hours logged), Skill Bridge ("Learn this" creates a Skill-track course in Academics), AI screenshot/text task capture (`ai-capture`).
 5. **Focus engine and FocusGuard:** Pomodoro and Deep Work timers; mode-switch warning when switching between Academics and Hustle during a scheduled block; Kotlin FocusGuard plugin with the **Academic Tollbooth**: answer 3 rapid-fire questions from your active subject to earn a 3-minute emergency unlock. This replaces the reason-based 5-minute unlock described in docs 1 and 2.
 
 ### Phase 2: everything else
-AI tutor and material search (pgvector), YouTube lectures, weekly AI review, learning metrics and adaptive difficulty, mock tests, friends and accountability, attendance and marks, habits and the full Life section, Gmail/Calendar/Drive and the other integrations, exam season mode, strict mode, in-app feedback, the Tools app.
+the full AI tutor (chat threads and search across all your materials with pgvector; the page tutor is in Phase 1), YouTube lectures, weekly AI review, learning metrics and adaptive difficulty, mock tests, friends and accountability, attendance and marks, habits and the full Life section, Gmail/Calendar/Drive and the other integrations, exam season mode, strict mode, in-app feedback, the Tools app.
 
 ### Phase 1 milestones
 The current milestone is the first unchecked one.
 
 - [x] **M1 Foundation:** project structure, Tailwind + shadcn/ui, Phase 1 migration (`supabase/migrations/001_phase1_core.sql`) with RLS on every table and database tests (`tests/db/`), 5-tab app shell with Mode Chip and mode-switch warning (a temporary Mode Simulator on the Me tab stands in for the planner)
-- [x] **M2 Supabase, sign-in, Android:** Supabase client, Google sign-in (web + Android), Demo Mode (no account, works offline), Capacitor Android app (`app.ekagra.student`), 4-step onboarding (profile, routine, rhythm, time budget) saved to `profiles` + `routine_blocks`, 14-day planner and priority engines (unit-tested) with a plan preview on Today. **Your one-time steps:** link the Supabase project, `npm run db:push`, `npm run db:types` (docs/4-setup-guide.md)
-- [ ] **M3 Academics core:** `_shared/ai.ts` (tiers, quotas, `ai_usage`), subjects, syllabus upload → `ai-syllabus` → dual-track topic tree editor, past papers → `ai-papers` → topic priorities (formula built in M2)
+- [x] **M2 Supabase, sign-in, Android:** Supabase client, Google sign-in (web + Android), Demo Mode (no account, works offline), Capacitor Android app (`app.ekagra.student`), 4-step onboarding (profile, routine, rhythm, time budget) saved to `profiles` + `routine_blocks`, 14-day planner and priority engines (unit-tested) with a plan preview on Today. Supabase project linked, migration applied and `src/types/database.ts` generated
+- [ ] **M3 Academics (decided 2026-11-01: takes in M5–M7 and the page tutor), in 7 steps:**
+  1. AI gateway `supabase/functions/_shared/ai.ts` (Smart/Fast tiers, quotas, Zod check with one retry, `ai_usage`) and Demo Mode plumbing (`demoDb`: the same tables on the device; AI features give sample answers)
+  2. Subjects; syllabus → `ai-syllabus` → dual-track topic tree editor; past papers → `ai-papers` → topic priorities (formula built in M2)
+  3. PDF library (pdf.js, text extracted on the device), 1-click AI Anchors and the page tutor ("Ask about this page", saved as `ai_anchors` with action `ask`) through `ai-tutor`
+  4. FSRS flashcards (`ts-fsrs`) and review sessions
+  5. Mistake notebook (1 → 3 → 7 day ladder)
+  6. Python Coding Lab: CodeMirror 6 + Pyodide in a Web Worker (loaded from a CDN on first use, then cached), code problems with tests, saved snippets
+  7. Lazy lessons and 3–5 question check quizzes (`ai-generate`); wrong answers go to the mistake notebook. Full loop: lesson → check quiz → flashcards → mistakes
 - [ ] **M4 Planner and Today:** save the 14-day plan (engine built in M2), Now card, "I Crashed", evening check-in; Mode Chip driven by real plan blocks (remove the Mode Simulator); mode switches saved to `distraction_events`
-- [ ] **M5 PDF library and AI Anchors:** pdf.js viewer, on-device text extraction, 1-click anchors
-- [ ] **M6 Learn loop:** `ai-generate` lessons, check quizzes and FSRS flashcards; quiz player; mistake notebook
-- [ ] **M7 Python Coding Lab:** CodeMirror 6 + Pyodide worker, code problems with tests, saved snippets
+- ~~**M5 PDF library and AI Anchors**~~: moved into M3 (step 3)
+- ~~**M6 Learn loop**~~: moved into M3 (steps 4, 5 and 7)
+- ~~**M7 Python Coding Lab**~~: moved into M3 (step 6)
 - [ ] **M8 Hustle:** templates, Kanban, clients, transactions, time entries, earnings per hour, Skill Bridge, `ai-capture`
 - [ ] **M9 Focus engine:** timers, focus sessions (hustle sessions add time entries), FocusGuard plugin, Academic Tollbooth
 - [ ] **M10 Beta:** end-to-end polish, web deploy, APK for friends

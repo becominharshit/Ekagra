@@ -12,8 +12,9 @@ export default defineConfig({
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
   test: {
-    // src/** = app logic tests, tests/** = database (migration + RLS) tests
-    include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'tests/**/*.test.ts'],
+    // src/** = app logic tests, tests/** = database (migration + RLS) tests,
+    // supabase/functions/** = Edge Function tests (they run in Node with a fake AI model)
+    include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'tests/**/*.test.ts', 'supabase/functions/**/*.test.ts'],
     environment: 'node',
     // Starting the in-memory Postgres for the database tests can take a few seconds.
     testTimeout: 30_000,
