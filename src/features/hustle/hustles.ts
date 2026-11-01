@@ -68,6 +68,24 @@ export function stepProgress(phases: PhaseWithSteps[]): { done: number; total: n
   return { done: steps.filter((step) => step.done).length, total: steps.length }
 }
 
+/**
+ * The hustle that gets the plan's general hustle time: the active one with the nearest goal date
+ * (or, without goal dates, the one started first). Null when no hustle is active.
+ */
+export function primaryHustle<T extends Pick<Hustle, 'status' | 'goal_date' | 'created_at'>>(hustles: T[]): T | null {
+  const active = hustles.filter((hustle) => hustle.status === 'active')
+  const noDate = '9999-12-31'
+  active.sort((a, b) => (a.goal_date ?? noDate).localeCompare(b.goal_date ?? noDate) || a.created_at.localeCompare(b.created_at))
+  return active[0] ?? null
+}
+
+export async function listHustles(source: DataSource): Promise<Hustle[]> {
+  if (source.kind === 'demo') return demoDb.list('hustles')
+  const { data, error } = await source.client.from('hustles').select('*').eq('user_id', source.userId)
+  if (error) throw dbError(error)
+  return data
+}
+
 export async function loadHustlePlans(source: DataSource): Promise<HustlePlan[]> {
   if (source.kind === 'demo') return groupPlans(demoDb.list('hustles'), demoDb.list('hustle_phases'), demoDb.list('hustle_steps'))
   const { client, userId } = source
@@ -201,6 +219,16 @@ export async function deleteStep(source: DataSource, { step, phase, now = new Da
     if (error) throw dbError(error)
   }
   await refreshPhase(source, phase, now)
+}
+
+/** Just the hustles (e.g. for the planner, which only needs the main one). */
+export function useHustles() {
+  const { source, owner } = useDataSource()
+  return useQuery({
+    queryKey: [...hustlesKey(owner), 'list'],
+    queryFn: () => listHustles(need(source)),
+    enabled: source !== null,
+  })
 }
 
 export function useHustlePlans() {

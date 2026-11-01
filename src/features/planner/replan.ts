@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { loadStudy, useStudy } from '@/features/academics/roadmap'
 import { CHECK_IN_DAYS, listCheckIns, toPlannerCheckIns, useCheckIns } from '@/features/checkins/checkins'
 import { listCards } from '@/features/flashcards/flashcards'
+import { listHustles, primaryHustle, useHustles } from '@/features/hustle/hustles'
 import { listMistakes } from '@/features/mistakes/mistakes'
 import { toPlannerRoutine } from '@/features/onboarding/routineDraft'
 import { profileRepoFor, useProfile, useRoutine } from '@/features/profile/queries'
@@ -36,7 +37,7 @@ export interface ReplanResult {
 export async function replan(source: DataSource, { from, now = new Date() }: { from: ReplanFrom; now?: Date }): Promise<ReplanResult> {
   const today = localDateOf(now)
   const repo = profileRepoFor(source)
-  const [profile, routine, study, tasks, cards, mistakes, checkIns, todayBlocks, workRows, version] = await Promise.all([
+  const [profile, routine, study, tasks, cards, mistakes, checkIns, hustles, todayBlocks, workRows, version] = await Promise.all([
     repo.getProfile(),
     repo.getRoutine(),
     loadStudy(source),
@@ -44,6 +45,7 @@ export async function replan(source: DataSource, { from, now = new Date() }: { f
     listCards(source),
     listMistakes(source),
     listCheckIns(source, addDays(today, -CHECK_IN_DAYS)),
+    listHustles(source),
     listBlocks(source, today, today),
     listWorkRows(source),
     latestPlanVersion(source),
@@ -65,6 +67,7 @@ export async function replan(source: DataSource, { from, now = new Date() }: { f
     // "I Crashed" makes today a minimum day; low-energy check-ins turn on the Burnout Guard.
     checkIns: toPlannerCheckIns(checkIns),
     doneTodayBySubject: planFrom === today ? Object.fromEntries(done.todayBySubject) : undefined,
+    hustle: primaryHustle(hustles),
     settings: plannerSettingsFor(settings, toChronotype(profile.chronotype)),
   })
   const rows = planRows(plan, version + 1).filter((row) => Date.parse(row.start_at) >= start.getTime())
@@ -102,13 +105,17 @@ export function usePlanFingerprint(): string | null {
   const study = useStudy()
   const tasks = useTasks()
   const checkIns = useCheckIns(today)
-  if (!profile.data?.onboarded_at || !routine.data || !study.data || !tasks.data || !checkIns.data) return null
+  const hustles = useHustles()
+  if (!profile.data?.onboarded_at || !routine.data || !study.data || !tasks.data || !checkIns.data || !hustles.data) return null
+  const mainHustle = primaryHustle(hustles.data)
   return planFingerprint({
+    // Starting, pausing or renaming the main hustle changes the hustle blocks' names and links.
+    hustle: mainHustle ? [mainHustle.id, mainHustle.name] : null,
     // "I Crashed" (and its Undo) re-plans today. Energy isn't here: the evening check-in plans tomorrow itself.
     minimumDay: checkIns.data.some((row) => row.date === today && row.minimum_day),
     tasks: tasks.data
       .filter(isOpenTask)
-      .map((task) => [task.id, task.due_at, task.est_minutes, task.priority, task.area, task.subject_id]),
+      .map((task) => [task.id, task.due_at, task.est_minutes, task.priority, task.area, task.subject_id, task.hustle_id]),
     settings: profile.data.settings,
     chronotype: profile.data.chronotype,
     routine: routine.data.map((row) => [row.kind, row.days_of_week, row.start_time, row.end_time, row.valid_from, row.valid_to]),

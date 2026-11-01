@@ -5,15 +5,19 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { monthEarnings, perHourLabel, useAllMoney, type Earnings } from '@/features/hustle/earnings'
 import { currentPhaseIndex, stepProgress, useHustlePlans, type HustlePlan } from '@/features/hustle/hustles'
 import { HUSTLE_STATUS_LABEL, targetLabel } from '@/features/hustle/labels'
 import { NewHustleDialog, TemplateTiles } from '@/features/hustle/NewHustleDialog'
 import { ProgressBar } from '@/features/hustle/PhaseList'
 import { TEMPLATES, toHustleType, type HustleType } from '@/features/hustle/templates'
+import { useNow } from '@/hooks/useNow'
 
 /** Your hustles, each with its goal and where it stands. */
 export function HustlePage() {
   const plans = useHustlePlans()
+  const money = useAllMoney()
+  const now = useNow(60_000)
   // undefined = the dialog is closed, null = open on the list of templates.
   const [start, setStart] = useState<HustleType | null | undefined>(undefined)
   const all = plans.data ?? []
@@ -57,7 +61,19 @@ export function HustlePage() {
           </Card>
         )}
         {shown.map((plan) => (
-          <HustleCard key={plan.hustle.id} plan={plan} />
+          <HustleCard
+            key={plan.hustle.id}
+            plan={plan}
+            month={
+              money.data
+                ? monthEarnings(
+                    money.data.transactions.filter((row) => row.hustle_id === plan.hustle.id),
+                    money.data.entries.filter((row) => row.hustle_id === plan.hustle.id),
+                    now,
+                  )
+                : null
+            }
+          />
         ))}
         {archived.length > 0 && (
           <Card size="sm">
@@ -83,12 +99,13 @@ export function HustlePage() {
   )
 }
 
-function HustleCard({ plan }: { plan: HustlePlan }) {
+function HustleCard({ plan, month }: { plan: HustlePlan; month: Earnings | null }) {
   const { hustle, phases } = plan
   const progress = stepProgress(phases)
   const index = currentPhaseIndex(phases)
   const phase = phases[index]
   const target = targetLabel(hustle)
+  const hasNumbers = month !== null && (month.income > 0 || month.expense > 0 || month.minutes > 0)
   return (
     <Link to={`/hustle/${hustle.id}`} className="block rounded-xl">
       <Card className="transition-colors hover:bg-muted/40">
@@ -101,6 +118,7 @@ function HustleCard({ plan }: { plan: HustlePlan }) {
           </CardAction>
         </CardHeader>
         <CardContent className="grid gap-2">
+          {month && hasNumbers && <p className="text-sm">This month: {perHourLabel(month, hustle.currency)}</p>}
           <p className="text-sm">{phase ? `Phase ${index + 1} of ${phases.length}: ${phase.title}` : 'No phases yet'}</p>
           <ProgressBar value={progress.done} max={progress.total} label={`${hustle.name}: ${progress.done} of ${progress.total} steps done`} />
         </CardContent>

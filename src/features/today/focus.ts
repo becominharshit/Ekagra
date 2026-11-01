@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { addFocusTime } from '@/features/hustle/time'
 import { planKey } from '@/features/planner/planBlocks'
 import { blockAt, blocksAfter, type PlanBlock } from '@/features/planner/schedule'
 import { dbError, need, useDataSource, type DataSource } from '@/lib/dataSource'
@@ -110,6 +111,8 @@ export async function startFocus(source: DataSource, { block, now = new Date() }
     plan_block_id: block.id,
     area: block.area === 'hustle' || block.area === 'life' || block.area === 'personal' ? block.area : 'academics',
     subject_id: block.subject_id,
+    // A hustle block's focus time is logged for that hustle when the session ends.
+    hustle_id: block.hustle_id,
     mode: 'custom',
     started_at: now.toISOString(),
     planned_minutes: focusLength(block, now),
@@ -143,13 +146,27 @@ export async function finishBlock(
       outcome: outcome === 'missed' ? 'stopped' : outcome,
       completed: outcome === 'done',
     })
+    await logHustleTime(source, session, now)
   }
   if (outcome !== 'missed' && block.topic_id) await markTopicStarted(source, block.topic_id)
 }
 
-/** Stop: the focus session ends without a result; the block is still to do. */
+/** Time focused on a hustle block counts as hours for that hustle (earnings per hour). */
+async function logHustleTime(source: DataSource, session: FocusSession, now: Date): Promise<void> {
+  if (!session.hustle_id) return
+  await addFocusTime(source, {
+    hustleId: session.hustle_id,
+    sessionId: session.id,
+    startedAt: session.started_at,
+    endedAt: now.toISOString(),
+    minutes: focusedMinutes(session, now),
+  })
+}
+
+/** Stop: the focus session ends without a result; the block is still to do. Time spent still counts. */
 export async function stopFocus(source: DataSource, { session, now = new Date() }: { session: FocusSession; now?: Date }): Promise<void> {
   await patchSession(source, session.id, { ended_at: now.toISOString(), actual_minutes: focusedMinutes(session, now), outcome: 'stopped', completed: false })
+  await logHustleTime(source, session, now)
   const blockId = session.plan_block_id
   if (!blockId) return
   // Back to "planned", unless the block was finished some other way meanwhile.

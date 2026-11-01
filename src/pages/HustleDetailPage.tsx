@@ -13,8 +13,9 @@ import { MoneyTab } from '@/features/hustle/MoneyTab'
 import { PhaseList, ProgressBar } from '@/features/hustle/PhaseList'
 import { PipelineBoard } from '@/features/hustle/PipelineBoard'
 import { TEMPLATES, toHustleType } from '@/features/hustle/templates'
+import { TimeTab } from '@/features/hustle/TimeTab'
 
-const TABS = ['plan', 'board', 'money', 'clients'] as const
+const TABS = ['plan', 'board', 'money', 'time', 'clients'] as const
 type Tab = (typeof TABS)[number]
 
 /** One hustle: its goal, its phases with steps, and its pipeline board. */
@@ -74,6 +75,7 @@ export function HustleDetailPage() {
             <TabsTrigger value="plan">Plan</TabsTrigger>
             <TabsTrigger value="board">Board</TabsTrigger>
             <TabsTrigger value="money">Money</TabsTrigger>
+            <TabsTrigger value="time">Time</TabsTrigger>
             <TabsTrigger value="clients">{clientWord(hustle.type).many}</TabsTrigger>
           </TabsList>
           <TabsContent value="plan" className="pt-2">
@@ -84,6 +86,9 @@ export function HustleDetailPage() {
           </TabsContent>
           <TabsContent value="money" className="pt-2">
             <MoneyTab hustle={hustle} />
+          </TabsContent>
+          <TabsContent value="time" className="pt-2">
+            <TimeTab hustle={hustle} />
           </TabsContent>
           <TabsContent value="clients" className="pt-2">
             <ClientsTab hustle={hustle} />

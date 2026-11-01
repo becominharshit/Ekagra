@@ -10,6 +10,7 @@ import {
   deleteStep,
   loadHustlePlans,
   phasePatch,
+  primaryHustle,
   setStepDone,
   stepProgress,
   type HustlePlan,
@@ -111,6 +112,22 @@ describe('hustles (Demo Mode)', () => {
     const { hustle } = await startFreelancing()
     await deleteHustle(DEMO, hustle.id)
     expect([demoDb.list('hustles'), demoDb.list('hustle_phases'), demoDb.list('hustle_steps')].map((rows) => rows.length)).toEqual([0, 0, 0])
+  })
+})
+
+describe('primaryHustle', () => {
+  const hustle = (name: string, status: string, goal_date: string | null, created_at: string) => ({ name, status, goal_date, created_at })
+
+  it('is the active hustle with the nearest goal date, else the one started first', () => {
+    const hustles = [
+      hustle('vlogs', 'active', null, '2026-09-01'),
+      hustle('logos', 'active', '2027-01-31', '2026-10-01'),
+      hustle('tutoring', 'active', '2026-12-15', '2026-10-15'),
+      hustle('app', 'paused', '2026-11-30', '2026-08-01'),
+    ]
+    expect(primaryHustle(hustles)?.name).toBe('tutoring')
+    expect(primaryHustle(hustles.filter((entry) => entry.goal_date === null))?.name).toBe('vlogs')
+    expect(primaryHustle([hustle('app', 'archived', null, '2026-08-01')])).toBeNull()
   })
 })
 

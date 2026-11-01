@@ -88,6 +88,26 @@ describe('Now card actions (Demo Mode)', () => {
     expect(demoDb.get('topics', 'sql')?.status).toBe('not_started')
   })
 
+  it('focus on a hustle block logs the minutes as hours for that hustle, also when stopped early', async () => {
+    demoDb.insert('hustles', [{ id: 'logos', type: 'freelancing', name: 'Logos' }])
+    const [row] = demoDb.insert('plan_blocks', [{ ...block('logos', '14:00', '14:45', { area: 'hustle', kind: 'hustle', hustle_id: 'logos' }), id: undefined }])
+    if (!row) throw new Error('no block')
+    await startFocus(DEMO, { block: row, now: NOW })
+    const session = await loadActiveFocus(DEMO)
+    expect(session?.hustle_id).toBe('logos')
+    await finishBlock(DEMO, { block: row, outcome: 'done', session, now: new Date('2026-11-02T14:44:00') })
+    expect(demoDb.list('time_entries')).toEqual([
+      expect.objectContaining({ hustle_id: 'logos', minutes: 24, source: 'focus', focus_session_id: session?.id, started_at: session?.started_at }),
+    ])
+
+    demoDb.update('plan_blocks', row.id, { status: 'planned' })
+    await startFocus(DEMO, { block: row, now: new Date('2026-11-02T15:00:00') })
+    const again = await loadActiveFocus(DEMO)
+    if (!again) throw new Error('no focus session')
+    await stopFocus(DEMO, { session: again, now: new Date('2026-11-02T15:10:00') })
+    expect(demoDb.list('time_entries').map((entry) => entry.minutes)).toEqual([24, 10])
+  })
+
   it('Stop ends the focus session and the block is still to do', async () => {
     const row = setUp()
     await startFocus(DEMO, { block: row, now: NOW })

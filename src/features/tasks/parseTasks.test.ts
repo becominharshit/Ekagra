@@ -131,10 +131,10 @@ describe('task rules', () => {
       new Map([['essay', 45]]),
     )
     expect(planner).toEqual([
-      { id: 'essay', area: 'academics', title: 'essay', dueDate: '2026-11-06', dueMinute: 17 * 60, remainingMinutes: 75, priority: 2, subjectId: 'dbms' },
-      { id: 'chores', area: 'personal', title: 'chores', dueDate: null, dueMinute: null, remainingMinutes: 60, priority: 2, subjectId: null },
+      { id: 'essay', area: 'academics', title: 'essay', dueDate: '2026-11-06', dueMinute: 17 * 60, remainingMinutes: 75, priority: 2, subjectId: 'dbms', hustleId: null },
+      { id: 'chores', area: 'personal', title: 'chores', dueDate: null, dueMinute: null, remainingMinutes: 60, priority: 2, subjectId: null, hustleId: null },
       // 23:59 = by the end of the day: no set time.
-      { id: 'record', area: 'academics', title: 'record', dueDate: '2026-11-03', dueMinute: null, remainingMinutes: 120, priority: 2, subjectId: 'dbms' },
+      { id: 'record', area: 'academics', title: 'record', dueDate: '2026-11-03', dueMinute: null, remainingMinutes: 120, priority: 2, subjectId: 'dbms', hustleId: null },
     ])
   })
 

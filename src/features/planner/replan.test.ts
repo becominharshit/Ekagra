@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { addSampleSubjects } from '@/features/academics/sampleSubjects'
 import { defaultRoutine, routineToRows } from '@/features/onboarding/routineDraft'
 import { crashToday, saveCheckIn, saveEveningCheckIn, undoCrash } from '@/features/checkins/checkins'
+import { createHustle } from '@/features/hustle/hustles'
+import { planFromTemplate, TEMPLATES } from '@/features/hustle/templates'
 import { profileRepoFor } from '@/features/profile/queries'
 import { addTasks } from '@/features/tasks/tasks'
 import type { DataSource } from '@/lib/dataSource'
@@ -72,6 +74,27 @@ describe('making and saving the plan (Demo Mode)', () => {
     const taskBlocks = demoDb.list('plan_blocks').filter((block) => block.kind === 'task')
     expect(taskBlocks.reduce((total, block) => total + block.planned_minutes, 0)).toBe(120)
     expect(taskBlocks.every((block) => block.title === 'DBMS assignment' && block.date <= '2026-11-05')).toBe(true)
+  })
+
+  it("names the general hustle time after the main hustle, and links hustle blocks to their hustle", async () => {
+    await setUp()
+    const hustleId = await createHustle(DEMO, {
+      type: 'freelancing',
+      name: 'Logo design',
+      goal: null,
+      goalAmount: null,
+      goalDate: null,
+      currency: 'INR',
+      phases: planFromTemplate(TEMPLATES.freelancing, 'Logo design'),
+      stages: TEMPLATES.freelancing.stages,
+    })
+    await addTasks(DEMO, [{ title: 'Send 5 proposals', area: 'hustle', hustle_id: hustleId, est_minutes: 30 }])
+    await replan(DEMO, { from: 'now', now: at(MONDAY, '08:00') })
+    const hustleBlocks = planned().filter((block) => block.area === 'hustle')
+    expect(hustleBlocks.length).toBeGreaterThan(0)
+    expect(hustleBlocks.every((block) => block.hustle_id === hustleId)).toBe(true)
+    expect(hustleBlocks.some((block) => block.kind === 'hustle' && block.title === 'Logo design')).toBe(true)
+    expect(hustleBlocks.some((block) => block.kind === 'task' && block.title === 'Send 5 proposals')).toBe(true)
   })
 
   it('takes work already done off the estimate', async () => {

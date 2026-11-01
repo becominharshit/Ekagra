@@ -31,6 +31,13 @@ function WorkLink({ block }: { block: PlanBlock }) {
       </Button>
     )
   }
+  if (block.hustle_id && (block.kind === 'hustle' || block.kind === 'task')) {
+    return (
+      <Button asChild variant="link" className="h-auto justify-self-start p-0">
+        <Link to={`/hustle/${block.hustle_id}`}>Open the hustle: board, money and time</Link>
+      </Button>
+    )
+  }
   if (block.kind === 'task') {
     return (
       <Button asChild variant="link" className="h-auto justify-self-start p-0">

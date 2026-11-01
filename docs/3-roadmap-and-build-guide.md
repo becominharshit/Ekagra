@@ -46,7 +46,7 @@ The current milestone is the first unchecked one.
   5. Time entries (manual and from focus sessions on hustle blocks) and earnings per hour per hustle and per client (`hustle_earnings`)
   6. Skill Bridge: "Learn this" creates or links a skill course and skill-track topic; the planner gives skill courses their weekly time (and no more)
   7. The + capture sheet saves hustle tasks and leads; the 10-minute Launchpad when opening outreach and social platforms from Hustle
-- [ ] **M9 Focus engine:** timers, focus sessions (hustle sessions add time entries), FocusGuard plugin, Academic Tollbooth
+- [ ] **M9 Focus engine:** timers, focus sessions (hustle sessions already add time entries since M8 step 5, with the simple M4 timer), FocusGuard plugin, Academic Tollbooth
 - [ ] **M10 Beta:** end-to-end polish, web deploy, APK for friends
 
 The 12-week plan in §3 and the phases in §1 and §4 are kept for reference only.

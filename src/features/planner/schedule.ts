@@ -42,6 +42,7 @@ export function planRows(plan: Plan, version: number): TablesInsert<'plan_blocks
       subject_id: block.subjectId ?? null,
       topic_id: block.topicId ?? null,
       task_id: block.taskId ?? null,
+      hustle_id: block.hustleId ?? null,
       title: block.title,
       planned_minutes: block.end - block.start,
       status: 'planned',

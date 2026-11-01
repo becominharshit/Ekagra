@@ -19,21 +19,24 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { countLabel } from '@/features/academics/labels'
 import { deleteClient, saveClient, useClients, type Client } from './clients'
+import { clientEarnings, perHourLabel } from './earnings'
 import { useHustleMutation, type Hustle } from './hustles'
 import { useHustleItems } from './items'
 import { CARD_WORDS, clientWord, formatMoney } from './labels'
-import { clientTotals, useTransactions } from './money'
+import { useTransactions } from './money'
 import { TEMPLATES, toHustleType } from './templates'
+import { useTimeEntries } from './time'
 
 /** A hustle's clients (students, for tutoring) with what each one brought in. */
 export function ClientsTab({ hustle }: { hustle: Hustle }) {
   const clients = useClients(hustle.id)
   const money = useTransactions(hustle.id)
+  const time = useTimeEntries(hustle.id)
   const items = useHustleItems(hustle.id)
   const [editing, setEditing] = useState<Client | 'new' | null>(null)
   const words = clientWord(hustle.type)
   const cardWord = CARD_WORDS[TEMPLATES[toHustleType(hustle.type)].itemKind].card
-  const earned = clientTotals(money.data ?? [])
+  const earned = clientEarnings(money.data ?? [], time.data ?? [])
 
   return (
     <div className="grid gap-3">
@@ -59,7 +62,7 @@ export function ClientsTab({ hustle }: { hustle: Hustle }) {
                 <CardDescription>{[client.platform, client.contact].filter(Boolean).join(' · ') || `No contact details`}</CardDescription>
               </CardHeader>
               <CardContent className="text-sm">
-                Earned {formatMoney(total?.net ?? 0, hustle.currency)}
+                Earned {total && total.minutes > 0 ? perHourLabel(total, hustle.currency) : formatMoney(total?.net ?? 0, hustle.currency)}
                 {cards > 0 && <span className="text-muted-foreground"> · {countLabel(cards, cardWord)}</span>}
               </CardContent>
             </Card>

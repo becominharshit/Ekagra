@@ -71,6 +71,7 @@ export function toPlannerTasks(tasks: Task[], done: ReadonlyMap<string, number>)
     remainingMinutes: remainingMinutes(task.est_minutes ?? DEFAULT_TASK_MINUTES, done.get(task.id) ?? 0),
     priority: task.priority,
     subjectId: task.subject_id,
+    hustleId: task.hustle_id,
   }))
 }
 

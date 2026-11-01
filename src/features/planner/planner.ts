@@ -323,6 +323,7 @@ function taskItem(task: PlannerTask, minutes: number): WorkItem {
     minutes,
     taskId: task.id,
     subjectId: task.subjectId ?? undefined,
+    hustleId: task.hustleId ?? undefined,
   }
 }
 
@@ -393,7 +394,9 @@ function allocateDay(ctx: DayContext, pool: Pool, carry: WorkItem[], growth: num
   hustle -= takeTasks(ctx, pool, items, 'hustle', hustle)
   hustle = Math.max(0, hustle - takeCarry('hustle', hustle))
   if (hustle >= settings.minBlockMinutes) {
-    items.push({ key: 'hustle', area: 'hustle', kind: 'hustle', title: 'Hustle work', minutes: hustle })
+    // With a hustle set up, its general time is named after it (and links to it).
+    const named = input.hustle ? { title: input.hustle.name, hustleId: input.hustle.id } : { title: 'Hustle work' }
+    items.push({ key: 'hustle', area: 'hustle', kind: 'hustle', minutes: hustle, ...named })
   }
 
   // Life
@@ -673,6 +676,7 @@ function toBlock(date: LocalDate, start: Minute, { item, minutes }: Chunk): Plan
     topicId: item.topicId,
     taskId: item.taskId,
     subjectId: item.subjectId,
+    hustleId: item.hustleId,
     recovered: item.recovered,
   }
 }

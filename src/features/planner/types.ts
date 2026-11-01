@@ -72,6 +72,8 @@ export interface PlannerTask {
   /** 1 = most important … 4 = least. */
   priority: number
   subjectId?: string | null
+  /** The hustle a hustle task belongs to: its blocks link to it (time spent there counts for it). */
+  hustleId?: string | null
 }
 
 export interface PlannerCheckIn {
@@ -121,6 +123,7 @@ export interface WorkItem {
   topicId?: string
   taskId?: string
   subjectId?: string
+  hustleId?: string
   difficulty?: number
   /** Moved or missed work being caught up (auto-recovery). */
   recovered?: boolean
@@ -137,6 +140,7 @@ export interface PlannedBlock {
   topicId?: string
   taskId?: string
   subjectId?: string
+  hustleId?: string
   recovered?: boolean
 }
 
@@ -188,6 +192,8 @@ export interface PlannerInput {
   /** Re-planning in the middle of the day: minutes of each subject already studied today.
    *  They count toward today's pace, so the rest of the day doesn't repeat them. */
   doneTodayBySubject?: Record<string, number>
+  /** The hustle that gets the general hustle time ("Hustle work" otherwise). */
+  hustle?: { id: string; name: string } | null
   settings?: Partial<PlannerSettings>
 }
 
