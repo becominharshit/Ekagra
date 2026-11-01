@@ -15,9 +15,18 @@ export const captureFeature: AiFeature<CaptureRequest, CaptureResponse> = {
       instructions: CAPTURE_INSTRUCTIONS,
       prompt: capturePrompt(input),
     })
-    // Only keys from the list count as subjects.
-    const keys = new Set(input.subjects.map((subject) => subject.key))
-    const tasks = data.tasks.map((task) => ({ ...task, subjectKey: task.subjectKey && keys.has(task.subjectKey) ? task.subjectKey : null }))
+    // Only keys from the lists count as subjects and hustles; a lead needs a hustle.
+    const subjectKeys = new Set(input.subjects.map((subject) => subject.key))
+    const hustleKeys = new Set((input.hustles ?? []).map((hustle) => hustle.key))
+    const tasks = data.tasks.map((task) => {
+      const hustleKey = task.hustleKey && hustleKeys.has(task.hustleKey) ? task.hustleKey : null
+      return {
+        ...task,
+        subjectKey: task.subjectKey && subjectKeys.has(task.subjectKey) ? task.subjectKey : null,
+        hustleKey,
+        lead: task.lead && hustleKey !== null,
+      }
+    })
     return { tasks, model, promptVersion: CAPTURE_PROMPT_VERSION }
   },
 }

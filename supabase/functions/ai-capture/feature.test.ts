@@ -8,11 +8,22 @@ const REQUEST = {
   now: '2026-11-02T14:30:00+05:30',
   timezone: 'Asia/Kolkata',
   subjects: [{ key: 's1', name: 'Database Management Systems', code: 'DBMS' }],
+  hustles: [{ key: 'h1', name: 'Logo design', type: 'freelancing' }],
 }
 const TASKS = {
   tasks: [
-    { title: 'DBMS assignment', area: 'academics', subjectKey: 's1', dueAt: '2026-11-06T17:00:00+05:30', estMinutes: 120, priority: 2, unsure: ['estMinutes'] },
-    { title: 'Call mom', area: 'personal', subjectKey: 's9', dueAt: null, estMinutes: 15, priority: 3, unsure: ['dueAt'] },
+    {
+      title: 'DBMS assignment',
+      area: 'academics',
+      subjectKey: 's1',
+      hustleKey: null,
+      lead: false,
+      dueAt: '2026-11-06T17:00:00+05:30',
+      estMinutes: 120,
+      priority: 2,
+      unsure: ['estMinutes'],
+    },
+    { title: 'Call mom', area: 'personal', subjectKey: 's9', hustleKey: null, lead: true, dueAt: null, estMinutes: 15, priority: 3, unsure: ['dueAt'] },
   ],
 }
 
@@ -29,10 +40,26 @@ describe('ai-capture', () => {
     const { response, usage } = await call(REQUEST, JSON.stringify(TASKS))
     expect(response.status).toBe(200)
     const body = await response.json()
-    expect(body).toMatchObject({ model: 'fast-model', promptVersion: 'capture-v1' })
+    expect(body).toMatchObject({ model: 'fast-model', promptVersion: 'capture-v2' })
     expect(body.tasks[0]).toEqual(TASKS.tasks[0])
-    expect(body.tasks[1]).toMatchObject({ title: 'Call mom', subjectKey: null })
+    expect(body.tasks[1]).toMatchObject({ title: 'Call mom', subjectKey: null, lead: false }) // a lead needs a hustle
     expect(usage.logged).toEqual([expect.objectContaining({ feature: 'capture', model: 'fast-model' })])
+  })
+
+  it('matches hustles and leads; a hustle key that is not in the list becomes null', async () => {
+    const leads = {
+      tasks: [
+        { ...TASKS.tasks[0], title: 'Bakery logo enquiry', area: 'hustle', subjectKey: null, hustleKey: 'h1', lead: true },
+        { ...TASKS.tasks[0], title: 'Send invoice', area: 'hustle', subjectKey: null, hustleKey: 'h7', lead: false },
+      ],
+    }
+    const { response, model } = await call(REQUEST, JSON.stringify(leads))
+    const body = await response.json()
+    expect(body.tasks.map((task: { hustleKey: string | null; lead: boolean }) => [task.hustleKey, task.lead])).toEqual([
+      ['h1', true],
+      [null, false],
+    ])
+    expect(JSON.stringify(model.doGenerateCalls[0]?.prompt)).toContain('h1: Logo design (freelancing)')
   })
 
   it("gives the model the student's date, time zone and subjects", async () => {

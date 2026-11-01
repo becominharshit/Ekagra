@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useSubjects, type Subject } from '@/features/academics/subjects'
+import { useHustles, type Hustle } from '@/features/hustle/hustles'
 import { useCaptureStore } from '@/features/tasks/captureStore'
 import { draftProblems, draftValues, taskToDraft, type TaskDraft } from '@/features/tasks/drafts'
 import { TaskDraftFields } from '@/features/tasks/TaskDraftFields'
@@ -30,6 +31,7 @@ export function TasksPage() {
   const now = useNow(60_000)
   const tasks = useTasks()
   const subjects = useSubjects()
+  const hustles = useHustles()
   const toggle = useTaskMutation(setTaskDone)
   const remove = useTaskMutation(deleteTask)
   const openCapture = useCaptureStore((state) => state.setOpen)
@@ -42,6 +44,12 @@ export function TasksPage() {
     .sort((a, b) => Date.parse(b.completed_at ?? b.updated_at) - Date.parse(a.completed_at ?? a.updated_at))
     .slice(0, 15)
   const subjectOf = (task: Task) => subjects.data?.find((subject) => subject.id === task.subject_id)
+  const hustleOf = (task: Task) => hustles.data?.find((hustle) => hustle.id === task.hustle_id)
+  /** Where the task belongs: its subject, its hustle, or its area. */
+  const belongsTo = (task: Task) => {
+    const subject = subjectOf(task)
+    return subject ? (subject.code ?? subject.name) : (hustleOf(task)?.name ?? AREA_LABEL[toTaskArea(task.area)])
+  }
   const error = tasks.error ?? toggle.error ?? remove.error
 
   return (
@@ -73,7 +81,6 @@ export function TasksPage() {
         )}
         {open.map((task) => {
           const overdue = task.due_at !== null && Date.parse(task.due_at) < now.getTime()
-          const subject = subjectOf(task)
           return (
             <Card key={task.id} size="sm">
               <CardContent className="flex items-start gap-3">
@@ -84,7 +91,7 @@ export function TasksPage() {
                   <p className="font-medium">{task.title}</p>
                   <p className="text-xs text-muted-foreground">
                     <span className={cn(overdue && 'font-medium text-destructive')}>{dueLabel(task.due_at, now)}</span>
-                    {[subject ? (subject.code ?? subject.name) : AREA_LABEL[toTaskArea(task.area)], task.est_minutes ? `${task.est_minutes} min` : null]
+                    {[belongsTo(task), task.est_minutes ? `${task.est_minutes} min` : null]
                       .filter(Boolean)
                       .map((part) => ` · ${part}`)
                       .join('')}
@@ -126,7 +133,9 @@ export function TasksPage() {
       </div>
 
       <Dialog open={editing !== null} onOpenChange={(isOpen) => !isOpen && setEditing(null)}>
-        <DialogContent>{editing && <EditTask task={editing} subjects={subjects.data ?? []} onDone={() => setEditing(null)} />}</DialogContent>
+        <DialogContent>
+          {editing && <EditTask task={editing} subjects={subjects.data ?? []} hustles={(hustles.data ?? []).filter((hustle) => hustle.status !== 'archived')} onDone={() => setEditing(null)} />}
+        </DialogContent>
       </Dialog>
       <AlertDialog open={deleting !== null} onOpenChange={(isOpen) => !isOpen && setDeleting(null)}>
         <AlertDialogContent>
@@ -152,7 +161,7 @@ export function TasksPage() {
   )
 }
 
-function EditTask({ task, subjects, onDone }: { task: Task; subjects: Subject[]; onDone: () => void }) {
+function EditTask({ task, subjects, hustles, onDone }: { task: Task; subjects: Subject[]; hustles: Hustle[]; onDone: () => void }) {
   const [draft, setDraft] = useState<TaskDraft>(() => taskToDraft(task))
   const [problems, setProblems] = useState<string[]>([])
   const save = useTaskMutation(updateTask)
@@ -161,7 +170,7 @@ function EditTask({ task, subjects, onDone }: { task: Task; subjects: Subject[];
       <DialogHeader>
         <DialogTitle>Edit task</DialogTitle>
       </DialogHeader>
-      <TaskDraftFields draft={draft} subjects={subjects} onChange={setDraft} />
+      <TaskDraftFields draft={draft} subjects={subjects} hustles={hustles} onChange={setDraft} />
       {(problems.length > 0 || save.error) && (
         <p role="alert" className="text-sm text-destructive">
           {problems[0] ?? save.error?.message}

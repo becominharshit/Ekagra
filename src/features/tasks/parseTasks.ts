@@ -13,22 +13,26 @@ const MONTH = '(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\\.?'
 
 const ACADEMIC = /\b(assignment|homework|hw|quiz|exam|test|lab|viva|project|lecture|class|submission|submit|practical|tutorial|record|journal|seminar|presentation|report|essay|syllabus|revision|revise)\b/i
 const HUSTLE = /\b(client|invoice|freelanc\w*|gig|upwork|fiverr|youtube|reel|thumbnail|portfolio|startup|pitch|customer|order)\b/i
+// A possible job or client for a hustle: saved as a card on its board.
+const LEAD = /\b(lead|inquiry|enquiry|quote|new client|wants an?|order for)\b/i
 const BIG_WORK = /\b(assignment|project|report|record|journal|essay)\b/i
 const STUDY_WORK = /\b(quiz|exam|test|viva|presentation|revision|revise)\b/i
 
 type Subjects = Pick<Subject, 'id' | 'name' | 'code'>[]
+/** The student's hustles, the main one first. */
+type Hustles = { id: string; name: string }[]
 
 /** The tasks in typed text, one per line (or per ";"). */
-export function parseTasks(text: string, { now, subjects }: { now: Date; subjects: Subjects }): TaskDraft[] {
+export function parseTasks(text: string, { now, subjects, hustles = [] }: { now: Date; subjects: Subjects; hustles?: Hustles }): TaskDraft[] {
   return text
     .split(/\r?\n|;/)
     .map((line) => line.trim())
     .filter((line) => /[a-z]{2}/i.test(line))
     .slice(0, 20)
-    .map((line) => parseLine(line, now, subjects))
+    .map((line) => parseLine(line, now, subjects, hustles))
 }
 
-function parseLine(line: string, now: Date, subjects: Subjects): TaskDraft {
+function parseLine(line: string, now: Date, subjects: Subjects, hustles: Hustles): TaskDraft {
   let rest = ` ${line} `
   const unsure = new Set<CaptureField>()
   /** Finds a pattern and takes it out of the text that becomes the title. */
@@ -97,10 +101,18 @@ function parseLine(line: string, now: Date, subjects: Subjects): TaskDraft {
 
   // Subject, area and work time
   const subject = subjects.find((candidate) => mentions(line, candidate.code) || mentions(line, candidate.name))
+  const hustle = hustles.find((candidate) => mentions(line, candidate.name))
   let area: TaskArea = 'personal'
-  if (subject || ACADEMIC.test(line)) area = 'academics'
-  else if (HUSTLE.test(line)) area = 'hustle'
+  if (hustle) area = 'hustle'
+  else if (subject || ACADEMIC.test(line)) area = 'academics'
+  else if (HUSTLE.test(line) || LEAD.test(line)) area = 'hustle'
   else unsure.add('area')
+  // A hustle task that names no hustle goes to the main one: the student checks it.
+  let hustleId = hustle?.id ?? null
+  if (area === 'hustle' && !hustleId && hustles[0]) {
+    hustleId = hustles[0].id
+    unsure.add('hustle')
+  }
   if (estMinutes === null) {
     estMinutes = BIG_WORK.test(line) ? 120 : STUDY_WORK.test(line) ? 90 : 30
     unsure.add('estMinutes')
@@ -125,7 +137,9 @@ function parseLine(line: string, now: Date, subjects: Subjects): TaskDraft {
     key: draftKey(),
     title: title.charAt(0).toUpperCase() + title.slice(1),
     area,
-    subjectId: subject?.id ?? null,
+    subjectId: area === 'academics' ? (subject?.id ?? null) : null,
+    hustleId,
+    asCard: hustleId !== null && LEAD.test(line),
     dueDate: date ? format(date, 'yyyy-MM-dd') : '',
     dueTime: date && minute !== null && minute !== 23 * 60 + 59 ? `${String(Math.floor(minute / 60)).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}` : '',
     estMinutes,

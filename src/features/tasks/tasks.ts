@@ -59,16 +59,19 @@ export interface CaptureInput {
   text: string
   file: SourceFile | null
   subjects: Pick<Subject, 'id' | 'name' | 'code'>[]
+  /** The student's hustles, the main one first. */
+  hustles?: { id: string; name: string; type: string }[]
   now?: Date
 }
 
 /** The tasks in what the student typed or photographed, to check in the confirm sheet. Nothing is saved here. */
-export async function readTasks(source: DataSource, { text, file, subjects, now = new Date() }: CaptureInput): Promise<TaskDraft[]> {
+export async function readTasks(source: DataSource, { text, file, subjects, hustles = [], now = new Date() }: CaptureInput): Promise<TaskDraft[]> {
   if (source.kind === 'demo') {
     if (file) throw new Error("Demo Mode can't read screenshots (that needs the AI). Type the task instead, or sign in.")
-    return parseTasks(text, { now, subjects })
+    return parseTasks(text, { now, subjects, hustles })
   }
   const keyed = subjects.slice(0, 40).map((subject, index) => ({ key: `s${index + 1}`, subject }))
+  const keyedHustles = hustles.slice(0, 20).map((hustle, index) => ({ key: `h${index + 1}`, hustle }))
   const answer = await callAiFunction(
     'ai-capture',
     {
@@ -77,11 +80,13 @@ export async function readTasks(source: DataSource, { text, file, subjects, now 
       now: isoWithOffset(now),
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
       subjects: keyed.map(({ key, subject }) => ({ key, name: subject.name, code: subject.code })),
+      hustles: keyedHustles.map(({ key, hustle }) => ({ key, name: hustle.name, type: hustle.type })),
     },
     CaptureResponseSchema,
   )
   const idByKey = new Map(keyed.map(({ key, subject }) => [key, subject.id]))
-  return answer.tasks.map((task) => capturedToDraft(task, idByKey))
+  const hustleIdByKey = new Map(keyedHustles.map(({ key, hustle }) => [key, hustle.id]))
+  return answer.tasks.map((task) => capturedToDraft(task, idByKey, hustleIdByKey))
 }
 
 export function useTasks() {

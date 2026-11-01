@@ -7,12 +7,14 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { useSubjects } from '@/features/academics/subjects'
 import { useAuthStore } from '@/features/auth/authStore'
+import { primaryHustle, useHustles } from '@/features/hustle/hustles'
 import { need, useDataSource } from '@/lib/dataSource'
 import { fileToSource } from '@/lib/files'
 import { useCaptureStore } from './captureStore'
-import { blankDraft, draftProblems, draftValues, type TaskDraft } from './drafts'
+import { blankDraft, draftProblems, type TaskDraft } from './drafts'
+import { useSaveCaptured } from './saveCaptured'
 import { TaskDraftFields } from './TaskDraftFields'
-import { addTasks, readTasks, useTaskMutation } from './tasks'
+import { readTasks } from './tasks'
 
 /** The global + Capture sheet: type tasks or add a screenshot, check them, save. */
 export function CaptureSheet() {
@@ -32,22 +34,20 @@ function CaptureFlow({ onDone }: { onDone: () => void }) {
   const isDemo = useAuthStore((state) => state.status === 'demo')
   const { source } = useDataSource()
   const subjects = useSubjects()
+  const hustles = useHustles()
   const [text, setText] = useState('')
   const [file, setFile] = useState<{ source: SourceFile; name: string } | null>(null)
   const [drafts, setDrafts] = useState<TaskDraft[] | null>(null)
   const [reading, setReading] = useState(false)
   const [problems, setProblems] = useState<string[]>([])
-  const save = useTaskMutation<TaskDraft[], void>((dataSource, list) =>
-    addTasks(
-      dataSource,
-      list.map((draft) => ({
-        ...draftValues(draft),
-        source: file ? 'screenshot' : text.trim() ? 'text' : 'manual',
-        source_ref: file ? file.name : text.trim().slice(0, 500) || null,
-      })),
-    ),
-  )
+  const save = useSaveCaptured()
   const subjectList = subjects.data ?? []
+  // Hustles that can take tasks, the main one first (it gets hustle tasks that name none).
+  const hustleList = (() => {
+    const open = (hustles.data ?? []).filter((hustle) => hustle.status !== 'archived')
+    const main = primaryHustle(open)
+    return main ? [main, ...open.filter((hustle) => hustle.id !== main.id)] : open
+  })()
 
   async function pickScreenshot(event: ChangeEvent<HTMLInputElement>) {
     const picked = event.target.files?.[0]
@@ -65,7 +65,7 @@ function CaptureFlow({ onDone }: { onDone: () => void }) {
     setReading(true)
     setProblems([])
     try {
-      const found = await readTasks(need(source), { text, file: file?.source ?? null, subjects: subjectList })
+      const found = await readTasks(need(source), { text, file: file?.source ?? null, subjects: subjectList, hustles: hustleList })
       if (found.length === 0) setProblems(['No tasks found. Try writing one task per line, e.g. "DBMS assignment due Friday 5pm".'])
       else setDrafts(found)
     } catch (error) {
@@ -79,7 +79,9 @@ function CaptureFlow({ onDone }: { onDone: () => void }) {
     if (!drafts) return
     const issues = [...new Set(drafts.flatMap(draftProblems))]
     setProblems(issues)
-    if (issues.length === 0) save.mutate(drafts, { onSuccess: onDone })
+    if (issues.length > 0) return
+    const from = { source: file ? 'screenshot' : text.trim() ? 'text' : 'manual', ref: file ? file.name : text.trim().slice(0, 500) || null } as const
+    save.mutate({ drafts, hustles: hustleList, from }, { onSuccess: onDone })
   }
 
   if (!drafts) {
@@ -137,6 +139,8 @@ function CaptureFlow({ onDone }: { onDone: () => void }) {
           key={draft.key}
           draft={draft}
           subjects={subjectList}
+          hustles={hustleList}
+          canSaveAsCard
           onChange={(next) => setDrafts(drafts.map((other) => (other.key === draft.key ? next : other)))}
           onRemove={drafts.length > 1 ? () => setDrafts(drafts.filter((other) => other.key !== draft.key)) : undefined}
         />

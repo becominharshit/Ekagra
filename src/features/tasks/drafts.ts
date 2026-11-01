@@ -15,6 +15,10 @@ export interface TaskDraft {
   title: string
   area: TaskArea
   subjectId: string | null
+  /** For hustle tasks: the hustle it belongs to. */
+  hustleId: string | null
+  /** Save it as a card on the hustle's board (a lead or order) instead of a to-do. */
+  asCard: boolean
   /** 'YYYY-MM-DD', or '' for no due date. */
   dueDate: string
   /** 'HH:MM', or '' for the end of the day. */
@@ -32,7 +36,7 @@ export function draftKey(): string {
 }
 
 export function blankDraft(): TaskDraft {
-  return { key: draftKey(), title: '', area: 'personal', subjectId: null, dueDate: '', dueTime: '', estMinutes: null, priority: 2, unsure: [] }
+  return { key: draftKey(), title: '', area: 'personal', subjectId: null, hustleId: null, asCard: false, dueDate: '', dueTime: '', estMinutes: null, priority: 2, unsure: [] }
 }
 
 /** Splits a due timestamp into the date and time fields (23:59 = "end of the day", no time shown). */
@@ -44,14 +48,21 @@ function dueParts(dueAt: string | null): { dueDate: string; dueTime: string } {
   return { dueDate: format(due, 'yyyy-MM-dd'), dueTime: time === '23:59' ? '' : time }
 }
 
-/** A task the AI found. Its subject key (s1, s2, …) becomes the subject's id. */
-export function capturedToDraft(task: CapturedTask, subjectIdByKey: ReadonlyMap<string, string>): TaskDraft {
-  const subjectId = task.subjectKey ? (subjectIdByKey.get(task.subjectKey) ?? null) : null
+/** A task the AI found. Its subject key (s1, …) and hustle key (h1, …) become their ids. */
+export function capturedToDraft(
+  task: CapturedTask,
+  subjectIdByKey: ReadonlyMap<string, string>,
+  hustleIdByKey: ReadonlyMap<string, string> = new Map(),
+): TaskDraft {
+  const hustleId = task.hustleKey ? (hustleIdByKey.get(task.hustleKey) ?? null) : null
+  const subjectId = !hustleId && task.subjectKey ? (subjectIdByKey.get(task.subjectKey) ?? null) : null
   return {
     key: draftKey(),
     title: task.title,
-    area: subjectId ? 'academics' : task.area,
+    area: hustleId ? 'hustle' : subjectId ? 'academics' : task.area,
     subjectId,
+    hustleId,
+    asCard: hustleId !== null && task.lead,
     ...dueParts(task.dueAt),
     estMinutes: task.estMinutes,
     priority: task.priority,
@@ -65,6 +76,8 @@ export function taskToDraft(task: Task): TaskDraft {
     title: task.title,
     area: toTaskArea(task.area),
     subjectId: task.subject_id,
+    hustleId: task.hustle_id,
+    asCard: false,
     ...dueParts(task.due_at),
     estMinutes: task.est_minutes,
     priority: task.priority,
@@ -81,13 +94,21 @@ export function draftProblems(draft: TaskDraft): string[] {
   return problems
 }
 
-/** The fields of a tasks row. A due date without a time means the end of that day (23:59). */
-export function draftValues(draft: TaskDraft): Pick<TablesInsert<'tasks'>, 'title' | 'area' | 'subject_id' | 'due_at' | 'est_minutes' | 'priority'> {
+/** When it's due, as a timestamp. A due date without a time means the end of that day (23:59). */
+export function draftDueAt(draft: Pick<TaskDraft, 'dueDate' | 'dueTime'>): string | null {
+  return draft.dueDate ? localToIso(draft.dueDate, draft.dueTime ? parseTime(draft.dueTime) : 23 * 60 + 59) : null
+}
+
+/** The fields of a tasks row. */
+export function draftValues(
+  draft: TaskDraft,
+): Pick<TablesInsert<'tasks'>, 'title' | 'area' | 'subject_id' | 'hustle_id' | 'due_at' | 'est_minutes' | 'priority'> {
   return {
     title: draft.title.trim(),
     area: draft.area,
     subject_id: draft.area === 'academics' ? draft.subjectId : null,
-    due_at: draft.dueDate ? localToIso(draft.dueDate, draft.dueTime ? parseTime(draft.dueTime) : 23 * 60 + 59) : null,
+    hustle_id: draft.area === 'hustle' ? draft.hustleId : null,
+    due_at: draftDueAt(draft),
     est_minutes: draft.estMinutes,
     priority: draft.priority,
   }

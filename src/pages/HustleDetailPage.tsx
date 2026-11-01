@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ClientsTab } from '@/features/hustle/ClientsTab'
 import { EditHustleDialog } from '@/features/hustle/EditHustleDialog'
 import { currentPhaseIndex, stepProgress, useHustlePlans, type Hustle, type PhaseWithSteps } from '@/features/hustle/hustles'
+import { HustleTasks } from '@/features/hustle/HustleTasks'
 import { clientWord, formatMoney, HUSTLE_STATUS_LABEL, targetLabel } from '@/features/hustle/labels'
 import { goalProgress, totals, useTransactions } from '@/features/hustle/money'
 import { MoneyTab } from '@/features/hustle/MoneyTab'
@@ -78,7 +79,8 @@ export function HustleDetailPage() {
             <TabsTrigger value="time">Time</TabsTrigger>
             <TabsTrigger value="clients">{clientWord(hustle.type).many}</TabsTrigger>
           </TabsList>
-          <TabsContent value="plan" className="pt-2">
+          <TabsContent value="plan" className="grid gap-3 pt-2">
+            <HustleTasks hustle={hustle} />
             <PhaseList phases={phases} />
           </TabsContent>
           <TabsContent value="board" className="pt-2">

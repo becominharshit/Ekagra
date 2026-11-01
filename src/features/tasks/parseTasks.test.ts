@@ -43,6 +43,23 @@ describe('parseTasks (Demo Mode reads typed tasks)', () => {
     expect(viva).toMatchObject({ subjectId: 'dbms', dueDate: '2026-12-03', estMinutes: 90 })
   })
 
+  it('routes hustle tasks to the hustle they name (or the main one, to check), and reads leads as board cards', () => {
+    const hustles = [
+      { id: 'logos', name: 'Logo design' },
+      { id: 'tuition', name: 'Maths tuition' },
+    ]
+    const [invoice, lead, named, plain] = parseTasks('Send invoice to Café Mocha friday\nBakery wants a logo, quote 4000\nMaths tuition: plan algebra session tomorrow\ncall mom', {
+      now: NOW,
+      subjects: SUBJECTS,
+      hustles,
+    })
+    expect(invoice).toMatchObject({ area: 'hustle', hustleId: 'logos', asCard: false, unsure: expect.arrayContaining(['hustle']) })
+    expect(lead).toMatchObject({ area: 'hustle', hustleId: 'logos', asCard: true })
+    expect(named).toMatchObject({ area: 'hustle', hustleId: 'tuition', asCard: false, dueDate: '2026-11-03' })
+    expect(named?.unsure).not.toContain('hustle')
+    expect(plain).toMatchObject({ area: 'personal', hustleId: null, asCard: false })
+  })
+
   it('marks a missing date as unsure, and a lone time as today (or tomorrow once it has passed)', () => {
     expect(read('call mom')[0]).toMatchObject({ title: 'Call mom', dueDate: '', unsure: expect.arrayContaining(['dueAt', 'area']) })
     expect(read('call mom at 6:30pm')[0]).toMatchObject({ title: 'Call mom', dueDate: '2026-11-02', dueTime: '18:30' })
@@ -52,12 +69,27 @@ describe('parseTasks (Demo Mode reads typed tasks)', () => {
 
 describe('drafts', () => {
   it("turns the AI's task into a draft: subject key to id, due time in local time, 23:59 as end of day", () => {
+    const noHustle = { hustleKey: null, lead: false }
     const draft = capturedToDraft(
-      { title: 'DBMS assignment', area: 'academics', subjectKey: 's1', dueAt: new Date('2026-11-06T17:00:00').toISOString(), estMinutes: 120, priority: 2, unsure: ['estMinutes'] },
+      {
+        title: 'DBMS assignment',
+        area: 'academics',
+        subjectKey: 's1',
+        ...noHustle,
+        dueAt: new Date('2026-11-06T17:00:00').toISOString(),
+        estMinutes: 120,
+        priority: 2,
+        unsure: ['estMinutes'],
+      },
       new Map([['s1', 'dbms']]),
     )
     expect(draft).toMatchObject({ subjectId: 'dbms', dueDate: '2026-11-06', dueTime: '17:00', unsure: ['estMinutes'] })
-    expect(capturedToDraft({ title: 'X', area: 'personal', subjectKey: null, dueAt: new Date('2026-11-06T23:59:00').toISOString(), estMinutes: null, priority: 3, unsure: [] }, new Map()).dueTime).toBe('')
+    expect(
+      capturedToDraft(
+        { title: 'X', area: 'personal', subjectKey: null, ...noHustle, dueAt: new Date('2026-11-06T23:59:00').toISOString(), estMinutes: null, priority: 3, unsure: [] },
+        new Map(),
+      ).dueTime,
+    ).toBe('')
   })
 
   it('saves a due date without a time as the end of that day, and checks what is missing', () => {
@@ -66,11 +98,15 @@ describe('drafts', () => {
       title: 'Essay',
       area: 'academics',
       subject_id: 'dbms',
+      hustle_id: null,
       due_at: new Date('2026-11-06T23:59:00').toISOString(),
       est_minutes: null,
       priority: 2,
     })
     expect(draftValues({ ...draft, area: 'personal' }).subject_id).toBeNull()
+    // The hustle only stays with a hustle task.
+    expect(draftValues({ ...draft, area: 'hustle', hustleId: 'logos' })).toMatchObject({ subject_id: null, hustle_id: 'logos' })
+    expect(draftValues({ ...draft, area: 'personal', hustleId: 'logos' }).hustle_id).toBeNull()
     expect(draftProblems({ ...blankDraft(), dueTime: '17:00' })).toEqual(['Every task needs a title.', 'Pick a due date for the time you gave.'])
   })
 })

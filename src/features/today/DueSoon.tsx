@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { countLabel } from '@/features/academics/labels'
 import { useSubjects } from '@/features/academics/subjects'
 import { todaysQueue, useFlashcards, useReviewsToday } from '@/features/flashcards/flashcards'
+import { useHustles } from '@/features/hustle/hustles'
 import { dueMistakes } from '@/features/mistakes/ladder'
 import { useMistakes } from '@/features/mistakes/mistakes'
 import { useProfile } from '@/features/profile/queries'
@@ -20,6 +21,7 @@ export function DueSoon() {
   const now = useNow(60_000)
   const tasks = useTasks()
   const subjects = useSubjects()
+  const hustles = useHustles()
   const toggle = useTaskMutation(setTaskDone)
   const cards = useFlashcards()
   const reviews = useReviewsToday(now)
@@ -43,6 +45,7 @@ export function DueSoon() {
           <ul className="grid gap-2">
             {soon.map((task) => {
               const subject = subjects.data?.find((row) => row.id === task.subject_id)
+              const belongsTo = subject ? (subject.code ?? subject.name) : hustles.data?.find((row) => row.id === task.hustle_id)?.name
               const overdue = task.due_at !== null && Date.parse(task.due_at) < now.getTime()
               return (
                 <li key={task.id} className="flex items-center gap-2 text-sm">
@@ -58,7 +61,7 @@ export function DueSoon() {
                   </Button>
                   <span className="min-w-0 flex-1 truncate">
                     {task.title}
-                    {subject && <span className="text-muted-foreground"> · {subject.code ?? subject.name}</span>}
+                    {belongsTo && <span className="text-muted-foreground"> · {belongsTo}</span>}
                   </span>
                   <span className={cn('shrink-0 text-xs', overdue ? 'font-medium text-destructive' : 'text-muted-foreground')}>{dueLabel(task.due_at, now)}</span>
                 </li>

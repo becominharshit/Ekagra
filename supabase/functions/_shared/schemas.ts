@@ -228,7 +228,7 @@ export type GenerateResponse = z.infer<typeof GenerateResponseSchema>
 // ---------------------------------------------------------------------------
 
 export const TASK_AREAS = ['academics', 'hustle', 'life', 'personal'] as const
-export const CAPTURE_FIELDS = ['title', 'dueAt', 'subject', 'estMinutes', 'area'] as const
+export const CAPTURE_FIELDS = ['title', 'dueAt', 'subject', 'estMinutes', 'area', 'hustle'] as const
 
 export const CaptureRequestSchema = z
   .object({
@@ -241,6 +241,11 @@ export const CaptureRequestSchema = z
     subjects: z
       .array(z.object({ key: z.string().min(1).max(10), name: z.string().min(1).max(120), code: z.string().max(40).nullable() }))
       .max(40),
+    /** The student's hustles with short keys (h1, h2, …). */
+    hustles: z
+      .array(z.object({ key: z.string().min(1).max(10), name: z.string().min(1).max(80), type: z.string().max(20) }))
+      .max(20)
+      .optional(),
   })
   .refine(hasSource, NO_SOURCE)
 export type CaptureRequest = z.infer<typeof CaptureRequestSchema>
@@ -250,6 +255,8 @@ export const CapturedTaskSchema = z
     title: z.string().min(1).max(200).describe('Short and clear, e.g. "DBMS assignment 2"'),
     area: z.enum(TASK_AREAS).describe('academics = college work, hustle = side business or freelancing, life/personal = everything else'),
     subjectKey: z.string().nullable().describe('Key of the subject it belongs to, or null'),
+    hustleKey: z.string().nullable().describe('Key of the hustle it belongs to, or null'),
+    lead: z.boolean().describe('true for a new lead, inquiry or order for a hustle (someone who may pay), false for a to-do'),
     dueAt: z
       .string()
       .nullable()
