@@ -4,11 +4,11 @@ import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/ca
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { HabitsTab } from '@/features/life/habits/HabitsTab'
 import { LIFE_TABS, toLifeTab, type LifeTab } from '@/features/life/lifeTabs'
+import { MealsTab } from '@/features/life/meals/MealsTab'
 import { WorkoutsTab } from '@/features/life/workouts/WorkoutsTab'
 
 /** What each tab will hold (filled in step by step during Milestone 14). */
-const COMING: Record<Exclude<LifeTab, 'habits' | 'workouts'>, string> = {
-  meals: 'Meals from a photo (estimates) or mess and hostel presets.',
+const COMING: Record<Exclude<LifeTab, 'habits' | 'workouts' | 'meals'>, string> = {
   speaking: 'A speaking partner for interviews, presentations and group discussions.',
   health: 'Sleep and steps, from Health Connect or typed in.',
 }
@@ -36,6 +36,8 @@ export function LifePage() {
           <HabitsTab />
         ) : tab === 'workouts' ? (
           <WorkoutsTab />
+        ) : tab === 'meals' ? (
+          <MealsTab />
         ) : (
           <Card>
             <CardHeader>

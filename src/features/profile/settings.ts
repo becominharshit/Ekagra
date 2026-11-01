@@ -99,6 +99,9 @@ const lifeSchema = z.looseObject({
   program: z.enum(['hostel', 'dumbbell', 'gym']).nullable().catch(null),
   /** The weekdays to work out (0 = Sunday … 6 = Saturday). */
   workoutDays: z.array(z.number().int().min(0).max(6)).max(7).catch(() => [1, 3, 5]),
+  /** Daily targets for meals (estimates; editable). */
+  calories: z.number().int().min(800).max(6000).catch(2200),
+  protein: z.number().int().min(10).max(400).catch(70),
 })
 
 export const settingsSchema = z.looseObject({

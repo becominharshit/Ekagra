@@ -553,6 +553,43 @@ export const ReviewResponseSchema = z.object({
 export type ReviewResponse = z.infer<typeof ReviewResponseSchema>
 
 // ---------------------------------------------------------------------------
+// Meals: a photo (and/or a note) → estimated calories and macros (ai-meal)
+// The photo is only in the request: it is never stored.
+// ---------------------------------------------------------------------------
+
+export const MEAL_SLOTS = ['breakfast', 'lunch', 'snack', 'dinner'] as const
+
+export const MealRequestSchema = z
+  .object({
+    meal: z.enum(MEAL_SLOTS),
+    photo: SourceFileSchema.refine((file) => file.mimeType !== 'application/pdf', { message: 'Send a photo (JPG, PNG or WebP)' }).optional(),
+    /** What the student says about it, e.g. "hostel lunch, 3 rotis". */
+    note: z.string().trim().max(300).optional(),
+  })
+  .refine((request) => request.photo !== undefined || Boolean(request.note), { message: 'Send a photo or say what you ate', path: ['note'] })
+export type MealRequest = z.infer<typeof MealRequestSchema>
+
+const mealItemSchema = z.object({
+  name: z.string().trim().min(1).max(80).describe('The food, e.g. "Dal tadka"'),
+  portion: z.string().trim().min(1).max(60).describe('The amount seen, e.g. "1 bowl" or "2 rotis"'),
+  calories: z.number().min(0).max(3000),
+  protein_g: z.number().min(0).max(300),
+  carbs_g: z.number().min(0).max(500),
+  fat_g: z.number().min(0).max(300),
+})
+export type MealItem = z.infer<typeof mealItemSchema>
+
+export const MealAnswerSchema = z.object({
+  items: z.array(mealItemSchema).max(12).describe('Each food on the plate; empty when there is no food'),
+  confidence: z.enum(['low', 'medium', 'high']),
+  note: z.string().trim().max(200).describe('One short sentence on what was hard to tell, or empty'),
+})
+export type MealAnswer = z.infer<typeof MealAnswerSchema>
+
+export const MealResponseSchema = MealAnswerSchema.extend({ model: z.string(), promptVersion: z.string() })
+export type MealResponse = z.infer<typeof MealResponseSchema>
+
+// ---------------------------------------------------------------------------
 // AI usage dashboard: the limits and what the whole app spent (ai-usage, no AI call)
 // ---------------------------------------------------------------------------
 
