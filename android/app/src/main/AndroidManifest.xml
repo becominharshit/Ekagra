@@ -2,6 +2,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- Health Connect's library asks for Android 8+; the app still runs on Android 7, where
+         HealthBridgePlugin checks the version first and never loads it (Health Connect needs 9+). -->
+    <uses-sdk tools:overrideLibrary="androidx.health.connect.client" />
+
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
@@ -41,7 +45,25 @@
                 <data android:scheme="ekagra" android:host="focus" />
             </intent-filter>
 
+            <!-- Health Connect (Android 9–13): "Why does this app need access?" opens the privacy page
+                 (MainActivity.onNewIntent). Without it, Health Connect won't show the permission screen. -->
+            <intent-filter>
+                <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+            </intent-filter>
+
         </activity>
+
+        <!-- The same link on Android 14+, where Health Connect is part of Android. -->
+        <activity-alias
+            android:name="ViewPermissionUsageActivity"
+            android:exported="true"
+            android:targetActivity=".MainActivity"
+            android:permission="android.permission.START_VIEW_PERMISSION_USAGE">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
+                <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
+            </intent-filter>
+        </activity-alias>
 
         <!-- FocusGuard: checks which app is on the screen during a focus session and covers blocked ones. -->
         <service
@@ -100,11 +122,18 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 
+    <!-- Health Connect (Life → Sleep & steps): read sleep and steps only, after the student allows it
+         on Health Connect's own screen. Must match HealthReader.PERMISSIONS. -->
+    <uses-permission android:name="android.permission.health.READ_SLEEP" />
+    <uses-permission android:name="android.permission.health.READ_STEPS" />
+
     <!-- Android 11+ only shows other apps to apps that ask: FocusGuard lists the ones with a launcher icon. -->
     <queries>
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
         </intent>
+        <!-- Whether the Health Connect app is installed (Android 9–13). -->
+        <package android:name="com.google.android.apps.healthdata" />
     </queries>
 </manifest>

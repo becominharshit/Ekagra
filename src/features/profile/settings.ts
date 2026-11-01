@@ -102,6 +102,8 @@ const lifeSchema = z.looseObject({
   /** Daily targets for meals (estimates; editable). */
   calories: z.number().int().min(800).max(6000).catch(2200),
   protein: z.number().int().min(10).max(400).catch(70),
+  /** Steps a day to aim for. */
+  stepGoal: z.number().int().min(1000).max(50_000).catch(8000),
 })
 
 export const settingsSchema = z.looseObject({
