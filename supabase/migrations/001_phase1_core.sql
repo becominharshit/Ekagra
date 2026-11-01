@@ -97,6 +97,15 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
 
+-- People who signed up before this migration ran (e.g. while testing sign-in) get a profile too.
+insert into public.profiles (id, full_name, avatar_url)
+select
+  id,
+  coalesce(raw_user_meta_data ->> 'full_name', raw_user_meta_data ->> 'name'),
+  coalesce(raw_user_meta_data ->> 'avatar_url', raw_user_meta_data ->> 'picture')
+from auth.users
+on conflict (id) do nothing;
+
 create table public.routine_blocks (
   id            uuid primary key default gen_random_uuid(),
   user_id       uuid not null default auth.uid() references auth.users (id) on delete cascade,

@@ -10,6 +10,7 @@ const readSql = (relativePath: string) => readFileSync(new URL(relativePath, imp
 
 const ALICE = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const BOB = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+const CAROL = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc' // signed up before the migration ran
 
 let db: PGlite
 let tables: string[] = [] // every table in the "public" schema
@@ -45,6 +46,8 @@ async function insertId(tx: Transaction, insert: string, params: unknown[] = [])
 beforeAll(async () => {
   db = new PGlite()
   await db.exec(readSql('./supabase-stubs.sql'))
+  // Carol signed in (e.g. while testing Google sign-in) before the tables existed.
+  await db.exec(`insert into auth.users (id, email, raw_user_meta_data) values ('${CAROL}', 'carol@example.com', '{"name": "Carol"}')`)
   await db.exec(readSql('../../supabase/migrations/001_phase1_core.sql'))
 
   // Two people sign up. The sign-up trigger creates their profiles.
@@ -145,6 +148,11 @@ describe('Phase 1 migration (001_phase1_core.sql)', () => {
   it('creates a profile with name and photo when someone signs up', async () => {
     const rows = await as(ALICE, async (tx) => (await tx.query('select full_name, avatar_url, timezone from public.profiles')).rows)
     expect(rows).toEqual([{ full_name: 'Alice', avatar_url: 'https://example.com/alice.png', timezone: 'Asia/Kolkata' }])
+  })
+
+  it('also creates profiles for people who signed up before the migration ran', async () => {
+    const rows = await as(CAROL, async (tx) => (await tx.query('select full_name from public.profiles')).rows)
+    expect(rows).toEqual([{ full_name: 'Carol' }])
   })
 
   it('turns on RLS for every table, each with at least one policy', async () => {

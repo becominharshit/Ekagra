@@ -2,9 +2,13 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { RouterProvider } from 'react-router/dom'
+import { initAuth } from '@/features/auth/auth'
 import { queryClient } from '@/lib/queryClient'
 import { router } from '@/router'
 import './index.css'
+
+// Start following sign-in changes (and Android sign-in links) before the first screen shows.
+initAuth()
 
 const rootElement = document.getElementById('root')
 if (!rootElement) throw new Error('index.html is missing <div id="root">')
