@@ -126,7 +126,8 @@ Generated per topic **when the student reaches it**, not for the whole book at o
 - **Check quiz:** 3–5 questions after every lesson (active recall).
 - **Topic and subject quizzes:** MCQ, short answer, numerical; code questions from P2.
 - Short answers are graded by AI against key points, with feedback and a model answer.
-- **Mock tests (P2):** timed, in the real exam pattern detected from past papers.
+- **Subject practice (P2, built in M11):** 10 questions at a time, picked so he gets about 7 in 10 right; wrong answers go to the mistake notebook.
+- **Mock tests (P2, built in M11):** timed, in the real exam pattern detected from past papers (a full or a half paper, 1.8 minutes per mark), handed in by themselves when the time is up. The test stays on the phone if he leaves the screen. Written answers are marked by the AI against key points (a rough mark on the device in Demo Mode); he can change written marks before saving. Results come per topic, weakest first, and answers under half marks go to the mistake notebook.
 
 ### 8.9 Flashcards (P1)
 - Made automatically from lessons and material; the student can add and edit cards.
@@ -145,14 +146,14 @@ Generated per topic **when the student reaches it**, not for the whole book at o
 
 ### 8.12 Progress and learning metrics (P1 basic, P2 full)
 - **P1:** mastery per topic, focus minutes, flashcard retention, streak.
-- **P2:** four metrics (formulas in the technical design §9):
+- **P2 (built in M11):** four metrics, saved each week and shown on Academics → Progress as charts over 9 weeks (formulas in the technical design §9):
   - **Memory:** how much he remembers on reviews
   - **Learning speed:** time to master a topic vs the estimate
   - **Processing speed:** time per correct answer in timed practice
   - **Problem solving:** first-try accuracy on new, harder problems
-- **Exam readiness score (P2)** per subject: combines topic coverage, mastery and mock-test scores.
+- **Exam readiness score (P2, built in M11)** per subject: combines topic coverage, mastery and mock-test scores (40/40/20). It shows on the subject list, on each subject and on Progress.
 
-### 8.13 Adaptive challenge (P2)
+### 8.13 Adaptive challenge (P2, built in M11)
 - Questions are picked so he succeeds about 70% of the time: hard enough to grow, easy enough to keep going.
 - Weekly challenge on one metric at a time: the target rises 5–10% after two good weeks and drops 5% after two missed weeks.
 

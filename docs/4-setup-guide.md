@@ -46,7 +46,7 @@ npm run db:types
 
 - `login` opens your browser to allow the Supabase command-line tool.
 - `link` asks for the database password from step 1.
-- `db:push` creates every table, security rule (RLS) and storage bucket from the files in `supabase/migrations/` (`001_phase1_core.sql`, then `002_hustle_mode.sql`, `003_beta.sql` (feedback), `004_attendance_grades.sql` and any later ones). Run it again whenever a new migration file appears; it only applies the new ones.
+- `db:push` creates every table, security rule (RLS) and storage bucket from the files in `supabase/migrations/` (`001_phase1_core.sql`, then `002_hustle_mode.sql`, `003_beta.sql` (feedback), `004_attendance_grades.sql`, `005_adaptive.sql` (practice ratings, weekly metrics and challenges) and any later ones). Run it again whenever a new migration file appears; it only applies the new ones.
 - `db:types` writes `src/types/database.ts` from your real database. Run it again after every new migration.
 
 **Check:** Supabase → **Table Editor** lists tables such as `profiles`, `subjects`, `hustles`, and each one says RLS is enabled.
@@ -133,7 +133,7 @@ Demo Mode never uses this: there, AI features give sample answers made on the de
 3. Send the secrets to Supabase: `npm run functions:secrets`
 4. Deploy the functions: `npm run functions:deploy` (no Docker needed). Run it again whenever something in `supabase/functions/` changes.
 
-**Check:** Supabase → **Edge Functions** lists the 7 AI functions (`ai-syllabus`, `ai-papers`, `ai-tutor`, `ai-generate`, `ai-capture`, `ai-brief`, `ai-hustle`) and 2 without AI: `ai-usage` (the AI usage card on Me) and `account-delete` (wiping data and deleting accounts). Those 2 need no AI secrets, but they must be deployed. **Edge Functions → Secrets** lists the `AI_…` names. Then, signed in: import a syllabus (Academics → a subject → Import syllabus), open a topic → **Make my lesson**, add a screenshot of the portal with the **+** button, and tap refresh on Today's **Morning brief** (it should say "Written by the AI"). **Me → AI usage** then shows those requests, today and this month, with their cost.
+**Check:** Supabase → **Edge Functions** lists the 8 AI functions (`ai-syllabus`, `ai-papers`, `ai-tutor`, `ai-generate`, `ai-capture`, `ai-brief`, `ai-hustle`, `ai-grade`) and 2 without AI: `ai-usage` (the AI usage card on Me) and `account-delete` (wiping data and deleting accounts). Those 2 need no AI secrets, but they must be deployed. **Edge Functions → Secrets** lists the `AI_…` names. Then, signed in: import a syllabus (Academics → a subject → Import syllabus), open a topic → **Make my lesson**, add a screenshot of the portal with the **+** button, and tap refresh on Today's **Morning brief** (it should say "Written by the AI"). **Me → AI usage** then shows those requests, today and this month, with their cost. To try `ai-grade`: Academics → a subject with a past paper → **Mock test** → Start, write an answer or two, **Hand in**: the written answers should say "Marked by the AI".
 
 The Coding Lab doesn't need any of this: Python runs on the device. Its first run downloads Python (about 13 MB) from the jsDelivr CDN, so that one needs the internet.
 

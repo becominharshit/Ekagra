@@ -137,7 +137,8 @@ subjects            user_id, name, code, semester, exam_date, exam_date_estimate
 topics              user_id, subject_id, parent_id (unit → topic), title, order_index,
                     track (exam|skill), est_minutes, difficulty 1–5, exam_weight 0–1,
                     pyq_count, pyq_marks_share, priority_score,
-                    status (not_started|learning|review|mastered), mastery 0–1, target_date
+                    status (not_started|learning|review|mastered), mastery 0–1, target_date,
+                    learned_at (the first check quiz of 80% or more, for learning speed; M11)
 topic_prereqs       topic_id, prereq_topic_id
 materials           user_id, subject_id, kind (pdf|youtube|video|audio|image|text|drive),
                     title, storage_path, source_url, page_count, duration_sec,
@@ -150,12 +151,14 @@ material_chunks     material_id, section_id, user_id, content, page_no, ts_start
 lessons             user_id, topic_id, content_md, sources jsonb, prompt_version, model
 questions           user_id, topic_id, source (generated|pyq|manual),
                     type (mcq|short|numerical|code|long), prompt, options jsonb,
-                    answer jsonb, explanation, marks, difficulty 1–5, rating (P2),
+                    answer jsonb, explanation, marks, difficulty 1–5, rating (Elo; M11),
                     tests jsonb (code, P2), source_ref
 quizzes             user_id, kind (check|topic|subject|mock), subject_id, topic_ids uuid[],
-                    time_limit_sec, started_at, finished_at, score
+                    time_limit_sec, started_at, finished_at, score (0–1)
+                    (subject = an adaptive practice session, mock = a mock test; M11)
 attempts            user_id, question_id, quiz_id, answer jsonb, is_correct, score,
-                    time_ms, hints_used
+                    time_ms, hints_used (mock tests keep the marks, who marked them,
+                    feedback and the model answer in answer; time_ms only for quick answers)
 flashcards          user_id, topic_id, front, back, source, fsrs jsonb, due_at, suspended
 flashcard_reviews   user_id, flashcard_id, rating 1–4, reviewed_at, duration_ms, log jsonb
 mistakes            user_id, topic_id, question_id, flashcard_id, concept, why_wrong,
@@ -163,7 +166,8 @@ mistakes            user_id, topic_id, question_id, flashcard_id, concept, why_w
 past_papers         user_id, subject_id, material_id, year, exam_type
 tutor_threads       user_id, subject_id, material_id, title, mode (explain|socratic|exam)
 tutor_messages      thread_id, user_id, role, content, citations jsonb
-subject_ratings     user_id, subject_id, rating (Elo), attempts_count           (P2)
+subject_ratings     user_id, subject_id, rating (Elo, starts at 1000), attempts_count;   (M11)
+                    one per subject
 attendance          user_id, subject_id, date, start_time (the routine class; null =    (M12)
                     added by hand), status (present|absent|cancelled); unique per
                     subject, date and start time
@@ -193,9 +197,11 @@ blocked_apps        user_id, package_name, label, active
 screen_time_daily   user_id, date, package_name, minutes                       (P2)
 
 ── Progress (P2) ─────────────────────────────────────────────────────────────
-metric_snapshots    user_id, week_start, memory, learning_speed, processing_speed,
-                    problem_solving, focus_minutes, details jsonb
-challenges          user_id, week_start, metric, baseline, target, achieved
+metric_snapshots    user_id, week_start, memory, learning_speed, processing_speed,        (M11)
+                    problem_solving (null = too little practice), focus_minutes,
+                    details jsonb; one per finished week with practice
+challenges          user_id, week_start, metric, baseline, target, achieved (null      (M11)
+                    until the week is over); one per week
 weekly_reviews      user_id, week_start, stats jsonb, insights jsonb, changes jsonb
 
 ── Life ──────────────────────────────────────────────────────────────────────
@@ -334,7 +340,7 @@ const TopicTree = z.object({
 - Output: `[{ title, area, subjectKey (a listed subject or null), hustleKey (a listed hustle or null), lead (a possible job or client for that hustle: saved as a card on its board), dueAt (ISO 8601 with offset; 23:59 when only a day is given), estMinutes, priority, unsure: [fields it guessed] }]`.
 - The `unsure` fields are highlighted in the confirm sheet. Nothing is saved without confirmation. Demo Mode reads typed tasks on the device with simple rules (screenshots need the AI).
 
-**h) Grading (`ai-grade`, Fast):** short answer + rubric of key points → score, feedback, model answer.
+**h) Grading (`ai-grade`, Fast; built in M11):** up to 15 written answers (short and long answers, programs and past-paper questions of a mock test) per request, each with its marks and, when known, key points or a model answer → marks in steps of 0.5, 2–4 sentences of feedback, the missing points and a full-marks answer. Zod checks one grade per answer and never more than its marks (one retry). Without key points the model decides what the marks need. The student's answer is never followed as an instruction. Without the AI (Demo Mode, or when it fails) the device gives a rough mark by matching key words with the key points or the model answer, and the student marks what it can't compare.
 
 **i) Morning brief (`ai-brief`, Fast):** today's plan + deadlines + last check-in → 3 short lines, cached for the day.
 
@@ -406,6 +412,14 @@ Pure TypeScript in `src/features/planner/`, run in the app, saved to `plan_block
 - Next questions are chosen so that `E ≈ 0.7`.
 
 **Weekly challenge (P2):** one metric at a time. Two weeks on target → target × 1.05–1.10. Two weeks missed → target × 0.95.
+
+**As built in M11** (`src/features/practice/elo.ts`, `src/features/metrics/`, `src/features/mock/`; all pure and tested):
+- Metrics need a minimum before they say anything (memory 5 reviews or re-tests, processing speed 5 timed right answers, problem solving 3 first tries); otherwise they are null ("not enough practice"). Processing speed is the median over all quick right answers (check quizzes, practice, and the mock-test questions the app marks); written answers don't count, and there are no per-type baselines yet. Learning speed uses the minutes of done or partly done study blocks up to the day the topic was first learned (`topics.learned_at`). Problem solving doesn't count code problems yet.
+- Finished weeks with practice are saved once in `metric_snapshots` (8 weeks back); this week is worked out live.
+- Practice sessions use the check questions (the ones with an answer key), 10 per session. Question ratings start from the difficulty and stay within 100–3000.
+- Readiness: a subject without a mock test yet gets 0 for that part, and its card links to the mock test. Topics without any priority all count the same.
+- Weekly challenge: the first target is 5% better than the last measured value (memory at most 90%). "Two weeks" means two weeks in a row at the same target, so a new target starts counting again; 10% harder when both weeks beat it by 10% or more. A week too thin to measure counts as missed. Each finished week is judged only after its snapshot is saved.
+- Mock tests: the pattern is the median count of each question type and marks over the past papers (the biggest paper when they have nothing in common), timed at 1.8 minutes per mark. A half paper keeps the same mix. Lesson check questions fill the multiple-choice and numerical sections (the app marks them); past-paper questions fill the rest as written answers. Questions not used in recent mocks and important topics come first. Half marks or more counts as right; less goes to the mistake notebook.
 
 ## 10. Spaced repetition
 - `ts-fsrs` with desired retention 0.90 (setting 0.80–0.95), 20 new cards/day (setting), and a daily review cap with a warning when reviews pile up.
