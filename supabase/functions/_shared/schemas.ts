@@ -372,6 +372,58 @@ export const HustlePlanResponseSchema = HustlePlanAnswerSchema.safeExtend({ mode
 export type HustlePlanResponse = z.infer<typeof HustlePlanResponseSchema>
 
 // ---------------------------------------------------------------------------
+// Marking written answers: short and long answers of a mock test (ai-grade)
+// ---------------------------------------------------------------------------
+
+export const GradeItemSchema = z.object({
+  /** A short key (a1, a2, …) so the grades come back matched to the answers. */
+  key: z.string().min(1).max(10),
+  question: z.string().trim().min(1).max(4000),
+  marks: z.number().min(0.5).max(100),
+  /** The student's answer (may be empty: then it gets 0). */
+  answer: z.string().max(8000),
+  /** What a full-marks answer must contain, when known. */
+  keyPoints: z.array(z.string().max(300)).max(12).optional(),
+  modelAnswer: z.string().max(4000).optional(),
+})
+export type GradeItem = z.infer<typeof GradeItemSchema>
+
+export const GradeRequestSchema = z
+  .object({
+    subject: z.string().trim().min(1).max(120),
+    items: z.array(GradeItemSchema).min(1).max(15),
+  })
+  .refine((request) => new Set(request.items.map((item) => item.key)).size === request.items.length, { message: 'Each answer needs its own key', path: ['items'] })
+export type GradeRequest = z.infer<typeof GradeRequestSchema>
+
+const gradeSchema = z.object({
+  key: z.string(),
+  awarded: z.number().min(0).describe('Marks given, in steps of 0.5'),
+  feedback: z.string().trim().min(1).max(1200).describe('2–4 plain sentences: what was right and what was missing'),
+  missing: z.array(z.string().max(300)).max(8).describe('Key points the answer left out'),
+  modelAnswer: z.string().trim().min(1).max(4000).describe('A concise full-marks answer'),
+})
+
+/** The answer the model must give for these items: one grade per key, never above the item's marks. */
+export function gradeAnswerSchemaFor(items: Pick<GradeItem, 'key' | 'marks'>[]) {
+  const marks = new Map(items.map((item) => [item.key, item.marks]))
+  return z.object({ grades: z.array(gradeSchema) }).superRefine((answer, context) => {
+    const keys = answer.grades.map((grade) => grade.key)
+    if (keys.length !== marks.size || new Set(keys).size !== keys.length || keys.some((key) => !marks.has(key))) {
+      context.addIssue({ code: 'custom', message: `Give exactly one grade for each of: ${[...marks.keys()].join(', ')}`, path: ['grades'] })
+    }
+    answer.grades.forEach((grade, index) => {
+      const most = marks.get(grade.key)
+      if (most !== undefined && grade.awarded > most) context.addIssue({ code: 'custom', message: `At most ${most} marks for ${grade.key}`, path: ['grades', index, 'awarded'] })
+    })
+  })
+}
+export type GradeAnswer = { grades: z.infer<typeof gradeSchema>[] }
+
+export const GradeResponseSchema = z.object({ grades: z.array(gradeSchema), model: z.string(), promptVersion: z.string() })
+export type GradeResponse = z.infer<typeof GradeResponseSchema>
+
+// ---------------------------------------------------------------------------
 // AI usage dashboard: the limits and what the whole app spent (ai-usage, no AI call)
 // ---------------------------------------------------------------------------
 

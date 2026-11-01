@@ -8,7 +8,7 @@ import { callAiFunction, type AiFunction } from './aiClient'
 // students read their own rows), next to the limits and the whole app's spending, which come from
 // the ai-usage Edge Function. Demo Mode makes its sample answers on the device: nothing is counted.
 
-/** The 7 AI Edge Functions, and the names each one saves in ai_usage.feature. */
+/** The AI Edge Functions, and the names each one saves in ai_usage.feature. */
 export const AI_FUNCTIONS: { name: AiFunction; label: string; features: string[] }[] = [
   { name: 'ai-syllabus', label: 'Syllabus to topics', features: ['syllabus'] },
   { name: 'ai-papers', label: 'Past papers', features: ['papers'] },
@@ -17,6 +17,7 @@ export const AI_FUNCTIONS: { name: AiFunction; label: string; features: string[]
   { name: 'ai-capture', label: 'Task capture', features: ['capture'] },
   { name: 'ai-brief', label: 'Morning brief', features: ['brief'] },
   { name: 'ai-hustle', label: 'Custom hustle plans', features: ['hustle'] },
+  { name: 'ai-grade', label: 'Marking mock tests', features: ['grade'] },
 ]
 
 export interface UsageRow {
