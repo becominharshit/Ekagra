@@ -10,6 +10,16 @@ export type SharedStats = Tables<'shared_stats'>
 export type SharedView = Tables<'shared_stats_view'>
 export type Nudge = Tables<'nudges'>
 
+/** A partner or group mate, with what they share. */
+export interface Friend {
+  userId: string
+  name: string
+  /** Their shared numbers (null: they haven't set up sharing yet). */
+  stats: SharedView | null
+  /** A made-up friend in Demo Mode. */
+  sample?: boolean
+}
+
 /** What a student chose to share, and the name others see. */
 export interface Sharing {
   displayName: string
@@ -112,6 +122,23 @@ export function samePublished(row: ReturnType<typeof toPublished>, saved: Shared
     if (key === 'studying_until' && typeof mine === 'string' && typeof theirs === 'string') return Date.parse(mine) === Date.parse(theirs)
     return mine === theirs
   })
+}
+
+/** A sharing row as shared_stats_view shows it ("studying now" worked out, an old one hidden). */
+export function viewOf(row: SharedStats, now: Date): SharedView {
+  const studying = row.studying_until !== null && Date.parse(row.studying_until) > now.getTime()
+  return {
+    user_id: row.user_id,
+    display_name: row.display_name,
+    week_start: row.week_start,
+    focus_minutes: row.focus_minutes,
+    streak_days: row.streak_days,
+    plan_pct: row.plan_pct,
+    on_leaderboard: row.on_leaderboard,
+    studying_until: studying ? row.studying_until : null,
+    studying_now: studying,
+    updated_at: row.updated_at,
+  }
 }
 
 /** When a running focus session should end (its start + planned minutes), if that's still ahead. */

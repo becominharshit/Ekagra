@@ -3,7 +3,7 @@ import { addDays, format, startOfWeek } from 'date-fns'
 import { dbError, need, readAll, useDataSource, type DataSource } from '@/lib/dataSource'
 import { demoDb } from '@/lib/demoDb'
 import type { TablesInsert } from '@/types/database'
-import { myNumbers, normalizeCode, type MyNumbers, type Nudge, type NudgeKind, type SharedStats, type SharedView } from './social'
+import { myNumbers, normalizeCode, type Friend, type MyNumbers, type Nudge, type NudgeKind, type SharedStats, type SharedView } from './social'
 
 // Partners and nudges, from Supabase or (Demo Mode) the device. Real friends need accounts: in
 // Demo Mode the student's own sharing is kept on the device, Aarav is a sample partner, and codes
@@ -58,15 +58,6 @@ export async function loadMyNumbers(source: DataSource, now: Date): Promise<MyNu
 // ---------------------------------------------------------------------------
 // Partners
 // ---------------------------------------------------------------------------
-
-export interface Friend {
-  userId: string
-  name: string
-  /** Their shared numbers (null: they haven't set up sharing yet). */
-  stats: SharedView | null
-  /** A made-up friend in Demo Mode. */
-  sample?: boolean
-}
 
 export const SAMPLE_PARTNER_ID = 'sample-aarav'
 

@@ -5,6 +5,7 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useProfile } from '@/features/profile/queries'
+import { GroupsCard } from '@/features/social/GroupsCard'
 import { NudgesCard } from '@/features/social/NudgesCard'
 import { PartnerCard } from '@/features/social/PartnerCard'
 import { SharingCard } from '@/features/social/SharingCard'
@@ -36,7 +37,9 @@ export function FriendsPage() {
       <PageHeader title="Partner and groups" subtitle="Study with friends: share a few numbers, nudge each other and focus together." />
       <div className="grid gap-4">
         {demo && (
-          <p className="rounded-lg bg-muted/50 p-3 text-sm">Demo Mode: Aarav is a sample partner, so you can try everything. Sign in to connect with real friends.</p>
+          <p className="rounded-lg bg-muted/50 p-3 text-sm">
+            Demo Mode: Aarav and the study group are samples, so you can try everything. Sign in to connect with real friends.
+          </p>
         )}
         {stats.isPending && (
           <p className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -78,6 +81,7 @@ export function FriendsPage() {
           <>
             <NudgesCard />
             <PartnerCard weekStart={weekStart} demo={demo} />
+            <GroupsCard weekStart={weekStart} />
             <SharingCard key={stats.data.display_name} stats={stats.data} numbers={numbers.data ?? null} />
           </>
         )}
