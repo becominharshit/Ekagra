@@ -12,7 +12,8 @@ import { useNow } from '@/hooks/useNow'
 import { useDataSource } from '@/lib/dataSource'
 import { cn } from '@/lib/utils'
 import { useLifeMutation } from '../lifeData'
-import { canRecord, startRecording, toAudioFile, type Recorder, type Recording } from './recorder'
+import { canRecognizeSpeech, startListening, type Listener } from './recognizer'
+import { canRecord, startRecording, type Recorder, type Recording } from './recorder'
 import {
   averageScore,
   clockLabel,
@@ -37,6 +38,7 @@ import {
   speechStats,
   toScenario,
   topFillers,
+  type Capture,
   type Scenario,
   type SpeakingSession,
 } from './speech'
@@ -136,22 +138,31 @@ function PracticeCard({
   const { source } = useDataSource()
   const withAi = source?.kind === 'supabase'
   const practise = usePractiseWithAi()
+  const save = useSaveSpeakingSession()
   const recorderRef = useRef<Recorder | null>(null)
+  const listenerRef = useRef<Listener | null>(null)
   const timerRef = useRef<number | undefined>(undefined)
   const aliveRef = useRef(true)
   const [phase, setPhase] = useState<'idle' | 'starting' | 'recording'>('idle')
   const [startedAt, setStartedAt] = useState(0)
-  const [take, setTake] = useState<{ recording: Recording; url: string } | null>(null)
+  const [take, setTake] = useState<{ recording: Recording; url: string; heard: string } | null>(null)
+  const [heard, setHeard] = useState('')
+  const [speechProblem, setSpeechProblem] = useState<string | null>(null)
   const [typing, setTyping] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
   const now = useNow(phase === 'recording' ? 250 : 60_000)
   const elapsed = phase === 'recording' ? Math.max(0, (now.getTime() - startedAt) / 1000) : 0
   const recordable = canRecord()
+  // Speech-to-text only when signed in: in Chrome it goes through Google's speech service, and in
+  // Demo Mode nothing leaves the device.
+  const listens = withAi && canRecognizeSpeech()
+  const sending = practise.isPending ? 'ai' : save.isPending ? 'device' : null
 
   // Leaving the tab while recording turns the microphone off.
   useEffect(() => {
     const alive = aliveRef
     const recorder = recorderRef
+    const listener = listenerRef
     const timer = timerRef
     alive.current = true
     return () => {
@@ -159,6 +170,8 @@ function PracticeCard({
       window.clearTimeout(timer.current)
       recorder.current?.cancel()
       recorder.current = null
+      listener.current?.cancel()
+      listener.current = null
     }
   }, [])
 
@@ -171,12 +184,15 @@ function PracticeCard({
   async function stop() {
     window.clearTimeout(timerRef.current)
     const recorder = recorderRef.current
+    const listener = listenerRef.current
     recorderRef.current = null
+    listenerRef.current = null
     if (!recorder) return
     try {
-      const recording = await recorder.stop()
-      setTake({ recording, url: URL.createObjectURL(recording.blob) })
+      const [recording, words] = await Promise.all([recorder.stop(), listener ? listener.stop() : Promise.resolve('')])
+      setTake({ recording, url: URL.createObjectURL(recording.blob), heard: words })
     } catch (error) {
+      listener?.cancel()
       setProblem(messageOf(error))
     } finally {
       setPhase('idle')
@@ -185,7 +201,12 @@ function PracticeCard({
 
   async function start() {
     setProblem(null)
+    setSpeechProblem(null)
     setTake(null)
+    setTyping(false)
+    setHeard('')
+    practise.reset()
+    save.reset()
     setPhase('starting')
     try {
       const recorder = await startRecording()
@@ -194,6 +215,7 @@ function PracticeCard({
         return
       }
       recorderRef.current = recorder
+      if (listens) listenerRef.current = startListening(setHeard, setSpeechProblem)
       setStartedAt(nowMs())
       setPhase('recording')
       timerRef.current = window.setTimeout(() => void stop(), MAX_SECONDS * 1000)
@@ -207,24 +229,33 @@ function PracticeCard({
     window.clearTimeout(timerRef.current)
     recorderRef.current?.cancel()
     recorderRef.current = null
+    listenerRef.current?.cancel()
+    listenerRef.current = null
+    setHeard('')
     setPhase('idle')
   }
 
-  async function getFeedback() {
-    if (!take) return
+  /** Feedback from the AI on the words (signed in), or the pace and fillers counted on the device. */
+  function send(how: 'ai' | 'device', answer: { transcript: string; durationSec: number; captured: Capture }) {
     setProblem(null)
-    try {
-      const audio = await toAudioFile(take.recording)
-      const session = await practise.mutateAsync({ scenario, prompt, durationSec: take.recording.durationSec, audio })
-      // The recording is dropped here: only the transcript and the scores were saved.
+    // The recording is dropped here: only the words, what was counted and the scores are kept.
+    const done = (session: SpeakingSession) => {
       setTake(null)
+      setTyping(false)
       onSaved(session)
-    } catch (error) {
-      setProblem(messageOf(error))
     }
+    if (how === 'ai') {
+      practise.mutate({ scenario, prompt, ...answer }, { onSuccess: done })
+      return
+    }
+    const tips = deviceTips(speechStats(answer.transcript, answer.durationSec), answer.durationSec)
+    save.mutate(
+      { scenario, prompt, durationSec: answer.durationSec, transcript: answer.transcript, scores: null, feedback: tips.map((tip) => ({ kind: 'tip' as const, text: tip })), source: 'device' },
+      { onSuccess: done },
+    )
   }
 
-  const busy = phase !== 'idle' || practise.isPending
+  const busy = phase !== 'idle' || sending !== null
 
   return (
     <Card>
@@ -264,112 +295,145 @@ function PracticeCard({
         </div>
 
         {phase === 'recording' ? (
-          <div className="flex flex-wrap items-center gap-3">
-            <span role="status" className="flex items-center gap-2 text-sm tabular-nums">
-              <span className="size-2.5 animate-pulse rounded-full bg-destructive" aria-hidden />
-              Recording {clockLabel(elapsed)} of {clockLabel(MAX_SECONDS)}
-            </span>
-            <Button onClick={() => void stop()}>
-              <Square aria-hidden />
-              Stop
-            </Button>
-            <Button variant="ghost" onClick={cancel}>
-              Cancel
-            </Button>
+          <div className="grid gap-2">
+            <div className="flex flex-wrap items-center gap-3">
+              <span role="status" className="flex items-center gap-2 text-sm tabular-nums">
+                <span className="size-2.5 animate-pulse rounded-full bg-destructive" aria-hidden />
+                Recording {clockLabel(elapsed)} of {clockLabel(MAX_SECONDS)}
+              </span>
+              <Button onClick={() => void stop()}>
+                <Square aria-hidden />
+                Stop
+              </Button>
+              <Button variant="ghost" onClick={cancel}>
+                Cancel
+              </Button>
+            </div>
+            {listens && !speechProblem && <p className="rounded-lg bg-muted/40 p-2.5 text-sm text-muted-foreground">{heard || 'Listening… your words show here as you speak.'}</p>}
           </div>
         ) : take ? (
           <div className="grid gap-2">
             <audio controls src={take.url} className="w-full" aria-label="Your recording" />
             <div className="flex flex-wrap gap-2">
-              {withAi && (
-                <Button disabled={practise.isPending} onClick={() => void getFeedback()}>
-                  {practise.isPending ? <LoaderCircle className="animate-spin" aria-hidden /> : <Sparkles aria-hidden />}
-                  {practise.isPending ? 'Listening…' : 'Get feedback'}
-                </Button>
-              )}
-              <Button variant="outline" disabled={practise.isPending} onClick={() => void start()}>
+              <Button variant="outline" disabled={sending !== null} onClick={() => void start()}>
                 <Mic aria-hidden />
                 Record again
               </Button>
-              <Button variant="ghost" disabled={practise.isPending} onClick={() => setTake(null)}>
+              <Button variant="ghost" disabled={sending !== null} onClick={() => setTake(null)}>
                 Discard
               </Button>
             </div>
           </div>
         ) : (
           <div className="flex flex-wrap gap-2">
-            <Button disabled={phase === 'starting' || !recordable} onClick={() => void start()}>
+            <Button disabled={phase === 'starting' || !recordable || sending !== null} onClick={() => void start()}>
               {phase === 'starting' ? <LoaderCircle className="animate-spin" aria-hidden /> : <Mic aria-hidden />}
               Start speaking
             </Button>
-            <Button variant="outline" aria-expanded={typing} onClick={() => setTyping(!typing)}>
+            <Button variant="outline" aria-expanded={typing} disabled={sending !== null} onClick={() => setTyping(!typing)}>
               Type what I said
             </Button>
           </div>
         )}
         {!recordable && <p className="text-sm text-muted-foreground">This browser can't record audio: type what you said instead, or use the Android app.</p>}
+        {recordable && withAi && !listens && phase === 'idle' && !take && (
+          <p className="text-sm text-muted-foreground">This browser can't turn speech into text: after you stop, type what you said (you can play your recording back).</p>
+        )}
+        {speechProblem && (
+          <p role="status" className="text-sm text-muted-foreground">
+            {speechProblem}
+          </p>
+        )}
         {problem && (
           <p role="alert" className="text-sm text-destructive">
             {problem}
           </p>
         )}
-        {phase !== 'recording' && (typing || (take !== null && !withAi)) && (
-          <TypedAnswer
+        {phase !== 'recording' && (typing || take !== null) && (
+          <AnswerForm
             key={take?.url ?? 'typed'}
-            scenario={scenario}
-            prompt={prompt}
+            heard={take?.heard ?? ''}
             seconds={take?.recording.durationSec ?? null}
-            onSaved={(session) => {
-              setTake(null)
-              setTyping(false)
-              onSaved(session)
-            }}
+            withAi={withAi}
+            sending={sending}
+            error={(practise.error ?? save.error)?.message ?? null}
+            onSend={send}
           />
         )}
         <p className="text-xs text-muted-foreground">
           {withAi
-            ? 'Your recording goes to the AI only for this feedback and is never saved: only the transcript and the scores are kept.'
-            : 'Demo Mode has no AI to listen: your recording stays on this device for you to play back. Type what you said, and the app counts your pace and filler words.'}
+            ? `Only the words go to the AI for feedback: your recording stays on this device and is never sent or saved.${listens ? ' Speech-to-text is done by your browser (Chrome and Edge use their online speech service).' : ''}`
+            : 'Demo Mode has no AI: your recording stays on this device for you to play back. Type what you said, and the app counts your pace and filler words.'}
         </p>
       </CardContent>
     </Card>
   )
 }
 
-/** A typed (or pasted) answer: pace and fillers are counted on the device, with tips from the numbers. */
-function TypedAnswer({ scenario, prompt, seconds, onSaved }: { scenario: Scenario; prompt: string; seconds: number | null; onSaved: (session: SpeakingSession) => void }) {
-  const [text, setText] = useState('')
+/**
+ * What was said - as speech-to-text heard it, or typed - for the student to check, then feedback
+ * from the AI (signed in) or the pace and fillers counted on the device, with tips from the numbers.
+ */
+function AnswerForm({
+  heard,
+  seconds,
+  withAi,
+  sending,
+  error,
+  onSend,
+}: {
+  heard: string
+  seconds: number | null
+  withAi: boolean
+  sending: 'ai' | 'device' | null
+  error: string | null
+  onSend: (how: 'ai' | 'device', answer: { transcript: string; durationSec: number; captured: Capture }) => void
+}) {
+  const [text, setText] = useState(heard)
   const [secondsText, setSecondsText] = useState(String(seconds ?? 60))
-  const save = useSaveSpeakingSession()
   const durationSec = Math.round(Number(secondsText))
   const problem = !Number.isFinite(durationSec) || durationSec < 5 || durationSec > 1800 ? 'How long you spoke: between 5 and 1,800 seconds.' : null
+  const ready = text.trim() !== '' && problem === null && sending === null
+  const captured: Capture = heard.trim() ? 'speech' : 'typed'
+
+  function send(how: 'ai' | 'device') {
+    if (ready) onSend(how, { transcript: text, durationSec, captured })
+  }
 
   function submit(event: FormEvent) {
     event.preventDefault()
-    if (problem) return
-    const tips = deviceTips(speechStats(text, durationSec), durationSec)
-    save.mutate({ scenario, prompt, durationSec, transcript: text, scores: null, feedback: tips.map((tip) => ({ kind: 'tip' as const, text: tip })), source: 'device' }, { onSuccess: onSaved })
+    send(withAi ? 'ai' : 'device')
   }
 
   return (
     <form className="grid gap-3 rounded-lg border p-3" onSubmit={submit}>
       <Label className="grid gap-1.5 font-normal">
-        <span className="text-sm text-muted-foreground">What you said, as you said it (with every um and like)</span>
+        <span className="text-sm text-muted-foreground">
+          {heard ? 'What you said, as speech-to-text heard it: fix any wrong words, and add any um or uh it left out' : 'What you said, as you said it (with every um and like)'}
+        </span>
         <Textarea rows={4} maxLength={20_000} value={text} onChange={(event) => setText(event.target.value)} />
       </Label>
       <Label className="grid max-w-56 gap-1.5 font-normal">
         <span className="text-sm text-muted-foreground">How long you spoke (seconds)</span>
         <Input type="number" inputMode="numeric" min={5} max={1800} value={secondsText} onChange={(event) => setSecondsText(event.target.value)} />
       </Label>
-      {(problem ?? save.error) && (
+      {(problem ?? error) && (
         <p role="alert" className="text-sm text-destructive">
-          {problem ?? save.error?.message}
+          {problem ?? error}
         </p>
       )}
-      <Button type="submit" className="justify-self-start" disabled={!text.trim() || problem !== null || save.isPending}>
-        {save.isPending && <LoaderCircle className="animate-spin" aria-hidden />}
-        Count my pace and fillers
-      </Button>
+      <div className="flex flex-wrap gap-2">
+        {withAi && (
+          <Button type="submit" disabled={!ready}>
+            {sending === 'ai' ? <LoaderCircle className="animate-spin" aria-hidden /> : <Sparkles aria-hidden />}
+            {sending === 'ai' ? 'Getting feedback…' : 'Get feedback'}
+          </Button>
+        )}
+        <Button type={withAi ? 'button' : 'submit'} variant={withAi ? 'outline' : 'default'} disabled={!ready} onClick={withAi ? () => send('device') : undefined}>
+          {sending === 'device' && <LoaderCircle className="animate-spin" aria-hidden />}
+          Count my pace and fillers
+        </Button>
+      </div>
     </form>
   )
 }

@@ -159,3 +159,10 @@ Add a dated line whenever an important decision is made or changed.
   - `ai-review` gets `sleep` and `workouts`, optional in the request so older app versions still work. The prompt asks for one sleep insight when it stands out, as a pattern rather than proof, never medical advice.
 
   **Screen:** a "Sleep and study" card under the week in numbers (with a link to Life → Sleep & steps when no nights were logged), and a Workouts tile when there were any. Phase 4's "Burnout guard; sleep vs study results" is ticked (the Burnout Guard came in M4).
+- 2026-11-02: `ai-speak` gets text, never sound (prompt `speak-v2`), so any text-only model works, Claude included. **The words:**
+  - The recording stays on the phone, only for playback.
+  - Signed in, the browser's speech-to-text (Web Speech API, `en-IN`, no library) writes the words while the student speaks. It restarts after the browser's pauses; any error, or a browser without it (Firefox, most Android WebViews), means typing instead.
+  - Demo Mode never uses it, because Chrome sends the sound to Google's speech service and Demo Mode promises nothing leaves the device.
+  - The student checks the words in one box (typed answers use the same box), then picks **Get feedback** (AI) or **Count my pace and fillers** (device).
+
+  **The request:** the words (`captured: 'speech' | 'typed'`), the length, and the pace and fillers counted on the device. The prompt says the model can't hear the voice, that speech-to-text drops um/uh and mishears words (never marked down), and never to comment on accent. The privacy page says so too.

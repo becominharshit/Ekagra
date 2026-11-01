@@ -59,7 +59,7 @@ export function PrivacyPage() {
           <List>
             <li>Your data is private to your account. It is never sold or used for ads. Partners and groups see only the few numbers you pick.</li>
             <li>AI features send only what a request needs to Google's Gemini, through Ekagra's server.</li>
-            <li>Meal photos and voice recordings are used once for feedback and never stored.</li>
+            <li>Meal photos are used once for an estimate and never stored. Speaking-practice recordings never leave your phone.</li>
             <li>FocusGuard's app checks stay on your phone. Health Connect is only read, and only sleep and steps, when you allow it.</li>
             <li>You can export all your data or delete it at any time: Me → Account and privacy.</li>
           </List>
@@ -103,8 +103,8 @@ export function PrivacyPage() {
             </li>
           </List>
           <p>
-            Photos and screenshots you give the AI to read (a syllabus, a task list, a meal) and voice recordings for speaking practice are sent for
-            that one request and are not stored, on Ekagra's server or anywhere else.
+            Photos and screenshots you give the AI to read (a syllabus, a task list, a meal) are sent for that one request and are not stored, on
+            Ekagra's server or anywhere else.
           </p>
         </Section>
 
@@ -116,8 +116,9 @@ export function PrivacyPage() {
             </li>
             <li>
               <strong>Recordings</strong>: the microphone records only after you tap Start speaking, and stops when you tap Stop (or after 3
-              minutes). The recording stays in your phone's memory so you can play it back. For AI feedback it is sent once to write the transcript
-              and scores, then dropped; it is never saved. In Demo Mode it never leaves your device.
+              minutes). The recording stays in your phone's memory so you can play it back; it is never sent or saved. When you're signed in, your
+              browser turns your speech into text as you speak if it can (Chrome and Edge use their online speech service for this, Safari uses
+              Apple's); otherwise you type what you said. For AI feedback only those words are sent, once. In Demo Mode nothing leaves your device.
             </li>
           </List>
         </Section>
@@ -189,7 +190,7 @@ export function PrivacyPage() {
           <p>
             When you use an AI feature (reading a syllabus or past paper, AI Anchors and the page tutor, lessons and quizzes, task capture, the
             morning brief, custom hustle plans, marking mock tests, the weekly review, meal estimates, speaking feedback), the app sends only what
-            that request needs, such as the selected text, the page, the photo, the recording or the week's numbers, to
+            that request needs, such as the selected text, the page, the photo, the words of your speaking practice or the week's numbers, to
             Ekagra's server (Supabase Edge Functions). The server asks Google's Gemini API and sends the answer back. Your name and email address
             are not sent with it. Google processes these requests under the Gemini API terms (ai.google.dev/gemini-api/terms). Ekagra does not use
             your data to train AI models.
@@ -213,7 +214,7 @@ export function PrivacyPage() {
               reminder, and nudges and group focus from friends while the app is in the background.
             </li>
             <li>
-              <strong>Microphone</strong>: records your answer during speaking practice, only after you tap Start speaking.
+              <strong>Microphone</strong>: records your answer during speaking practice so you can play it back, only after you tap Start speaking.
             </li>
             <li>
               <strong>Health Connect: read sleep and read steps</strong>: brings your sleep and steps into Life → Sleep & steps (see above).

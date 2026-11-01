@@ -1,4 +1,4 @@
-import { SPEAK_SCENARIOS, SPEAK_SCORES, type AudioFile } from '@shared/schemas.ts'
+import { SPEAK_CAPTURES, SPEAK_SCENARIOS, SPEAK_SCORES } from '@shared/schemas.ts'
 import { format, parseISO } from 'date-fns'
 import type { Tables } from '@/types/database'
 
@@ -10,7 +10,23 @@ export type SpeakingSession = Tables<'speaking_sessions'>
 export type Scenario = (typeof SPEAK_SCENARIOS)[number]
 export type ScoreName = (typeof SPEAK_SCORES)[number]
 export type Scores = Record<ScoreName, number>
+/** Where the words came from: speech-to-text (checked by the student), or typed. */
+export type Capture = (typeof SPEAK_CAPTURES)[number]
 export { SPEAK_SCENARIOS, SPEAK_SCORES }
+
+/** Seconds spoken as saved and sent: whole, from 1 second to 30 minutes. */
+export function wholeSeconds(seconds: number): number {
+  return Math.min(1800, Math.max(1, Math.round(seconds)))
+}
+
+/** Pieces of speech-to-text (earlier runs, finished phrases, the phrase still being heard) as one transcript. */
+export function joinSpeech(pieces: (string | undefined)[]): string {
+  return pieces
+    .map((piece) => piece?.trim() ?? '')
+    .filter(Boolean)
+    .join(' ')
+    .replace(/\s+/g, ' ')
+}
 
 export const SCENARIO_LABEL: Record<Scenario, string> = { interview: 'Interview', presentation: 'Presentation', group_discussion: 'Group discussion', small_talk: 'Small talk' }
 
@@ -295,21 +311,4 @@ export function progressSeries(sessions: Pick<SpeakingSession, 'created_at' | 'w
       return scores ? averageScore(scores) : null
     }),
   }
-}
-
-/** A recorder's format as a name ai-speak accepts ('audio/webm;codecs=opus' → 'audio/webm'), or null. */
-export function audioType(recorderType: string): AudioFile['mimeType'] | null {
-  const base = recorderType.split(';')[0]?.trim().toLowerCase() ?? ''
-  const known: Record<string, AudioFile['mimeType']> = {
-    'audio/webm': 'audio/webm',
-    'video/webm': 'audio/webm',
-    'audio/ogg': 'audio/ogg',
-    'audio/mp4': 'audio/mp4',
-    'audio/m4a': 'audio/m4a',
-    'audio/x-m4a': 'audio/m4a',
-    'audio/mpeg': 'audio/mpeg',
-    'audio/wav': 'audio/wav',
-    'audio/aac': 'audio/aac',
-  }
-  return known[base] ?? null
 }

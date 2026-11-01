@@ -4,7 +4,7 @@ import { SpeakAnswerSchema, SpeakRequestSchema, type SpeakRequest, type SpeakRes
 
 const wholeScore = (value: number) => Math.min(10, Math.max(1, Math.round(value)))
 
-/** A practice recording → a word-for-word transcript, 4 scores, a strength and tips. The recording is not stored. */
+/** What the student said (as text, with the app's counts) → 4 scores, a strength and tips. The recording never leaves the phone. */
 export const speakFeature: AiFeature<SpeakRequest, SpeakResponse> = {
   feature: 'speak',
   input: SpeakRequestSchema,
@@ -19,7 +19,6 @@ export const speakFeature: AiFeature<SpeakRequest, SpeakResponse> = {
     })
     const { clarity, structure, vocabulary, confidence } = data.scores
     return {
-      transcript: data.transcript.trim(),
       scores: { clarity: wholeScore(clarity), structure: wholeScore(structure), vocabulary: wholeScore(vocabulary), confidence: wholeScore(confidence) },
       strength: data.strength,
       tips: data.tips,

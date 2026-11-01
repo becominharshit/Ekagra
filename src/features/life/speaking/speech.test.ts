@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  audioType,
   averageScore,
   clockLabel,
   countFillers,
@@ -8,6 +7,7 @@ import {
   deviceTips,
   fillerLabel,
   fillerLevel,
+  joinSpeech,
   markFillers,
   paceOf,
   practisedOn,
@@ -18,6 +18,7 @@ import {
   readScores,
   speechStats,
   topFillers,
+  wholeSeconds,
 } from './speech'
 
 describe('filler words', () => {
@@ -95,16 +96,11 @@ describe('saved sessions and recordings', () => {
     expect(readFillers({ um: 2, like: 'x', uh: -1 })).toEqual({ um: 2 })
   })
 
-  it('names what the recorder made in a way ai-speak accepts', () => {
-    expect(['audio/webm;codecs=opus', 'audio/ogg; codecs=opus', 'audio/mp4;codecs=mp4a.40.2', 'video/webm', 'audio/x-m4a', 'video/mp4', ''].map(audioType)).toEqual([
-      'audio/webm',
-      'audio/ogg',
-      'audio/mp4',
-      'audio/webm',
-      'audio/m4a',
-      null,
-      null,
-    ])
+  it('joins speech-to-text pieces into one transcript, and keeps lengths whole and in range', () => {
+    // Earlier runs, finished phrases (with gaps) and the phrase still being heard.
+    expect(joinSpeech(['so basically I am', undefined, '  a CSE student ', '', 'matlab  I like apps'])).toBe('so basically I am a CSE student matlab I like apps')
+    expect(joinSpeech([' ', undefined])).toBe('')
+    expect([0.4, 62.6, 5000].map(wholeSeconds)).toEqual([1, 63, 1800])
   })
 
   it("adds up today's practice and turns sessions into chart points, oldest first", () => {

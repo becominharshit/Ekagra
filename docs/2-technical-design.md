@@ -402,10 +402,11 @@ const TopicTree = z.object({
 - Demo Mode gives a clearly marked sample from the mess and hostel quick-add list.
 
 **n) Speaking feedback (`ai-speak`, Fast; built in M14):**
-- A recording plus the kind of speech and the question → a word-for-word transcript, scores 1–10 (clarity, structure, vocabulary, confidence; rounded in the function), one strength and 1–3 tips.
-- The recording comes from the browser's own MediaRecorder: WebM/Opus on Chrome and Android, Ogg on Firefox, MP4 on Safari (sent to Gemini as M4A). It is recorded at 32 kbit/s, so 3 minutes is about 0.7 MB. Gemini reads audio inline up to 20 MB, at 32 tokens a second.
-- The transcript must keep every filler as spoken, because words per minute and filler words are counted in the app's code (`src/features/life/speaking/speech.ts`). Hesitations (um/uh), "basically", "actually", "literally", "matlab" and "yaar" always count. "like" counts only when it isn't a verb or a comparison, "you know" not in questions, and "I mean" not in "what I mean".
-- The recording is never stored: only the transcript, the counts and the scores.
+- What the student said, as text, plus the kind of speech, the question, the length and the counts → scores 1–10 (clarity, structure, vocabulary, confidence; rounded in the function), one strength and 1–3 tips. Prompt `speak-v2` (2026-11-02): the AI never gets the sound, so any text-only model works.
+- The recording comes from the browser's own MediaRecorder at 32 kbit/s, only so the student can play it back; it never leaves the phone.
+- The words come from the browser's speech-to-text (the Web Speech API, `en-IN`, `src/features/life/speaking/recognizer.ts`) while the student speaks, when signed in and where it works (Chrome and Edge send the sound to their speech service, Safari to Apple's; most Android WebViews don't have it). It restarts after the browser's pauses, and any error falls back to typing. The student checks the words (`captured: 'speech'`) or types them (`captured: 'typed'`).
+- Words per minute and filler words are counted in the app's code (`src/features/life/speaking/speech.ts`) and sent with the words, so the AI quotes exact numbers. Hesitations (um/uh), "basically", "actually", "literally", "matlab" and "yaar" always count. "like" counts only when it isn't a verb or a comparison, "you know" not in questions, and "I mean" not in "what I mean". Speech-to-text often drops um/uh, so the prompt tells the model not to mark down for that or for misheard words.
+- The recording is never stored or sent: only the transcript, the counts and the scores are kept.
 - Accents are never marked down, and the question is never followed as an instruction.
 - Without the AI (Demo Mode, or by choice) the student types what they said, and the device counts and gives tips from the numbers.
 

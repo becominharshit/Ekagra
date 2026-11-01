@@ -1,9 +1,6 @@
-import { MAX_AUDIO_BYTES, type AudioFile } from '@shared/schemas.ts'
-import { audioType } from './speech'
-
-// Recording from the microphone with the browser's own MediaRecorder (no library). The recording
-// stays in memory: it can be played back, is sent once for feedback, then dropped. Never saved.
-// On Android the WebView asks for the microphone permission the first time.
+// Recording from the microphone with the browser's own MediaRecorder (no library), so the student
+// can play their answer back. The recording stays in memory and is dropped afterwards: it's never
+// sent or saved. On Android the WebView asks for the microphone permission the first time.
 
 /** Formats to record in, best first: WebM/Opus (Chrome, Android), Ogg (Firefox), MP4 (Safari). */
 const TYPES = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4']
@@ -81,18 +78,4 @@ export async function startRecording(): Promise<Recorder> {
       release()
     },
   }
-}
-
-/** A recording as base64 for ai-speak. Throws a plain-language error if it can't be sent. */
-export async function toAudioFile(recording: Recording): Promise<AudioFile> {
-  const mimeType = audioType(recording.mimeType)
-  if (!mimeType) throw new Error("This browser records in a format the AI can't read. Try Chrome, or the Android app.")
-  if (recording.blob.size > MAX_AUDIO_BYTES) throw new Error('That recording is too long to send. Keep answers under 3 minutes.')
-  const dataUrl = await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(String(reader.result))
-    reader.onerror = () => reject(new Error("Couldn't read the recording. Please try again."))
-    reader.readAsDataURL(recording.blob)
-  })
-  return { mimeType, base64: dataUrl.slice(dataUrl.indexOf(',') + 1) }
 }

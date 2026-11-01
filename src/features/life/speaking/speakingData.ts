@@ -4,11 +4,11 @@ import { callAiFunction } from '@/features/ai/aiClient'
 import { dbError, need, useDataSource, type DataSource } from '@/lib/dataSource'
 import { demoDb } from '@/lib/demoDb'
 import { lifeKey } from '../lifeData'
-import { speechStats, type FeedbackItem, type Scenario, type Scores, type SpeakingSession } from './speech'
+import { speechStats, topFillers, wholeSeconds, type Capture, type FeedbackItem, type Scenario, type Scores, type SpeakingSession } from './speech'
 
 // Speaking sessions, saved in Supabase or (Demo Mode) on the device. Only the transcript, what was
-// counted from it and the scores are kept: the recording goes to ai-speak in one request and is
-// never stored.
+// counted from it and the scores are kept. The recording never leaves the phone: ai-speak gets
+// the words as text.
 
 /** The progress chart and the history look this far back. */
 const RECENT = 60
@@ -37,7 +37,7 @@ export interface SessionInput {
 export async function saveSpeakingSession(source: DataSource, input: SessionInput): Promise<SpeakingSession> {
   const transcript = input.transcript.trim().slice(0, 20_000)
   if (!transcript) throw new Error('There is nothing to save: no words were found.')
-  const durationSec = Math.min(1800, Math.max(1, Math.round(input.durationSec)))
+  const durationSec = wholeSeconds(input.durationSec)
   const stats = speechStats(transcript, durationSec)
   const row = {
     scenario: input.scenario,
@@ -71,19 +71,45 @@ export async function deleteSpeakingSession(source: DataSource, id: string): Pro
   if (error) throw dbError(error)
 }
 
+export interface PractiseInput {
+  scenario: Scenario
+  prompt: string
+  durationSec: number
+  /** What the student said: from speech-to-text (checked by them), or typed. */
+  transcript: string
+  captured: Capture
+}
+
+/** What ai-speak gets: the words as text, with the pace and fillers counted here (never the recording). */
+export function speakRequest(input: PractiseInput): SpeakRequest {
+  const transcript = input.transcript.trim().slice(0, 20_000)
+  const durationSec = wholeSeconds(input.durationSec)
+  const stats = speechStats(transcript, durationSec)
+  return {
+    scenario: input.scenario,
+    prompt: input.prompt.trim().slice(0, 500) || 'Free practice',
+    durationSec,
+    transcript,
+    captured: input.captured,
+    wpm: Math.min(1000, stats.wpm),
+    fillers: topFillers(stats.fillers).slice(0, 20),
+  }
+}
+
 /**
- * Sends a recording to ai-speak (signed in only), then saves the transcript, what was counted from
- * it and the AI's scores and tips. The recording itself is dropped after this request.
+ * Sends what was said, as text, to ai-speak (signed in only), then saves it with what was counted
+ * from it and the AI's scores and tips.
  */
-export async function practiseWithAi(source: DataSource, request: SpeakRequest): Promise<SpeakingSession> {
-  if (source.kind === 'demo') throw new Error('Demo Mode has no AI to listen. Type what you said instead.')
+export async function practiseWithAi(source: DataSource, input: PractiseInput): Promise<SpeakingSession> {
+  if (source.kind === 'demo') throw new Error("Demo Mode has no AI. Tap Count my pace and fillers: it's counted on this device.")
+  const request = speakRequest(input)
+  if (!request.transcript) throw new Error('There is nothing to send: no words were found. Type what you said.')
   const answer = await callAiFunction('ai-speak', request, SpeakResponseSchema, source.client)
-  if (!answer.transcript.trim()) throw new Error('No speech was heard. Check that the microphone works, speak up and try again.')
   return saveSpeakingSession(source, {
     scenario: request.scenario,
     prompt: request.prompt,
     durationSec: request.durationSec,
-    transcript: answer.transcript,
+    transcript: request.transcript,
     scores: answer.scores,
     feedback: [...(answer.strength ? [{ kind: 'strength' as const, text: answer.strength }] : []), ...answer.tips.map((text) => ({ kind: 'tip' as const, text }))],
     source: 'ai',
