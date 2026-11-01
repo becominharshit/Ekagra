@@ -66,6 +66,14 @@ export const router = createBrowserRouter([
             path: 'academics/mistakes',
             lazy: async () => ({ Component: (await import('@/pages/MistakesPage')).MistakesPage }),
           },
+          {
+            path: 'academics/code',
+            lazy: async () => ({ Component: (await import('@/pages/CodingLabPage')).CodingLabPage }),
+          },
+          {
+            path: 'academics/code/:snippetId',
+            lazy: async () => ({ Component: (await import('@/pages/CodeEditorPage')).CodeEditorPage }),
+          },
           { path: 'hustle', element: <HustlePage /> },
           { path: 'life', element: <LifePage /> },
           { path: 'me', element: <MePage /> },

@@ -143,3 +143,22 @@ export const TutorAnswerSchema = z.object({
 /** What ai-tutor returns (model and prompt version are saved with the anchor). */
 export const TutorResponseSchema = TutorAnswerSchema.extend({ model: z.string(), promptVersion: z.string() })
 export type TutorResponse = z.infer<typeof TutorResponseSchema>
+
+// ---------------------------------------------------------------------------
+// Code problems (Coding Lab): questions with type "code"
+// ---------------------------------------------------------------------------
+
+/** One test of a code problem (saved in questions.tests). The app runs it with Python on the device. */
+export const CodeTestSchema = z.object({
+  call: z.string().min(1).max(300).describe('A Python expression that uses the solution, e.g. "factorial(5)"'),
+  expected: z.string().min(1).max(500).describe('A Python literal with the right result, e.g. "120"'),
+})
+export type CodeTest = z.infer<typeof CodeTestSchema>
+export const CodeTestsSchema = z.array(CodeTestSchema).min(1).max(12)
+
+/** questions.answer of a code problem: the code the student starts from, and a model solution. */
+export const CodeAnswerSchema = z.object({
+  starter: z.string().max(4000).describe('The function header the student starts from, with a comment where to write'),
+  solution: z.string().min(1).max(8000).describe('A correct, simple solution that passes every test'),
+})
+export type CodeAnswer = z.infer<typeof CodeAnswerSchema>

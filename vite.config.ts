@@ -15,6 +15,10 @@ export default defineConfig({
       '@shared': fileURLToPath(new URL('./supabase/functions/_shared', import.meta.url)),
     },
   },
+  // The Python worker is an ES module (Pyodide needs a module worker).
+  worker: {
+    format: 'es',
+  },
   test: {
     // src/** = app logic tests, tests/** = database (migration + RLS) tests,
     // supabase/functions/** = Edge Function tests (they run in Node with a fake AI model)

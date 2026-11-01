@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { format } from 'date-fns'
-import { BookOpen, ChevronRight, FlaskConical, Library, LoaderCircle, Plus } from 'lucide-react'
+import { BookOpen, ChevronRight, Code2, FlaskConical, Library, LoaderCircle, Plus } from 'lucide-react'
 import { Link, useNavigate } from 'react-router'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Badge } from '@/components/ui/badge'
@@ -17,7 +17,6 @@ import { useAuthStore } from '@/features/auth/authStore'
 import { useNow } from '@/hooks/useNow'
 
 const COMING = [
-  { title: 'Python Coding Lab', when: 'M3' },
   { title: 'Lessons and check quizzes', when: 'M3' },
 ]
 
@@ -47,6 +46,12 @@ export function AcademicsPage() {
             <Link to="/academics/library">
               <Library aria-hidden />
               Library (PDFs)
+            </Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link to="/academics/code">
+              <Code2 aria-hidden />
+              Coding Lab
             </Link>
           </Button>
         </div>
