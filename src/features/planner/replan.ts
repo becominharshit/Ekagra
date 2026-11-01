@@ -98,9 +98,10 @@ export function usePlanFingerprint(): string | null {
     chronotype: profile.data.chronotype,
     routine: routine.data.map((row) => [row.kind, row.days_of_week, row.start_time, row.end_time, row.valid_from, row.valid_to]),
     subjects: study.data.subjects.map((subject) => [subject.id, subject.exam_date]),
+    // Only "learned or not" matters to the planner (starting a topic doesn't change the plan).
     topics: study.data.topics
       .filter((topic) => topic.parent_id !== null)
-      .map((topic) => [topic.id, topic.est_minutes, topic.status, Number(topic.priority_score), topic.track, topic.difficulty]),
+      .map((topic) => [topic.id, topic.est_minutes, topic.status === 'review' || topic.status === 'mastered', Number(topic.priority_score), topic.track, topic.difficulty]),
     prereqs: study.data.prereqs.map((link) => `${link.topic_id}>${link.prereq_topic_id}`),
   })
 }

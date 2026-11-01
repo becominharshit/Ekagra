@@ -1,13 +1,13 @@
 import { format } from 'date-fns'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { useCurrentBlock } from '@/features/mode/currentBlock'
-import { MODE_LABEL } from '@/features/mode/modes'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { DayTimeline } from '@/features/planner/DayTimeline'
+import { DueSoon } from '@/features/today/DueSoon'
+import { NowCard, UpNext } from '@/features/today/NowCard'
+import { useNow } from '@/hooks/useNow'
 
 const COMING = [
-  { title: 'Now card with Start Focus, Done, Partial and Skip', when: 'M4' },
   { title: 'Capture tasks from text or a screenshot', when: 'M4' },
   { title: '"I Crashed" and the evening check-in', when: 'M4' },
   { title: 'Morning brief', when: 'M4' },
@@ -15,23 +15,15 @@ const COMING = [
 ]
 
 export function TodayPage() {
-  const { block, now } = useCurrentBlock()
+  const now = useNow(60_000)
 
   return (
     <>
       <PageHeader title="Today" subtitle={format(now, 'EEEE, d MMMM')} />
       <div className="grid gap-4">
-        <Card>
-          <CardHeader>
-            <CardTitle>Now</CardTitle>
-            <CardDescription>
-              {block
-                ? `${MODE_LABEL[block.mode]}: ${block.title}, until ${format(new Date(block.endsAt), 'h:mm a')}`
-                : 'Nothing scheduled. You are in Free mode.'}
-            </CardDescription>
-          </CardHeader>
-        </Card>
-
+        <NowCard />
+        <UpNext />
+        <DueSoon />
         <DayTimeline />
 
         <Card>
