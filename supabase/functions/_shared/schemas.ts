@@ -270,3 +270,52 @@ export const CaptureAnswerSchema = z.object({ tasks: z.array(CapturedTaskSchema)
 /** What ai-capture returns. Nothing is saved until the student confirms. */
 export const CaptureResponseSchema = CaptureAnswerSchema.extend({ model: z.string(), promptVersion: z.string() })
 export type CaptureResponse = z.infer<typeof CaptureResponseSchema>
+
+// ---------------------------------------------------------------------------
+// Morning brief: today's plan, deadlines and last check-in → 3 short lines (ai-brief)
+// ---------------------------------------------------------------------------
+
+const CLOCK = /^\d{2}:\d{2}$/
+
+export const BriefRequestSchema = z.object({
+  /** The student's day, e.g. "Monday, 2 November". */
+  day: z.string().min(1).max(40),
+  mentorTone: z.enum(['strict', 'balanced', 'friendly']).optional(),
+  /** Today's plan blocks, earliest first (local times). */
+  blocks: z
+    .array(
+      z.object({
+        start: z.string().regex(CLOCK),
+        end: z.string().regex(CLOCK),
+        mode: z.enum(['study', 'hustle', 'life']),
+        kind: z.string().min(1).max(20),
+        title: z.string().min(1).max(200),
+        subject: z.string().max(120).nullable(),
+        status: z.string().min(1).max(20),
+      }),
+    )
+    .max(40),
+  /** Open tasks due in the next days, e.g. due "Due Fri 5:00 PM". */
+  deadlines: z.array(z.object({ title: z.string().min(1).max(200), due: z.string().min(1).max(40), subject: z.string().max(120).nullable() })).max(10),
+  exams: z.array(z.object({ subject: z.string().min(1).max(120), inDays: z.number().int().min(0).max(366) })).max(10),
+  reviews: z.object({ flashcards: z.number().int().min(0).max(10_000), mistakes: z.number().int().min(0).max(10_000) }),
+  lastCheckIn: z
+    .object({
+      daysAgo: z.number().int().min(0).max(31),
+      energy: z.number().int().min(1).max(5),
+      mood: z.number().int().min(1).max(5),
+      topDistraction: z.string().max(120).nullable(),
+    })
+    .nullable(),
+  minimumDay: z.boolean(),
+  burnoutGuard: z.boolean(),
+})
+export type BriefRequest = z.infer<typeof BriefRequestSchema>
+
+export const BriefAnswerSchema = z.object({
+  lines: z.array(z.string().trim().min(1).max(160)).length(3).describe('Exactly 3 short lines'),
+})
+
+/** What ai-brief returns. */
+export const BriefResponseSchema = BriefAnswerSchema.extend({ model: z.string(), promptVersion: z.string() })
+export type BriefResponse = z.infer<typeof BriefResponseSchema>

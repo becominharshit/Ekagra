@@ -311,8 +311,8 @@ const TopicTree = z.object({
 
 **g) Task capture (`ai-capture`, Fast)**
 - Input: text or image + current date, time and timezone + the subject list.
-- Output: `[{ title, subjectGuess, dueAt (ISO 8601 with offset), estMinutes, confidence }]`.
-- Low-confidence fields are highlighted in the confirm sheet. Nothing is saved without confirmation.
+- Output: `[{ title, area, subjectKey (a listed subject or null), dueAt (ISO 8601 with offset; 23:59 when only a day is given), estMinutes, priority, unsure: [fields it guessed] }]`.
+- The `unsure` fields are highlighted in the confirm sheet. Nothing is saved without confirmation. Demo Mode reads typed tasks on the device with simple rules (screenshots need the AI).
 
 **h) Grading (`ai-grade`, Fast):** short answer + rubric of key points → score, feedback, model answer.
 

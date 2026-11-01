@@ -27,7 +27,7 @@ The current milestone is the first unchecked one.
   5. Mistake notebook (1 → 3 → 7 day ladder)
   6. Python Coding Lab: CodeMirror 6 + Pyodide in a Web Worker (loaded from a CDN on first use, then cached), code problems with tests, saved snippets
   7. Lazy lessons and 3–5 question check quizzes (`ai-generate`); wrong answers go to the mistake notebook. Full loop: lesson → check quiz → flashcards → mistakes
-- [ ] **M4 Planner, Today and task capture (decided 2026-11-01: task capture moves here from M8), in 7 steps:**
+- [x] **M4 Planner, Today and task capture (decided 2026-11-01: task capture moves here from M8), in 7 steps.** Done 2026-11-01, no new migration; every step works in Demo Mode too (typed tasks and the morning brief are made on the device there). **Your one-time steps for real AI** are the same as for M3 and now deploy 6 functions, including `ai-capture` and `ai-brief` (docs/4-setup-guide.md, step 6)
   1. Mistake ladder: fixed after 3 right answers on different days (1 → 3 → 7 → fixed)
   2. Save the 14-day plan to `plan_blocks` (engine built in M2; `plan_version` for two devices); re-plan when the app opens with an old plan, when inputs change and on "Re-plan"; work already done counts against the estimates
   3. Mode Chip and mode-switch warning driven by the real plan blocks (remove the Mode Simulator); mode switches saved to `distraction_events`
