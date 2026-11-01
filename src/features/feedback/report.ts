@@ -46,6 +46,7 @@ const SCREENS: [path: string, name: string][] = [
   ['/academics/subjects/:subjectId/import', 'Syllabus import'],
   ['/academics/subjects/:subjectId/edit', 'Roadmap editor'],
   ['/academics/subjects/:subjectId/papers', 'Past papers'],
+  ['/academics/subjects/:subjectId/practice', 'Practice'],
   ['/academics/attendance', 'Attendance'],
   ['/academics/grades', 'Grades'],
   ['/academics/library', 'PDF library'],
