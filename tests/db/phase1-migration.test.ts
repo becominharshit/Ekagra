@@ -12,10 +12,11 @@ const readSql = (relativePath: string) => readFileSync(new URL(relativePath, imp
 const ALICE = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const BOB = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
 const CAROL = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc' // signed up before the migration ran
+const DAN = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd' // signs up for the social tests
 
 let db: PGlite
 let tables: string[] = [] // every table in the "public" schema
-const alice = { subject: '', topic: '', material: '', hustle: '', client: '', habit: '' }
+const alice = { subject: '', topic: '', material: '', hustle: '', client: '', habit: '', group: '' }
 
 /** Run queries as a signed-in user (like the app does through Supabase). `null` = signed out. */
 function as<T>(userId: string | null, run: (tx: Transaction) => Promise<T>): Promise<T> {
@@ -56,6 +57,7 @@ beforeAll(async () => {
   await db.exec(readSql('../../supabase/migrations/005_adaptive.sql'))
   await db.exec(readSql('../../supabase/migrations/006_weekly_review.sql'))
   await db.exec(readSql('../../supabase/migrations/007_life.sql'))
+  await db.exec(readSql('../../supabase/migrations/008_social.sql'))
 
   // Two people sign up. The sign-up trigger creates their profiles.
   await db.exec(`
@@ -161,6 +163,17 @@ beforeAll(async () => {
     await insertId(tx, `insert into public.sleep_logs (date, bed_at, wake_at, minutes) values ('2026-11-02', '2026-11-01 23:30+05:30', '2026-11-02 07:00+05:30', 450)`)
     await insertId(tx, `insert into public.step_counts (date, steps) values ('2026-11-02', 6400)`)
     await insertId(tx, `insert into public.speaking_sessions (scenario, prompt, duration_sec) values ('interview', 'Tell me about yourself.', 75)`)
+    await insertId(tx, `insert into public.shared_stats (display_name, focus_minutes, streak_days) values ('Alice', 120, 3)`)
+    await insertId(tx, `insert into public.partner_invites default values`)
+    alice.group = await insertId(tx, `insert into public.study_groups (name) values ('DBMS circle')`)
+    await insertId(tx, `insert into public.group_sessions (group_id, mode, minutes, ends_at) values ($1, 'pomodoro', 25, now() + interval '25 minutes')`, [alice.group])
+  })
+
+  // Alice and Carol become partners with Carol's code, and Alice nudges her.
+  const carolCode = await as(CAROL, async (tx) => (await tx.query<{ code: string }>('insert into public.partner_invites default values returning code')).rows[0]?.code ?? '')
+  await as(ALICE, async (tx) => {
+    await tx.query('select public.accept_partner_invite($1)', [carolCode])
+    await insertId(tx, `insert into public.nudges (to_user_id, kind) values ($1, 'cheer')`, [CAROL])
   })
 })
 
@@ -191,7 +204,7 @@ describe('Phase 1 migration (001_phase1_core.sql)', () => {
   })
 
   it('gives signed-out visitors no access to any table or view', async () => {
-    for (const name of [...tables, 'hustle_earnings']) {
+    for (const name of [...tables, 'hustle_earnings', 'shared_stats_view']) {
       await expect(as(null, (tx) => tx.query(`select 1 from public.${name} limit 1`)), name).rejects.toThrow(/permission denied/)
     }
   })
@@ -657,6 +670,97 @@ describe('Life migration (007_life.sql)', () => {
 
   it("stops Bob from logging Alice's habit", async () => {
     await expect(as(BOB, (tx) => tx.query(`insert into public.habit_logs (habit_id, date) values ($1, '2026-11-02')`, [alice.habit]))).rejects.toThrow(/foreign key/)
+  })
+})
+
+describe('Social migration (008_social.sql)', () => {
+  // Carol's account was deleted above (taking her partner link with Alice with it), so Dan signs up.
+  beforeAll(async () => {
+    await db.exec(`insert into auth.users (id, email) values ('${DAN}', 'dan@example.com')`)
+  })
+
+  const statsSeenBy = async (viewer: string) =>
+    as(viewer, async (tx) => (await tx.query<{ user_id: string; display_name: string }>('select user_id, display_name from public.shared_stats_view order by display_name')).rows.map((row) => row.display_name))
+
+  it('only stores the numbers a student chose to share', async () => {
+    const bob = (sql: string) => as(BOB, (tx) => tx.query(sql))
+    await expect(bob(`insert into public.shared_stats (display_name, share_plan, plan_pct) values ('Bob', false, 50)`)).rejects.toThrow(/check constraint/)
+    await expect(bob(`insert into public.shared_stats (display_name, share_focus, on_leaderboard) values ('Bob', false, true)`)).rejects.toThrow(/check constraint/)
+    await bob(`insert into public.shared_stats (display_name, focus_minutes, streak_days, studying_until) values ('Bob', 90, 2, now() + interval '30 minutes')`)
+    expect(await statsSeenBy(BOB)).toEqual(['Bob'])
+    // Alice isn't connected to Bob.
+    expect(await statsSeenBy(ALICE)).toEqual(['Alice'])
+  })
+
+  it('makes partners from a code (both ways, once), who then see each other’s numbers', async () => {
+    const code = await as(BOB, async (tx) => (await tx.query<{ code: string }>('insert into public.partner_invites default values returning code')).rows[0]?.code ?? '')
+    expect(code).toMatch(/^[0-9A-F]{10}$/)
+    await expect(as(BOB, (tx) => tx.query('select public.accept_partner_invite($1)', [code]))).rejects.toThrow(/your own code/)
+    await expect(as(DAN, (tx) => tx.query('select public.accept_partner_invite($1)', ['NOPE000000']))).rejects.toThrow(/wrong or has expired/)
+    const { rows } = await as(DAN, (tx) => tx.query<{ partner: string }>('select public.accept_partner_invite($1) as partner', [` ${code.toLowerCase()} `]))
+    expect(rows).toEqual([{ partner: BOB }])
+    await expect(as(ALICE, (tx) => tx.query('select public.accept_partner_invite($1)', [code]))).rejects.toThrow(/wrong or has expired/) // used up
+
+    expect(await statsSeenBy(DAN)).toEqual(['Bob'])
+    const studying = await as(DAN, async (tx) => (await tx.query('select studying_now from public.shared_stats_view where user_id = $1', [BOB])).rows)
+    expect(studying).toEqual([{ studying_now: true }])
+    // Removing either row ends the partnership both ways.
+    await as(BOB, (tx) => tx.query('delete from public.partner_links where partner_id = $1', [DAN]))
+    expect(await statsSeenBy(DAN)).toEqual([])
+    expect(await as(DAN, (tx) => count(tx, 'partner_links'))).toBe(0)
+    // Carol's account was deleted: her partner link with Alice and Alice's nudge to her went with it.
+    expect(await as(ALICE, async (tx) => [await count(tx, 'partner_links'), await count(tx, 'nudges')])).toEqual([0, 0])
+  })
+
+  it('lets students join a group with its code; members see each other, others see nothing', async () => {
+    const group = await as(BOB, (tx) => insertId(tx, `insert into public.study_groups (name) values ('Maths gang')`))
+    const code = await as(BOB, async (tx) => (await tx.query<{ invite_code: string; role: string }>('select g.invite_code, m.role from public.study_groups g join public.group_members m on m.group_id = g.id where g.id = $1', [group])).rows[0])
+    expect(code?.role).toBe('owner')
+    await expect(as(DAN, (tx) => tx.query('select public.join_group($1)', ['NOPE000000']))).rejects.toThrow(/No group has that code/)
+    await as(DAN, (tx) => tx.query('select public.join_group($1)', [code?.invite_code]))
+    await expect(as(DAN, (tx) => tx.query('select public.join_group($1)', [code?.invite_code]))).rejects.toThrow(/already in that group/)
+
+    expect(await as(DAN, (tx) => count(tx, 'group_members'))).toBe(2) // Bob and Dan (he isn't in Alice's group)
+    expect(await statsSeenBy(DAN)).toEqual(['Bob'])
+    const outsider = await as(ALICE, (tx) => tx.query('select 1 from public.study_groups where id = $1', [group]))
+    expect(outsider.rows).toEqual([])
+    await expect(as(BOB, (tx) => tx.query('insert into public.group_members (group_id, user_id) values ($1, $2)', [alice.group, BOB]))).rejects.toThrow(/row-level security/)
+  })
+
+  it('keeps group focus and nudges among connected students, at most 3 nudges a day', async () => {
+    const group = await as(BOB, async (tx) => (await tx.query<{ id: string }>(`select id from public.study_groups where name = 'Maths gang'`)).rows[0]?.id)
+    await as(DAN, (tx) => insertId(tx, `insert into public.group_sessions (group_id, mode, minutes, ends_at) values ($1, 'deep', 50, now() + interval '50 minutes')`, [group]))
+    expect(await as(BOB, (tx) => count(tx, 'group_sessions'))).toBe(1)
+    await expect(as(ALICE, (tx) => tx.query(`insert into public.group_sessions (group_id, mode, minutes, ends_at) values ($1, 'deep', 50, now() + interval '1 hour')`, [group]))).rejects.toThrow(/row-level security/)
+
+    const nudge = () => as(DAN, (tx) => insertId(tx, `insert into public.nudges (to_user_id, kind, message) values ($1, 'study', 'Time to study!')`, [BOB]))
+    const first = await nudge()
+    await nudge()
+    await nudge()
+    await expect(nudge()).rejects.toThrow(/3 times a day/)
+    await expect(as(ALICE, (tx) => tx.query(`insert into public.nudges (to_user_id, kind) values ($1, 'study')`, [BOB]))).rejects.toThrow(/row-level security/)
+
+    // Bob marks it seen, but can't change what it says.
+    const seen = await as(BOB, (tx) => tx.query('update public.nudges set seen_at = now() where id = $1', [first]))
+    expect(seen.affectedRows).toBe(1)
+    await expect(as(BOB, (tx) => tx.query(`update public.nudges set message = 'Fake' where id = $1`, [first]))).rejects.toThrow(/permission denied/)
+  })
+
+  it('hands a group to the member who joined first when the owner leaves; the last one out deletes it', async () => {
+    const group = await as(BOB, async (tx) => (await tx.query<{ id: string }>(`select id from public.study_groups where name = 'Maths gang'`)).rows[0]?.id)
+    await as(BOB, (tx) => tx.query('select public.leave_group($1)', [group]))
+    const owner = await as(DAN, async (tx) => (await tx.query('select g.user_id, m.role from public.study_groups g join public.group_members m on m.group_id = g.id where g.id = $1', [group])).rows)
+    expect(owner).toEqual([{ user_id: DAN, role: 'owner' }])
+    await expect(as(BOB, (tx) => tx.query('select public.leave_group($1)', [group]))).rejects.toThrow(/not in that group/)
+    await as(DAN, (tx) => tx.query('select public.leave_group($1)', [group]))
+    const left = await db.query('select 1 from public.study_groups where id = $1', [group])
+    expect(left.rows).toEqual([])
+  })
+
+  it('stops showing "studying now" once it has ended', async () => {
+    await as(BOB, (tx) => tx.query(`update public.shared_stats set studying_until = now() - interval '1 minute'`))
+    const rows = await as(BOB, async (tx) => (await tx.query('select studying_now, studying_until from public.shared_stats_view')).rows)
+    expect(rows).toEqual([{ studying_now: false, studying_until: null }])
   })
 })
 

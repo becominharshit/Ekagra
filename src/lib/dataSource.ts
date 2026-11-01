@@ -47,7 +47,7 @@ const NEWER_CHECKS = ['hustles_type_check', 'hustles_links_is_list']
 
 /** Tables added by later migrations (003_beta.sql onwards). */
 const NEWER_TABLES =
-  /\b(feedback|attendance|marks|semester_results|subject_ratings|metric_snapshots|challenges|weekly_reviews|habits|habit_logs|workouts|meals|sleep_logs|step_counts|speaking_sessions)\b/
+  /\b(feedback|attendance|marks|semester_results|subject_ratings|metric_snapshots|challenges|weekly_reviews|habits|habit_logs|workouts|meals|sleep_logs|step_counts|speaking_sessions|shared_stats|shared_stats_view|partner_invites|partner_links|study_groups|group_members|group_sessions|nudges)\b/
 
 const NEEDS_UPDATE = 'The database needs the latest update. Run `npm run db:push` (docs/4-setup-guide.md, step 2), then try again.'
 
@@ -59,8 +59,13 @@ export function dbError(error: PostgrestError): Error {
       "The database tables don't exist yet. Run `npm run db:push` (docs/4-setup-guide.md, step 2), then try again.",
     )
   }
-  // A column or rule from a newer migration in supabase/migrations/ isn't on the server yet.
-  if (error.code === 'PGRST204' || error.code === '42703' || (error.code === '23514' && NEWER_CHECKS.some((name) => error.message.includes(name)))) {
+  // A column, rule or function (PGRST202) from a newer migration in supabase/migrations/ isn't on the server yet.
+  if (
+    error.code === 'PGRST204' ||
+    error.code === 'PGRST202' ||
+    error.code === '42703' ||
+    (error.code === '23514' && NEWER_CHECKS.some((name) => error.message.includes(name)))
+  ) {
     return new Error(NEEDS_UPDATE)
   }
   return new Error(error.message)

@@ -738,6 +738,85 @@ export type Database = {
           },
         ]
       }
+      group_members: {
+        Row: {
+          created_at: string
+          group_id: string
+          id: string
+          role: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          group_id: string
+          id?: string
+          role?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          group_id?: string
+          id?: string
+          role?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_members_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "study_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      group_sessions: {
+        Row: {
+          created_at: string
+          ends_at: string
+          group_id: string
+          id: string
+          minutes: number
+          mode: string
+          starts_at: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          ends_at: string
+          group_id: string
+          id?: string
+          minutes: number
+          mode: string
+          starts_at?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          ends_at?: string
+          group_id?: string
+          id?: string
+          minutes?: number
+          mode?: string
+          starts_at?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_sessions_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "study_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       habit_logs: {
         Row: {
           created_at: string
@@ -1529,6 +1608,90 @@ export type Database = {
           },
         ]
       }
+      nudges: {
+        Row: {
+          created_at: string
+          id: string
+          kind: string
+          message: string | null
+          seen_at: string | null
+          to_user_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          kind: string
+          message?: string | null
+          seen_at?: string | null
+          to_user_id: string
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kind?: string
+          message?: string | null
+          seen_at?: string | null
+          to_user_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      partner_invites: {
+        Row: {
+          code: string
+          created_at: string
+          expires_at: string
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          code?: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      partner_links: {
+        Row: {
+          created_at: string
+          id: string
+          partner_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          partner_id: string
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          partner_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       past_papers: {
         Row: {
           created_at: string
@@ -1957,6 +2120,60 @@ export type Database = {
         }
         Relationships: []
       }
+      shared_stats: {
+        Row: {
+          created_at: string
+          display_name: string
+          focus_minutes: number | null
+          id: string
+          on_leaderboard: boolean
+          plan_pct: number | null
+          share_focus: boolean
+          share_plan: boolean
+          share_streak: boolean
+          share_studying: boolean
+          streak_days: number | null
+          studying_until: string | null
+          updated_at: string
+          user_id: string
+          week_start: string | null
+        }
+        Insert: {
+          created_at?: string
+          display_name?: string
+          focus_minutes?: number | null
+          id?: string
+          on_leaderboard?: boolean
+          plan_pct?: number | null
+          share_focus?: boolean
+          share_plan?: boolean
+          share_streak?: boolean
+          share_studying?: boolean
+          streak_days?: number | null
+          studying_until?: string | null
+          updated_at?: string
+          user_id?: string
+          week_start?: string | null
+        }
+        Update: {
+          created_at?: string
+          display_name?: string
+          focus_minutes?: number | null
+          id?: string
+          on_leaderboard?: boolean
+          plan_pct?: number | null
+          share_focus?: boolean
+          share_plan?: boolean
+          share_streak?: boolean
+          share_studying?: boolean
+          streak_days?: number | null
+          studying_until?: string | null
+          updated_at?: string
+          user_id?: string
+          week_start?: string | null
+        }
+        Relationships: []
+      }
       sleep_logs: {
         Row: {
           bed_at: string
@@ -2072,6 +2289,33 @@ export type Database = {
           id?: string
           source?: string
           steps?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      study_groups: {
+        Row: {
+          created_at: string
+          id: string
+          invite_code: string
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          invite_code?: string
+          name: string
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          invite_code?: string
+          name?: string
           updated_at?: string
           user_id?: string
         }
@@ -2638,9 +2882,29 @@ export type Database = {
         }
         Relationships: []
       }
+      shared_stats_view: {
+        Row: {
+          display_name: string | null
+          focus_minutes: number | null
+          on_leaderboard: boolean | null
+          plan_pct: number | null
+          streak_days: number | null
+          studying_now: boolean | null
+          studying_until: string | null
+          updated_at: string | null
+          user_id: string | null
+          week_start: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
-      [_ in never]: never
+      accept_partner_invite: { Args: { code: string }; Returns: string }
+      is_connected: { Args: { other: string }; Returns: boolean }
+      is_group_member: { Args: { target: string }; Returns: boolean }
+      join_group: { Args: { code: string }; Returns: string }
+      leave_group: { Args: { target: string }; Returns: undefined }
+      new_invite_code: { Args: never; Returns: string }
     }
     Enums: {
       [_ in never]: never
