@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { format } from 'date-fns'
-import { BookOpen, ChevronRight, Code2, FlaskConical, Library, LoaderCircle, Plus } from 'lucide-react'
+import { BookOpen, CalendarCheck, ChevronRight, Code2, FlaskConical, Library, LoaderCircle, Plus } from 'lucide-react'
 import { Link, useNavigate } from 'react-router'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Badge } from '@/components/ui/badge'
@@ -49,6 +49,12 @@ export function AcademicsPage() {
             <Link to="/academics/code">
               <Code2 aria-hidden />
               Coding Lab
+            </Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link to="/academics/attendance">
+              <CalendarCheck aria-hidden />
+              Attendance
             </Link>
           </Button>
         </div>

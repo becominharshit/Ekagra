@@ -165,6 +165,6 @@ describe('subjectAttendance', () => {
     const base = subjectAttendance({ subjectId: 'none', rows: [], slots: [], minPercent: 75, today: '2026-11-16', classesEndOn: null })
     expect(attendanceAdvice(base, 75)).toBe('No classes marked yet.')
     expect(attendanceAdvice({ ...base, state: 'safe', safeBunks: 3 }, 75)).toBe('You can miss 3 more classes and stay at 75% or above.')
-    expect(attendanceAdvice({ ...base, state: 'low', safeBunks: 0 }, 75)).toMatch(/Exactly at the limit/)
+    expect(attendanceAdvice({ ...base, state: 'low', safeBunks: 0 }, 75)).toBe("Don't miss the next class: it would take you under 75%.")
   })
 })

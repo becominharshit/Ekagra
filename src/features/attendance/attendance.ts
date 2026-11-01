@@ -226,6 +226,6 @@ export function attendanceAdvice(summary: SubjectAttendance, minPercent: number)
       ? `Attend the next ${toRecover} ${toRecover === 1 ? 'class' : 'classes'} to get back to ${minPercent}%.`
       : `Under ${minPercent}%, and a ${minPercent}% minimum can't be reached again after a missed class.`
   }
-  if (canMiss === 0) return `Exactly at the limit: missing the next class takes you under ${minPercent}%.`
+  if (canMiss === 0) return `Don't miss the next class: it would take you under ${minPercent}%.`
   return `You can miss ${canMiss} more ${canMiss === 1 ? 'class' : 'classes'} and stay at ${minPercent}% or above.`
 }

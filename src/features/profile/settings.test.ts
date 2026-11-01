@@ -44,7 +44,13 @@ describe('readSettings', () => {
       ...saved,
       focus: { pomodoro: { work: 30, break: 5 }, deep: { work: 50, break: 10 }, blockDuring: 'focus_sessions', defaultMode: 'pomodoro', idleCheck: true },
       tollbooth: { questions: 3, unlockMinutes: 3, dailyLimit: 3 },
+      attendance: { minPercent: 75, classesEndOn: null },
     })
+  })
+
+  it('reads the attendance minimum and the last day of classes, with 75% and none by default', () => {
+    expect(readSettings({ attendance: { minPercent: 80, classesEndOn: '2026-11-27' } }).attendance).toEqual({ minPercent: 80, classesEndOn: '2026-11-27' })
+    expect(readSettings({ attendance: { minPercent: 0, classesEndOn: '27/11/2026' } }).attendance).toEqual({ minPercent: 75, classesEndOn: null })
   })
 
   it('saves one setting without touching the others', () => {

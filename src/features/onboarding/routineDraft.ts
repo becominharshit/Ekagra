@@ -19,6 +19,8 @@ export interface TimeBlockDraft {
   /** 'HH:MM' */
   start: string
   end: string
+  /** Classes only: the subject taught then, so Today can ask about attendance. */
+  subjectId?: string | null
 }
 
 export interface MealDraft {
@@ -44,6 +46,8 @@ export interface RoutineRowDraft {
   days_of_week: number[]
   start_time: string
   end_time: string
+  /** Class blocks only. */
+  subject_id?: string | null
 }
 
 /** The fields of a saved routine_blocks row that we read back. */
@@ -55,6 +59,7 @@ export interface RoutineRowLike {
   end_time: string
   valid_from?: string | null
   valid_to?: string | null
+  subject_id?: string | null
 }
 
 let lastId = 0
@@ -95,6 +100,7 @@ function toRow(kind: RoutineKind, block: TimeBlockDraft): RoutineRowDraft {
     days_of_week: [...block.days].sort((a, b) => a - b),
     start_time: block.start,
     end_time: block.end,
+    ...(kind === 'class' ? { subject_id: block.subjectId ?? null } : {}),
   }
 }
 
@@ -116,7 +122,8 @@ export function routineToRows(draft: RoutineDraft): RoutineRowDraft[] {
 const hhmm = (time: string) => time.slice(0, 5) // the database stores '07:00:00'
 
 function toDraft(row: RoutineRowLike): TimeBlockDraft {
-  return { id: newBlockId(), title: row.title, days: [...row.days_of_week], start: hhmm(row.start_time), end: hhmm(row.end_time) }
+  const block: TimeBlockDraft = { id: newBlockId(), title: row.title, days: [...row.days_of_week], start: hhmm(row.start_time), end: hhmm(row.end_time) }
+  return row.kind === 'class' ? { ...block, subjectId: row.subject_id ?? null } : block
 }
 
 /** Saved rows → the form, so the routine can be edited later. No rows → the default week. */

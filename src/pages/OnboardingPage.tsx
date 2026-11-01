@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ArrowLeft, ArrowRight, Check, LoaderCircle } from 'lucide-react'
-import { useNavigate } from 'react-router'
+import { useNavigate, useSearchParams } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { signOut } from '@/features/auth/auth'
@@ -48,10 +48,12 @@ function OnboardingWizard({ profile, routineRows }: { profile: ProfileRow; routi
   const navigate = useNavigate()
   const save = useSaveOnboarding()
   const isDemo = useAuthStore((state) => state.status === 'demo')
-  const [step, setStep] = useState(0)
+  const [params] = useSearchParams()
+  const editing = profile.onboarded_at !== null
+  // "?step=routine" (from Attendance) opens the routine straight away when editing.
+  const [step, setStep] = useState(() => (editing && params.get('step') === 'routine' ? 1 : 0))
   const [draft, setDraft] = useState(() => draftFrom(profile, routineRows))
   const [problems, setProblems] = useState<string[]>([])
-  const editing = profile.onboarded_at !== null
   const isLast = step === STEPS.length - 1
   const current = STEPS[step] ?? STEPS[0]
 

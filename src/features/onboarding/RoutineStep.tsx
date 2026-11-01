@@ -2,8 +2,14 @@ import { Plus, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { useSubjects } from '@/features/academics/subjects'
 import { MEALS, newBlockId, WEEKDAYS, type MealName, type RoutineDraft, type TimeBlockDraft } from './routineDraft'
+
+const NO_SUBJECT = 'none'
+
+type SubjectOption = { id: string; name: string }
 
 // Monday first, the way most college timetables are written.
 const DAYS = [
@@ -18,6 +24,9 @@ const DAYS = [
 
 /** Step 2: the fixed parts of your week. The planner only plans around these. */
 export function RoutineStep({ value, onChange }: { value: RoutineDraft; onChange: (next: RoutineDraft) => void }) {
+  const subjects = useSubjects()
+  // University subjects only: skill courses have no classes to attend.
+  const courses: SubjectOption[] = (subjects.data ?? []).filter((subject) => subject.kind === 'course')
   const updateList = (key: 'classes' | 'other', id: string, next: TimeBlockDraft) =>
     onChange({ ...value, [key]: value[key].map((block) => (block.id === id ? next : block)) })
   const removeFromList = (key: 'classes' | 'other', id: string) =>
@@ -35,10 +44,16 @@ export function RoutineStep({ value, onChange }: { value: RoutineDraft; onChange
 
       <section className="grid gap-3">
         <h2 className="font-medium">Classes</h2>
+        <p className="text-sm text-muted-foreground">
+          {courses.length > 0
+            ? 'Pick the subject of each class time, and Today asks whether you went (attendance). Times without a subject still block your plan.'
+            : 'Once your subjects are in Academics, come back here to pick the subject of each class time: Today then tracks your attendance.'}
+        </p>
         {value.classes.map((block) => (
           <TimeBlockEditor
             key={block.id}
             block={block}
+            subjects={courses}
             onChange={(next) => updateList('classes', block.id, next)}
             onRemove={() => removeFromList('classes', block.id)}
           />
@@ -124,13 +139,23 @@ function TimeField({ label, value, onChange }: { label: string; value: string; o
 
 function TimeBlockEditor({
   block,
+  subjects = [],
   onChange,
   onRemove,
 }: {
   block: TimeBlockDraft
+  /** Classes only: the subjects a class time can belong to. */
+  subjects?: SubjectOption[]
   onChange: (next: TimeBlockDraft) => void
   onRemove: () => void
 }) {
+  function pickSubject(value: string) {
+    const subject = subjects.find((option) => option.id === value) ?? null
+    // A block still called "Classes" (or after another subject) takes the subject's name.
+    const generic = !block.title.trim() || block.title === 'Classes' || subjects.some((option) => option.name === block.title)
+    onChange({ ...block, subjectId: subject?.id ?? null, title: subject && generic ? subject.name : block.title })
+  }
+
   return (
     <div className="grid gap-3 rounded-lg border p-3">
       <div className="flex items-center gap-2">
@@ -139,6 +164,21 @@ function TimeBlockEditor({
           <X aria-hidden />
         </Button>
       </div>
+      {subjects.length > 0 && (
+        <Select value={block.subjectId && subjects.some((option) => option.id === block.subjectId) ? block.subjectId : NO_SUBJECT} onValueChange={pickSubject}>
+          <SelectTrigger aria-label={`Subject of ${block.title || 'this class'}`}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={NO_SUBJECT}>No subject (just busy)</SelectItem>
+            {subjects.map((subject) => (
+              <SelectItem key={subject.id} value={subject.id}>
+                {subject.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
       <ToggleGroup
         type="multiple"
         variant="outline"

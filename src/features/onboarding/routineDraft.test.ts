@@ -61,6 +61,19 @@ describe('rowsToRoutine', () => {
     expect(routineToRows(rowsToRoutine(asSaved(rows)))).toEqual(rows)
   })
 
+  it("keeps each class block's subject, for attendance", () => {
+    const draft = defaultRoutine()
+    draft.classes = [
+      { id: 'dbms', title: 'DBMS', days: [1, 3], start: '09:00', end: '10:00', subjectId: 'subject-dbms' },
+      { id: 'other', title: 'Classes', days: [1, 2, 3, 4, 5], start: '10:00', end: '16:00' },
+    ]
+    const rows = routineToRows(draft)
+    expect(rows.filter((row) => row.kind === 'class').map((row) => row.subject_id)).toEqual(['subject-dbms', null])
+    expect(rows.find((row) => row.kind === 'sleep')).not.toHaveProperty('subject_id')
+    expect(rowsToRoutine(asSaved(rows)).classes.map((block) => block.subjectId)).toEqual(['subject-dbms', null])
+    expect(routineToRows(rowsToRoutine(asSaved(rows)))).toEqual(rows)
+  })
+
   it('uses the default week when nothing is saved yet', () => {
     expect(routineToRows(rowsToRoutine([]))).toEqual(routineToRows(defaultRoutine()))
   })

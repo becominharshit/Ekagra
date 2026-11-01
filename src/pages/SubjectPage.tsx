@@ -24,6 +24,7 @@ import { useRoadmap } from '@/features/academics/roadmap'
 import { SubjectDialog } from '@/features/academics/SubjectDialog'
 import { deleteSubject, useAcademicsMutation, useSubject } from '@/features/academics/subjects'
 import { prerequisiteTitles, priorityLabels, roadmapSections, type PriorityLabel, type Topic } from '@/features/academics/topicTree'
+import { AttendanceCard } from '@/features/attendance/AttendanceCard'
 import { useNow } from '@/hooks/useNow'
 import { cn } from '@/lib/utils'
 
@@ -118,6 +119,9 @@ export function SubjectPage() {
             Delete
           </Button>
         </div>
+
+        {/* Skill courses have no classes to attend. */}
+        {current.kind === 'course' && <AttendanceCard subject={current} />}
 
         {leaves.length === 0 ? (
           <Card>

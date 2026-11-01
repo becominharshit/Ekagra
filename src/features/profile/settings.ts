@@ -61,12 +61,20 @@ const tollboothSchema = z.looseObject({
   dailyLimit: z.number().int().min(0).max(10).catch(3),
 })
 
+const attendanceSchema = z.looseObject({
+  /** The share of classes the college requires, in %. */
+  minPercent: z.number().int().min(1).max(100).catch(75),
+  /** The last day of classes this semester ('YYYY-MM-DD'), to count the classes left; null = not set. */
+  classesEndOn: z.iso.date().nullable().catch(null),
+})
+
 export const settingsSchema = z.looseObject({
   budget: budgetSchema.catch(() => ({ ...STANDARD_BUDGET })),
   planner: plannerSchema.catch(() => plannerSchema.parse({})),
   learning: learningSchema.catch(() => learningSchema.parse({})),
   focus: focusSchema.catch(() => focusSchema.parse({})),
   tollbooth: tollboothSchema.catch(() => tollboothSchema.parse({})),
+  attendance: attendanceSchema.catch(() => attendanceSchema.parse({})),
 })
 
 export type Settings = z.infer<typeof settingsSchema>
