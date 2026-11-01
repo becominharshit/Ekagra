@@ -34,6 +34,11 @@ export const CARD_WORDS: Record<ItemKind, { card: string; amount: string; date: 
   other: { card: 'card', amount: 'Amount', date: 'Due', example: 'e.g. First batch' },
 }
 
+/** What a hustle's clients are called: tutors have students. */
+export function clientWord(type: string): { one: string; title: string; many: string } {
+  return type === 'parttime' ? { one: 'student', title: 'Student', many: 'Students' } : { one: 'client', title: 'Client', many: 'Clients' }
+}
+
 /** A link that's safe to open: only web links (never javascript: and the like). */
 export function safeUrl(url: string | null): string | null {
   return url && /^https?:\/\//i.test(url) ? url : null

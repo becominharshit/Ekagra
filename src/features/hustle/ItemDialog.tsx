@@ -19,12 +19,15 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { localToIso } from '@/features/planner/schedule'
+import { useClients } from './clients'
 import type { Hustle } from './hustles'
 import { useHustleMutation } from './hustles'
 import { addItem, deleteItem, itemNotes, moveItems, updateItem, type HustleItem } from './items'
-import { CARD_WORDS } from './labels'
+import { CARD_WORDS, clientWord } from './labels'
 import { moveToColumn } from './ordering'
 import { TEMPLATES, toHustleType } from './templates'
+
+const NO_CLIENT = 'none'
 
 export interface EditingItem {
   /** null = a new card. */
@@ -37,20 +40,32 @@ interface ItemDialogProps {
   editing: EditingItem | null
   columns: Map<string, HustleItem[]>
   onClose: () => void
+  /** Called after a card was moved to another column (e.g. to offer logging the payment). */
+  onMoved?: (card: HustleItem, stage: string) => void
 }
 
 /** Add or edit a card on the pipeline board. */
-export function ItemDialog({ hustle, editing, columns, onClose }: ItemDialogProps) {
+export function ItemDialog({ hustle, editing, columns, onClose, onMoved }: ItemDialogProps) {
   return (
     <Dialog open={editing !== null} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-h-[90dvh] overflow-y-auto">
-        {editing && <ItemForm key={editing.item?.id ?? `new-${editing.stage}`} hustle={hustle} editing={editing} columns={columns} onDone={onClose} />}
+        {editing && (
+          <ItemForm key={editing.item?.id ?? `new-${editing.stage}`} hustle={hustle} editing={editing} columns={columns} onDone={onClose} onMoved={onMoved} />
+        )}
       </DialogContent>
     </Dialog>
   )
 }
 
-function ItemForm({ hustle, editing, columns, onDone }: { hustle: Hustle; editing: EditingItem; columns: Map<string, HustleItem[]>; onDone: () => void }) {
+interface ItemFormProps {
+  hustle: Hustle
+  editing: EditingItem
+  columns: Map<string, HustleItem[]>
+  onDone: () => void
+  onMoved?: (card: HustleItem, stage: string) => void
+}
+
+function ItemForm({ hustle, editing, columns, onDone, onMoved }: ItemFormProps) {
   const words = CARD_WORDS[TEMPLATES[toHustleType(hustle.type)].itemKind]
   const { item } = editing
   const add = useHustleMutation(addItem)
@@ -62,6 +77,9 @@ function ItemForm({ hustle, editing, columns, onDone }: { hustle: Hustle; editin
   const [date, setDate] = useState(item?.due_at ? format(new Date(item.due_at), 'yyyy-MM-dd') : '')
   const [url, setUrl] = useState(item?.url ?? '')
   const [notes, setNotes] = useState(item ? itemNotes(item) : '')
+  const [clientId, setClientId] = useState(item?.client_id ?? NO_CLIENT)
+  const clients = useClients(hustle.id)
+  const who = clientWord(hustle.type)
   const [stage, setStage] = useState(editing.stage)
   const [problem, setProblem] = useState<string | null>(null)
   const busy = add.isPending || save.isPending || move.isPending || remove.isPending
@@ -73,14 +91,19 @@ function ItemForm({ hustle, editing, columns, onDone }: { hustle: Hustle; editin
     if (value !== null && !(value >= 0 && value < 10_000_000_000)) return setProblem(`${words.amount} must be a number of 0 or more.`)
     setProblem(null)
     // A date without a time means the end of that day, like a task's due date.
-    const fields = { title, amount: value, dueAt: date ? localToIso(date, 23 * 60 + 59) : null, url: url.trim() || null, notes, clientId: item?.client_id ?? null }
+    const fields = { title, amount: value, dueAt: date ? localToIso(date, 23 * 60 + 59) : null, url: url.trim() || null, notes, clientId: clientId === NO_CLIENT ? null : clientId }
     try {
       if (!item) {
         const column = columns.get(stage) ?? []
         await add.mutateAsync({ hustle, stage, fields, after: column.at(-1)?.order_index ?? null })
       } else {
         await save.mutateAsync({ item, fields })
-        if (stage !== editing.stage) await move.mutateAsync(moveToColumn(columns.get(stage) ?? [], item, stage))
+        if (stage !== editing.stage) {
+          await move.mutateAsync(moveToColumn(columns.get(stage) ?? [], item, stage))
+          onDone()
+          onMoved?.({ ...item, title: fields.title.trim(), amount: fields.amount, client_id: fields.clientId, stage }, stage)
+          return
+        }
       }
       onDone()
     } catch {
@@ -113,6 +136,24 @@ function ItemForm({ hustle, editing, columns, onDone }: { hustle: Hustle; editin
           <Input id="item-date" type="date" value={date} onChange={(event) => setDate(event.target.value)} />
         </div>
       </div>
+      {(clients.data?.length ?? 0) > 0 && (
+        <div className="grid gap-1.5">
+          <Label htmlFor="item-client">{who.title}</Label>
+          <Select value={clientId} onValueChange={setClientId}>
+            <SelectTrigger id="item-client" className="w-56">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NO_CLIENT}>No {who.one}</SelectItem>
+              {(clients.data ?? []).map((client) => (
+                <SelectItem key={client.id} value={client.id}>
+                  {client.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
       <div className="grid gap-1.5">
         <Label htmlFor="item-url">Link (optional)</Label>
         <Input id="item-url" type="url" inputMode="url" placeholder="https://" maxLength={500} value={url} onChange={(event) => setUrl(event.target.value)} />

@@ -4,14 +4,17 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { ClientsTab } from '@/features/hustle/ClientsTab'
 import { EditHustleDialog } from '@/features/hustle/EditHustleDialog'
-import { currentPhaseIndex, stepProgress, useHustlePlans } from '@/features/hustle/hustles'
-import { HUSTLE_STATUS_LABEL, targetLabel } from '@/features/hustle/labels'
+import { currentPhaseIndex, stepProgress, useHustlePlans, type Hustle, type PhaseWithSteps } from '@/features/hustle/hustles'
+import { clientWord, formatMoney, HUSTLE_STATUS_LABEL, targetLabel } from '@/features/hustle/labels'
+import { goalProgress, totals, useTransactions } from '@/features/hustle/money'
+import { MoneyTab } from '@/features/hustle/MoneyTab'
 import { PhaseList, ProgressBar } from '@/features/hustle/PhaseList'
 import { PipelineBoard } from '@/features/hustle/PipelineBoard'
 import { TEMPLATES, toHustleType } from '@/features/hustle/templates'
 
-const TABS = ['plan', 'board'] as const
+const TABS = ['plan', 'board', 'money', 'clients'] as const
 type Tab = (typeof TABS)[number]
 
 /** One hustle: its goal, its phases with steps, and its pipeline board. */
@@ -54,9 +57,6 @@ export function HustleDetailPage() {
   }
 
   const { hustle, phases } = plan
-  const progress = stepProgress(phases)
-  const index = currentPhaseIndex(phases)
-  const target = targetLabel(hustle)
   return (
     <>
       {back}
@@ -68,22 +68,13 @@ export function HustleDetailPage() {
         <EditHustleDialog hustle={hustle} />
       </div>
       <div className="grid gap-4">
-        <Card size="sm">
-          <CardHeader>
-            <CardTitle>{hustle.goal ?? 'Goal'}</CardTitle>
-            <CardDescription>{target ?? (hustle.goal ? 'No money goal' : 'No goal yet: add one with Edit.')}</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-2">
-            <p className="text-sm">
-              {progress.done} of {progress.total} steps done{phases.length > 0 && ` · phase ${index + 1} of ${phases.length}`}
-            </p>
-            <ProgressBar value={progress.done} max={progress.total} label={`${progress.done} of ${progress.total} steps done`} />
-          </CardContent>
-        </Card>
+        <GoalCard hustle={hustle} phases={phases} />
         <Tabs value={tab} onValueChange={(value) => setParams({ tab: value }, { replace: true })}>
           <TabsList>
             <TabsTrigger value="plan">Plan</TabsTrigger>
             <TabsTrigger value="board">Board</TabsTrigger>
+            <TabsTrigger value="money">Money</TabsTrigger>
+            <TabsTrigger value="clients">{clientWord(hustle.type).many}</TabsTrigger>
           </TabsList>
           <TabsContent value="plan" className="pt-2">
             <PhaseList phases={phases} />
@@ -91,8 +82,48 @@ export function HustleDetailPage() {
           <TabsContent value="board" className="pt-2">
             <PipelineBoard hustle={hustle} />
           </TabsContent>
+          <TabsContent value="money" className="pt-2">
+            <MoneyTab hustle={hustle} />
+          </TabsContent>
+          <TabsContent value="clients" className="pt-2">
+            <ClientsTab hustle={hustle} />
+          </TabsContent>
         </Tabs>
       </div>
     </>
+  )
+}
+
+/** The goal: money earned toward it (net profit) and steps done in the plan. */
+function GoalCard({ hustle, phases }: { hustle: Hustle; phases: PhaseWithSteps[] }) {
+  const money = useTransactions(hustle.id)
+  const progress = stepProgress(phases)
+  const index = currentPhaseIndex(phases)
+  const target = targetLabel(hustle)
+  const net = totals(money.data ?? []).net
+  const goal = goalProgress(net, hustle.goal_amount === null ? null : Number(hustle.goal_amount))
+  return (
+    <Card size="sm">
+      <CardHeader>
+        <CardTitle>{hustle.goal ?? 'Goal'}</CardTitle>
+        <CardDescription>{target ?? (hustle.goal ? 'No money goal' : 'No goal yet: add one with Edit.')}</CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-3">
+        {goal && hustle.goal_amount !== null && (
+          <div className="grid gap-1.5">
+            <p className="text-sm">
+              {formatMoney(net, hustle.currency)} of {formatMoney(Number(hustle.goal_amount), hustle.currency)} earned ({goal.percent}%)
+            </p>
+            <ProgressBar value={goal.percent} max={100} label={`Money goal: ${goal.percent}%`} />
+          </div>
+        )}
+        <div className="grid gap-1.5">
+          <p className="text-sm">
+            {progress.done} of {progress.total} steps done{phases.length > 0 && ` · phase ${index + 1} of ${phases.length}`}
+          </p>
+          <ProgressBar value={progress.done} max={progress.total} label={`${progress.done} of ${progress.total} steps done`} />
+        </div>
+      </CardContent>
+    </Card>
   )
 }

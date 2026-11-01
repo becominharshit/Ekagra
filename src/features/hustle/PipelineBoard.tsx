@@ -1,20 +1,39 @@
 import { useState } from 'react'
 import { format } from 'date-fns'
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ExternalLink, LoaderCircle, Plus } from 'lucide-react'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
+import { useClients } from './clients'
 import type { Hustle } from './hustles'
 import { useHustleMutation } from './hustles'
 import { ItemDialog, type EditingItem } from './ItemDialog'
 import { applyMoves, boardColumns, moveItems, useHustleItems, type HustleItem } from './items'
 import { CARD_WORDS, formatMoney, safeUrl } from './labels'
+import { saveTransaction, shouldOfferPayment, useTransactions } from './money'
 import { moveInColumn, moveToColumn, type PositionUpdate } from './ordering'
 import { TEMPLATES, toHustleType } from './templates'
 
 /** The hustle's pipeline board: a column per stage, cards moved with arrow buttons (they work on phones too). */
 export function PipelineBoard({ hustle }: { hustle: Hustle }) {
   const items = useHustleItems(hustle.id)
+  const money = useTransactions(hustle.id)
+  const clients = useClients(hustle.id)
   const move = useHustleMutation(moveItems)
+  const logPayment = useHustleMutation(saveTransaction)
   const [editing, setEditing] = useState<EditingItem | null>(null)
+  const [paying, setPaying] = useState<HustleItem | null>(null)
+  const offerPayment = (card: HustleItem, stage: string) => {
+    if (shouldOfferPayment(card, stage, money.data ?? [])) setPaying(card)
+  }
   const words = CARD_WORDS[TEMPLATES[toHustleType(hustle.type)].itemKind]
   const stages = hustle.pipeline_stages
   // A move that is still being saved already shows.
@@ -32,6 +51,9 @@ export function PipelineBoard({ hustle }: { hustle: Hustle }) {
   const save = (updates: PositionUpdate[]) => {
     if (updates.length > 0) move.mutate(updates)
   }
+  const moveTo = (card: HustleItem, stage: string) =>
+    move.mutate(moveToColumn(columns.get(stage) ?? [], card, stage), { onSuccess: () => offerPayment(card, stage) })
+  const payingClient = paying?.client_id ? clients.data?.find((client) => client.id === paying.client_id)?.name : undefined
 
   return (
     <div className="grid gap-2">
@@ -65,8 +87,8 @@ export function PipelineBoard({ hustle }: { hustle: Hustle }) {
                   onEdit={() => setEditing({ item: card, stage })}
                   onUp={index > 0 ? () => save(moveInColumn(cards, card.id, -1)) : undefined}
                   onDown={index < cards.length - 1 ? () => save(moveInColumn(cards, card.id, 1)) : undefined}
-                  previous={previous === undefined ? undefined : { stage: previous, go: () => save(moveToColumn(columns.get(previous) ?? [], card, previous)) }}
-                  next={next === undefined ? undefined : { stage: next, go: () => save(moveToColumn(columns.get(next) ?? [], card, next)) }}
+                  previous={previous === undefined ? undefined : { stage: previous, go: () => moveTo(card, previous) }}
+                  next={next === undefined ? undefined : { stage: next, go: () => moveTo(card, next) }}
                 />
               ))}
               <Button variant="ghost" size="sm" className="justify-start" onClick={() => setEditing({ item: null, stage })}>
@@ -77,7 +99,47 @@ export function PipelineBoard({ hustle }: { hustle: Hustle }) {
           )
         })}
       </div>
-      <ItemDialog hustle={hustle} editing={editing} columns={columns} onClose={() => setEditing(null)} />
+      <ItemDialog hustle={hustle} editing={editing} columns={columns} onClose={() => setEditing(null)} onMoved={offerPayment} />
+      <AlertDialog open={paying !== null} onOpenChange={(open) => !open && setPaying(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Log the payment?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {paying && formatMoney(Number(paying.amount), hustle.currency)} for “{paying?.title}”{payingClient ? ` from ${payingClient}` : ''}, as income today. It
+              counts toward your profit and earnings per hour.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Not now</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (!paying) return
+                logPayment.mutate({
+                  hustleId: hustle.id,
+                  currency: hustle.currency,
+                  id: null,
+                  fields: {
+                    kind: 'income',
+                    amount: Number(paying.amount),
+                    occurredOn: format(new Date(), 'yyyy-MM-dd'),
+                    clientId: paying.client_id,
+                    itemId: paying.id,
+                    category: paying.title,
+                    note: null,
+                  },
+                })
+              }}
+            >
+              Log {paying && formatMoney(Number(paying.amount), hustle.currency)}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      {logPayment.error && (
+        <p role="alert" className="text-sm text-destructive">
+          {logPayment.error.message}
+        </p>
+      )}
     </div>
   )
 }
