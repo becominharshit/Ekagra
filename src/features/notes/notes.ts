@@ -25,7 +25,8 @@ export function noteSourceLabel(source: string): string | null {
   return SOURCE_LABEL[source] ?? null
 }
 
-const SUMMARY_COLUMNS = 'id, user_id, subject_id, topic_id, material_id, kind, title, source, status, error, model, prompt_version, created_at, updated_at'
+/** Every column but the (long) content; Ekagra Studio's lists use it too. */
+export const NOTE_SUMMARY_COLUMNS = 'id, user_id, subject_id, topic_id, material_id, kind, title, source, status, error, model, prompt_version, created_at, updated_at'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -41,7 +42,7 @@ export async function listSubjectNotes(source: DataSource, subjectId: string): P
   }
   const { data, error } = await source.client
     .from('notes')
-    .select(SUMMARY_COLUMNS)
+    .select(NOTE_SUMMARY_COLUMNS)
     .eq('user_id', source.userId)
     .eq('subject_id', subjectId)
     .eq('status', 'ready')

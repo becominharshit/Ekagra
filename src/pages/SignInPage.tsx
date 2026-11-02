@@ -87,8 +87,8 @@ export function SignInPage() {
   )
 }
 
-/** Google's "G" logo. */
-function GoogleLogo() {
+/** Google's "G" logo (Ekagra Studio's sign-in page uses it too). */
+export function GoogleLogo() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden className="size-4">
       <path

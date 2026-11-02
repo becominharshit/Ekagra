@@ -1,0 +1,20 @@
+/* Ekagra's design (colours, type, components), so both apps feel like one product. */
+@import "../../src/index.css";
+
+/* Tailwind finds the classes in Studio's files and in the Ekagra components Studio reuses. */
+@source ".";
+@source "../../src";
+
+/* Studio's own accent (violet), used sparingly: its mark, the selected item, a few highlights.
+   Use it like a Tailwind colour: text-studio, bg-studio/10. */
+@theme inline {
+    --color-studio: var(--studio);
+}
+
+:root {
+    --studio: oklch(0.541 0.281 293.009);
+}
+
+.dark {
+    --studio: oklch(0.702 0.183 293.541);
+}

@@ -20,7 +20,7 @@ An AI mentor app for college students. It turns your syllabus, books and lecture
 | Topic | Decision |
 |---|---|
 | First users | You + friends/classmates (about 5–20 students) |
-| Platforms | Android app + web app from one codebase |
+| Platforms | Android app + installable web app from one codebase; Ekagra Studio is a second web app in the same repo (`studio/`) |
 | Builder | First-year student; AI coding tools write most of the code |
 | Stack | React + TypeScript + Vite, Capacitor for Android, Supabase backend |
 | Budget | $10/month at the start; college funding later if the beta shows results |
@@ -28,12 +28,12 @@ An AI mentor app for college students. It turns your syllabus, books and lecture
 | College portal | No API → capture tasks by typing, screenshot, share or email |
 | Distraction control | Block chosen apps during focus sessions (Android); emergency unlock only through the Academic Tollbooth (3 quick questions → 3 minutes) |
 | AI features | All six: syllabus → roadmap, PDF/video → lessons and quizzes, AI tutor, coding practice, past-paper patterns, adaptive challenge |
-| AI provider | Claude (Anthropic) only: Claude Sonnet 5.5 for Smart tasks, Claude Haiku 5.5 for Fast ones (since 2026-11-02; Gemini before) |
+| AI provider | Ekagra: Claude (Anthropic) only, Claude Sonnet 5.5 for Smart tasks and Claude Haiku 5.5 for Fast ones (since 2026-11-02; Gemini before). Ekagra Studio: Gemini, which reads YouTube links, through the same gateway and budget |
 | Life section | Phase 1: routine blocks and the evening energy check-in; habits and the full section (gym, diet, sleep, communication) in Phase 2 |
 | Side hustles | Phase 1 templates: freelancing, content creation, startup, part-time / tutoring, custom |
 | Integrations | Google Calendar/Gmail/Drive, YouTube/Instagram, payments, GitHub/Notion, freelance platforms |
 | Extra ideas | All seven: spaced repetition + mistake notebook, auto-recovery, exam season mode, weekly review, skill bridge, earnings per hour, accountability partner |
-| Tools app | Same login and database; connects in Phase 5 |
+| Ekagra Studio | The study room (notes, mind maps, revision sheets, quizzes, practice), built from scratch in `studio/` (decided 2026-11-02; replaces the "Tools app"). Same login and database; Ekagra shows its notes and keeps managing plan, life and progress |
 
 ## Phases at a glance
 
@@ -217,3 +217,17 @@ Add a dated line whenever an important decision is made or changed.
   - A task or notice opens the capture sheet filled in (`captureStore.openWith`); `ai-capture` then finds the tasks. Demo Mode hands over text only.
 
   **Demo Mode:** no AI, so `classify.ts` guesses from words in the file name (counted 3 times) and the text, each rule counting once ("due to" isn't a deadline). It can't read timetables or photos and says so. When signed in, the same guess is used for a scanned PDF over 5 MB, which can't be sent to the AI.
+- 2026-11-02: **Ekagra Studio, step 1: the app and its library** (M17). **The app:**
+  - A second Vite app in `studio/`. It uses the root packages and `.env`, and reuses Ekagra's code through `@/` (Ekagra's `src`), with `@studio/` for its own. One repo, one database, no copied code.
+  - It is checked by `npm run typecheck` (a project reference) and Vitest, and linted by oxlint like the rest.
+  - Its CSS imports Ekagra's and adds one violet accent; its icon is a sibling of Ekagra's (two pages on violet).
+  - Signed in only. The page a student opened before signing in is kept in `sessionStorage` and opened after Google sign-in. Every sign-in saves it first, so it's never cleared: clearing it on unmount broke under React's development double-mount.
+
+  **The library:**
+  - Subjects are read from Ekagra (empty states link there; Studio doesn't make subjects).
+  - Materials of every kind: PDFs (`addPdf`), photos (made smaller to 1600 px, `addPhotoMaterial`), text and YouTube links (`kind = 'youtube'`, the canonical watch link in `source_url`).
+  - YouTube links: `youtubeId` reads watch, youtu.be, shorts, embed, live, mobile and music links. The title comes from YouTube's public oEmbed (it allows calls from the browser, tested); without one, the video may be private, and Gemini only reads public videos, so Studio warns.
+  - The material page uses the browser's own PDF viewer (`navigator.pdfViewerEnabled`; phones get "Open the PDF") and YouTube's privacy-enhanced player (`youtube-nocookie.com`). It moves a material between subjects or deletes it.
+  - Notes lists show notes being made (checked every 10 seconds) and failed ones; Ekagra shows only finished ones.
+  - The Studio pages were tested in the browser with Demo Mode data through a temporary change, removed again: Studio itself still needs sign-in.
+  - Studio's own queries look again when the student comes back to it, because Ekagra may have changed things meanwhile.

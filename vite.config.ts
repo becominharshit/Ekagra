@@ -18,6 +18,8 @@ export default defineConfig({
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
       '@shared': fileURLToPath(new URL('./supabase/functions/_shared', import.meta.url)),
+      // Ekagra Studio's code, for its tests (the app itself builds with studio/vite.config.ts).
+      '@studio': fileURLToPath(new URL('./studio/src', import.meta.url)),
     },
   },
   // The Python worker is an ES module (Pyodide needs a module worker).
@@ -46,9 +48,9 @@ export default defineConfig({
     },
   },
   test: {
-    // src/** = app logic tests, tests/** = database (migration + RLS) tests,
-    // supabase/functions/** = Edge Function tests (they run in Node with a fake AI model)
-    include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'tests/**/*.test.ts', 'supabase/functions/**/*.test.ts'],
+    // src/** = app logic tests, studio/src/** = Ekagra Studio's, tests/** = database (migration + RLS)
+    // tests, supabase/functions/** = Edge Function tests (they run in Node with a fake AI model)
+    include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'studio/src/**/*.test.ts', 'tests/**/*.test.ts', 'supabase/functions/**/*.test.ts'],
     environment: 'node',
     // Starting the in-memory Postgres for the database tests can take a few seconds.
     testTimeout: 30_000,

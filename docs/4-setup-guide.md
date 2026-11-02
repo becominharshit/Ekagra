@@ -79,7 +79,7 @@ Supabase → **Authentication → URL Configuration**:
 - **Site URL**: `http://localhost:5173`
 - **Redirect URLs**: add all three
   - `http://localhost:5173/auth/callback`
-  - `http://localhost:5174/auth/callback` (used when port 5173 is busy)
+  - `http://localhost:5174/auth/callback` (Ekagra Studio, see "Ekagra Studio" below)
   - `ekagra://auth/callback`
 
 `supabase/config.toml` lists the same values. Keep them matching.
@@ -102,18 +102,20 @@ Partners and groups need two people, so use two test-user accounts: one in a nor
 5. **Studying now and group focus:** A starts a group focus (25 min). B's group shows "A until …" and Today shows **Group focus now** → **Join** starts B's own focus for the minutes left.
 6. In Supabase → **Database → Publications → supabase_realtime**, the tables `shared_stats`, `nudges`, `group_sessions`, `group_members` and `ai_anchors` are listed (migration 008 adds them). If changes only show after a minute, check that Realtime is on for the project.
 
-### Ekagra Studio (the Studio Bridge)
+### Ekagra Studio (App #2)
 
-Ekagra Studio (App #2) is a separate app. AI Anchors pass between the two apps:
-- **By link:** Studio is opened with `?bridge_payload=…`, the anchor as URL-safe base64 JSON.
-- **On Android:** by the `ekagra-studio://anchor` deep link (and back: `ekagra://anchor`).
-- **Same address:** if Studio runs at the same address (for example under `/studio`), tabs also talk on `BroadcastChannel('ekagra_app2_studio_bridge_v2')`.
-- **Signed in:** when both apps use the same Supabase account, Realtime on `ai_anchors` shows each app's anchors in the other at once.
+Ekagra Studio is the second app in this repo (`studio/`): your library of PDFs, photos, text and YouTube lectures, and the notes, mind maps, revision sheets and quizzes made from them. It uses the same Supabase project and `.env`, so the database needs nothing new. Studio has no Demo Mode: it works on the account it shares with Ekagra.
 
-1. In development, run Studio on http://localhost:5174 (its own project) next to Ekagra on http://localhost:5173.
-2. Elsewhere, add `VITE_STUDIO_URL` to `.env` (for example `VITE_STUDIO_URL=https://studio.example.com` or `https://example.com/studio`) and restart `npm run dev`. This setting is only described here, not in `.env.example`. Without it, the app uses http://localhost:5174.
-3. Try it: open a PDF in the Library → an AI Anchor → **Open in Ekagra Studio**. A Studio tab opens with the anchor.
-4. Studio can open an anchor in Ekagra with `http://localhost:5173/?bridge_payload=…`: Ekagra opens that PDF at the anchor's page, with the anchor shown.
+1. Run `npm run dev:studio` next to `npm run dev`. Studio opens at http://localhost:5174; Ekagra stays at http://localhost:5173.
+2. Sign in to Studio with the **same Google account** as in Ekagra. It has its own address, so it has its own sign-in (once). Its return address, `http://localhost:5174/auth/callback`, is already in Supabase's Redirect URLs (step 3c).
+3. Try it:
+   - Your Ekagra subjects are in Studio's library. Add a PDF, a photo or a YouTube link to one (drag and drop works too); a PDF also shows in Ekagra's Library.
+   - In Ekagra, a subject's **Notes** card has **Open Studio**, and a note has **Edit in Studio**.
+4. Online: put Studio up as a second site (step 7, "Ekagra Studio online"), then set the two addresses. Both are described only here, not in `.env.example`; without them, the apps use the development addresses.
+   - In Ekagra's settings: `VITE_STUDIO_URL` = Studio's address (for **Open Studio** and **Edit in Studio**), for example `https://studio.example.com`.
+   - In Studio's settings: `VITE_EKAGRA_URL` = Ekagra's address (for its **Ekagra** link and the privacy policy).
+
+The older Studio Bridge for AI Anchors is still in Ekagra (**Open in Ekagra Studio** on an anchor; links with `?bridge_payload=…`, the `ekagra-studio://` deep link and `BroadcastChannel('ekagra_app2_studio_bridge_v2')`). The new Studio doesn't need it: signed in to the same account, it reads the shared tables directly.
 
 ## 5. Run the Android app on your phone
 
@@ -203,6 +205,16 @@ Any static host works. These steps use Netlify; Vercel and Cloudflare Pages are 
 7. Updates: every push to GitHub deploys again by itself.
 
 **Check:** open the site, sign in with Google, open Academics and reload the page (it must not say "Page not found"), and open `https://<your-site>/privacy` in a private window (it shows without signing in).
+
+### Ekagra Studio online
+
+Studio is a second site, set up the same way from the same repo:
+- Build command: `npm run build:studio`
+- Publish directory: `studio/dist`
+- Environment variables: `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` (the same as Ekagra's), and `VITE_EKAGRA_URL` (Ekagra's address).
+- Every address answered with `index.html`: on Netlify a file `studio/public/_redirects` with `/* /index.html 200`; on Vercel the same `vercel.json` as above.
+
+Then add `https://<studio-site>/auth/callback` to Supabase's **Redirect URLs**, and set `VITE_STUDIO_URL` in Ekagra's site to Studio's address. Studio installs as an app the same way as Ekagra (below), with its own icon.
 
 ### Install Ekagra as an app (laptop, Chromebook or phone)
 
