@@ -8,6 +8,7 @@ import adaptiveMigration from '../../supabase/migrations/005_adaptive.sql?raw'
 import reviewMigration from '../../supabase/migrations/006_weekly_review.sql?raw'
 import lifeMigration from '../../supabase/migrations/007_life.sql?raw'
 import socialMigration from '../../supabase/migrations/008_social.sql?raw'
+import studioMigration from '../../supabase/migrations/009_studio.sql?raw'
 import supabaseStubs from '../../tests/db/supabase-stubs.sql?raw'
 import { stubLocalStorage } from '@/test/memoryStorage'
 import { DEMO_TABLES, demoDb, type DemoTable } from './demoDb'
@@ -150,6 +151,25 @@ const ROWS: [DemoTable, Record<string, unknown>][] = [
   ],
   // One row per student, so only one here: some numbers set, the rest as defaults.
   ['shared_stats', { id: id(59), display_name: 'Riya', week_start: '2026-11-02', focus_minutes: 45, studying_until: '2026-11-04T13:00:00.000Z' }],
+  // The first goes with its subject; the second (another subject) keeps itself but loses its topic and material links.
+  ['notes', { id: id(60), subject_id: SUBJECT, title: 'SQL basics' }],
+  [
+    'notes',
+    {
+      id: id(61),
+      subject_id: id(38),
+      topic_id: TOPIC,
+      material_id: MATERIAL,
+      kind: 'mind_map',
+      title: 'Joins',
+      content: '# Joins\n- Inner join\n- Outer join',
+      source: 'youtube',
+      status: 'failed',
+      error: 'The video is private.',
+      model: 'gemini-test',
+      prompt_version: 'notes-v1',
+    },
+  ],
 ]
 
 /**
@@ -213,6 +233,7 @@ beforeAll(async () => {
   await db.exec(reviewMigration)
   await db.exec(lifeMigration)
   await db.exec(socialMigration)
+  await db.exec(studioMigration)
   await db.exec(`insert into auth.users (id, email, raw_user_meta_data) values ('${USER}', 'demo@example.com', '{}')`)
 })
 

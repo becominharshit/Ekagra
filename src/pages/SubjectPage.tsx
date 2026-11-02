@@ -27,6 +27,7 @@ import { prerequisiteTitles, priorityLabels, roadmapSections, type PriorityLabel
 import { AttendanceCard } from '@/features/attendance/AttendanceCard'
 import { MarksCard } from '@/features/grades/MarksCard'
 import { ReadinessCard } from '@/features/metrics/ReadinessCard'
+import { SubjectNotes } from '@/features/notes/SubjectNotes'
 import { useNow } from '@/hooks/useNow'
 import { cn } from '@/lib/utils'
 
@@ -134,6 +135,8 @@ export function SubjectPage() {
           </Button>
         </div>
 
+        <SubjectNotes subjectId={current.id} />
+
         {/* Skill courses have no exam, no classes to attend and no marks. */}
         {current.kind === 'course' && <ReadinessCard subjectId={current.id} topics={roadmap.data.topics} />}
         {current.kind === 'course' && <AttendanceCard subject={current} />}
@@ -205,7 +208,7 @@ export function SubjectPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete {current.name}?</AlertDialogTitle>
             <AlertDialogDescription>
-              This deletes the subject with its roadmap and past papers. It can't be undone.
+              This deletes the subject with its roadmap, past papers and notes (in Ekagra Studio too). It can't be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           {remove.error && (

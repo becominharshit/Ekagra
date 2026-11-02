@@ -58,6 +58,7 @@ beforeAll(async () => {
   await db.exec(readSql('../../supabase/migrations/006_weekly_review.sql'))
   await db.exec(readSql('../../supabase/migrations/007_life.sql'))
   await db.exec(readSql('../../supabase/migrations/008_social.sql'))
+  await db.exec(readSql('../../supabase/migrations/009_studio.sql'))
 
   // Two people sign up. The sign-up trigger creates their profiles.
   await db.exec(`
@@ -96,6 +97,12 @@ beforeAll(async () => {
       tx,
       `insert into public.flashcards (topic_id, anchor_id, front, back, source) values ($1, $2, 'What is BCNF?', 'A stricter form of 3NF', 'anchor')`,
       [alice.topic, anchor],
+    )
+    // Notes she made in Ekagra Studio from the textbook.
+    await insertId(
+      tx,
+      `insert into public.notes (subject_id, topic_id, material_id, title, content, source) values ($1, $2, $3, 'Normal forms', '# Normal forms', 'material')`,
+      [alice.subject, alice.topic, alice.material],
     )
 
     alice.hustle = await insertId(
@@ -761,6 +768,55 @@ describe('Social migration (008_social.sql)', () => {
     await as(BOB, (tx) => tx.query(`update public.shared_stats set studying_until = now() - interval '1 minute'`))
     const rows = await as(BOB, async (tx) => (await tx.query('select studying_now, studying_until from public.shared_stats_view')).rows)
     expect(rows).toEqual([{ studying_now: false, studying_until: null }])
+  })
+})
+
+describe('Studio migration (009_studio.sql): notes', () => {
+  it('starts a note as ready Markdown notes written by hand', async () => {
+    const rows = await as(BOB, async (tx) => {
+      const subject = await insertId(tx, `insert into public.subjects (name) values ('Electronics')`)
+      const note = await insertId(tx, `insert into public.notes (subject_id, title) values ($1, 'Diodes')`, [subject])
+      return (await tx.query('select kind, content, source, status, error, topic_id, material_id from public.notes where id = $1', [note])).rows
+    })
+    expect(rows).toEqual([{ kind: 'notes', content: '', source: 'manual', status: 'ready', error: null, topic_id: null, material_id: null }])
+  })
+
+  it('deletes notes with their subject; deleting the topic or material only clears the link', async () => {
+    await as(BOB, async (tx) => {
+      const subject = await insertId(tx, `insert into public.subjects (name) values ('Networks')`)
+      const topic = await insertId(tx, `insert into public.topics (subject_id, title) values ($1, 'TCP')`, [subject])
+      const video = await insertId(tx, `insert into public.materials (subject_id, kind, title, source_url) values ($1, 'youtube', 'TCP in 10 minutes', 'https://www.youtube.com/watch?v=abc')`, [subject])
+      const note = await insertId(
+        tx,
+        `insert into public.notes (subject_id, topic_id, material_id, kind, title, source, status) values ($1, $2, $3, 'revision_sheet', 'TCP', 'youtube', 'processing')`,
+        [subject, topic, video],
+      )
+      await tx.query('delete from public.topics where id = $1', [topic])
+      await tx.query('delete from public.materials where id = $1', [video])
+      const { rows } = await tx.query('select title, topic_id, material_id from public.notes where id = $1', [note])
+      expect(rows).toEqual([{ title: 'TCP', topic_id: null, material_id: null }])
+      await tx.query('delete from public.subjects where id = $1', [subject])
+      expect((await tx.query('select 1 from public.notes where id = $1', [note])).rows).toEqual([])
+    })
+  })
+
+  it('rejects unknown kinds, sources and statuses, and empty titles', async () => {
+    const subject = await as(BOB, (tx) => insertId(tx, `insert into public.subjects (name) values ('Optics')`))
+    const insert = (columns: string, values: string) => as(BOB, (tx) => tx.query(`insert into public.notes (subject_id, ${columns}) values ($1, ${values})`, [subject]))
+    await expect(insert('title, kind', `'Lenses', 'flowchart'`)).rejects.toThrow(/check constraint/)
+    await expect(insert('title, source', `'Lenses', 'scraped'`)).rejects.toThrow(/check constraint/)
+    await expect(insert('title, status', `'Lenses', 'done'`)).rejects.toThrow(/check constraint/)
+    await expect(insert('title', `'   '`)).rejects.toThrow(/check constraint/)
+    await expect(as(BOB, (tx) => tx.query(`insert into public.notes (title) values ('No subject')`))).rejects.toThrow(/not-null/)
+  })
+
+  it("stops Bob from filing notes under Alice's subject, topic or material", async () => {
+    const subject = await as(BOB, (tx) => insertId(tx, `insert into public.subjects (name) values ('Thermodynamics')`))
+    const note = (columns: string, params: string[]) =>
+      as(BOB, (tx) => tx.query(`insert into public.notes (title, ${columns}) values ('Sneaky', ${params.map((_, i) => `$${i + 1}`).join(', ')})`, params))
+    await expect(note('subject_id', [alice.subject])).rejects.toThrow(/foreign key/)
+    await expect(note('subject_id, topic_id', [subject, alice.topic])).rejects.toThrow(/foreign key/)
+    await expect(note('subject_id, material_id', [subject, alice.material])).rejects.toThrow(/foreign key/)
   })
 })
 

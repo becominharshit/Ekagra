@@ -55,6 +55,7 @@ export const DEMO_TABLES = [
   'step_counts',
   'speaking_sessions',
   'shared_stats',
+  'notes',
 ] as const satisfies readonly (keyof PublicTables)[]
 
 export type DemoTable = (typeof DEMO_TABLES)[number]
@@ -336,6 +337,17 @@ const DEFAULTS: { [T in DemoTable]: (now: Date) => Partial<DemoRow<T>> } = {
     plan_pct: null,
     studying_until: null,
   }),
+  notes: () => ({
+    topic_id: null,
+    material_id: null,
+    kind: 'notes',
+    content: '',
+    source: 'manual',
+    status: 'ready',
+    error: null,
+    model: null,
+    prompt_version: null,
+  }),
 }
 
 interface ForeignKey {
@@ -403,6 +415,9 @@ const FOREIGN_KEYS: ForeignKey[] = [
   { table: 'marks', column: 'subject_id', references: 'subjects', onDelete: 'cascade' },
   { table: 'subject_ratings', column: 'subject_id', references: 'subjects', onDelete: 'cascade' },
   { table: 'habit_logs', column: 'habit_id', references: 'habits', onDelete: 'cascade' },
+  { table: 'notes', column: 'subject_id', references: 'subjects', onDelete: 'cascade' },
+  { table: 'notes', column: 'topic_id', references: 'topics', onDelete: 'set null' },
+  { table: 'notes', column: 'material_id', references: 'materials', onDelete: 'set null' },
 ]
 
 /** Inside this file rows are plain objects; the public functions below give them their table's type. */

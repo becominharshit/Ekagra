@@ -106,6 +106,10 @@ export const router = createBrowserRouter([
                 lazy: async () => ({ Component: (await import('@/pages/PdfViewerPage')).PdfViewerPage }),
               },
               {
+                path: 'academics/notes/:noteId',
+                lazy: async () => ({ Component: (await import('@/pages/NotePage')).NotePage }),
+              },
+              {
                 path: 'academics/review',
                 lazy: async () => ({ Component: (await import('@/pages/ReviewPage')).ReviewPage }),
               },

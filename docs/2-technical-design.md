@@ -272,6 +272,16 @@ Functions (security definer): is_connected, is_group_member (used by the rules),
 accept_partner_invite, join_group, leave_group. Realtime: shared_stats, nudges,
 group_sessions, group_members and ai_anchors are in the supabase_realtime publication.
 
+── Ekagra Studio (migration 009_studio.sql, M16) ───────────────────────────────
+notes               user_id, subject_id (deleted with the subject), topic_id and material_id
+                    (cleared when those are deleted), kind (notes|mind_map|revision_sheet),
+                    title, content (Markdown; a mind map is a Markdown outline), source
+                    (manual|material|youtube; a YouTube video is a materials row, kind youtube,
+                    with source_url), status (processing|ready|failed), error, model,
+                    prompt_version. Made and edited in Ekagra Studio; Ekagra only reads them
+Studio's quizzes use questions (source generated, source_ref { noteId }), quizzes, attempts
+and mistakes from 001, so Ekagra's progress and weekly review count them.
+
 ── System ────────────────────────────────────────────────────────────────────
 integrations        user_id, provider, status, scopes, external_account, vault_secret_id,
                     connected_at, last_sync_at

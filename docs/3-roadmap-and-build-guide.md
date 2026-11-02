@@ -89,6 +89,20 @@ Built in this order (M12 comes first: attendance helps students in the middle of
   2. Test with two accounts (docs/4, "Partner, groups and Realtime").
   3. Set `VITE_STUDIO_URL` once Ekagra Studio is online (docs/4, "Ekagra Studio").
 
+### Two apps: Ekagra and Ekagra Studio (decided 2026-11-02)
+**Ekagra manages** the student's plan, life, hustle and progress. **Ekagra Studio** (App #2, a separate Vite app in `studio/`, built from scratch) is the study room: notes, mind maps, revision sheets, PDFs, YouTube lectures, quizzes and practice. Both use the same Supabase project, and they are connected only when the student signs in to both with the same account (Demo Mode can't connect them; each app's Demo Mode works on its own). Ekagra's `supabase/migrations` own every table, Studio's too. Ekagra shows Studio's notes read-only and never makes notes; it keeps its current learning screens until Studio replaces them. Ekagra's AI is Claude; Studio's is Gemini (it can read a public YouTube link directly), through the same gateway and the same AI budget. Desktop: installable web apps first, a Tauri `.exe` later.
+
+- [ ] **M16 Ekagra for two apps, in 3 steps** (migration `009_studio.sql`, Edge Function `ai-inbox`)
+  1. The shared `notes` table (notes, mind maps and revision sheets made in Studio, filed under a subject and maybe a topic and the material they came from); a Notes card on each subject and a reader (`/academics/notes/:noteId`; a mind map is drawn from its Markdown outline); "Open Studio" and "Edit in Studio" links (`VITE_STUDIO_URL`). Done 2026-11-02
+  2. Installable web app (manifest, icons, a small service worker on the web only) and a desktop layout (a side menu on wide screens, wider pages)
+  3. The Add inbox: upload, drop or photograph a syllabus, timetable, past paper, study material or notice; `ai-inbox` (Claude, Fast) says what it is and the student confirms where it goes (syllabus import, routine, past papers, materials, tasks)
+- [ ] **M17 Ekagra Studio MVP (`studio/`), in 3 steps** (Gemini)
+  1. The app: the same sign-in and database as Ekagra; a library of subjects and materials (PDFs, photos, text and YouTube links, with drag and drop and the camera); installable
+  2. Notes, mind maps and revision sheets from a material or a YouTube link (`studio-notes`; long ones are made in the background)
+  3. Quizzes from a note (`studio-quiz`, multiple choice); results go into Ekagra's `questions`, `quizzes`, `attempts` and `mistakes`, so its progress counts them
+
+Later: coding, flashcards, practice and mock tests move to Studio; Tauri `.exe`; Android share target; reminders.
+
 The 12-week plan in §3 and the phases in §1 and §4 are kept for reference only.
 
 ## 1. Phases

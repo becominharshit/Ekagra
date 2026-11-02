@@ -47,7 +47,7 @@ const NEWER_CHECKS = ['hustles_type_check', 'hustles_links_is_list']
 
 /** Tables added by later migrations (003_beta.sql onwards). */
 const NEWER_TABLES =
-  /\b(feedback|attendance|marks|semester_results|subject_ratings|metric_snapshots|challenges|weekly_reviews|habits|habit_logs|workouts|meals|sleep_logs|step_counts|speaking_sessions|shared_stats|shared_stats_view|partner_invites|partner_links|study_groups|group_members|group_sessions|nudges)\b/
+  /\b(feedback|attendance|marks|semester_results|subject_ratings|metric_snapshots|challenges|weekly_reviews|habits|habit_logs|workouts|meals|sleep_logs|step_counts|speaking_sessions|shared_stats|shared_stats_view|partner_invites|partner_links|study_groups|group_members|group_sessions|nudges|notes)\b/
 
 const NEEDS_UPDATE = 'The database needs the latest update. Run `npm run db:push` (docs/4-setup-guide.md, step 2), then try again.'
 

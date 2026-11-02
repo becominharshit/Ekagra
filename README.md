@@ -185,3 +185,15 @@ Add a dated line whenever an important decision is made or changed.
   - Only the status and Anthropic's message are logged, never the prompt.
 
   **Privacy:** the Privacy and Account pages name Anthropic's Claude and its Commercial Terms (no training on API data by default).
+- 2026-11-02: **Two apps on one database** (roadmap §0, "Two apps"). Ekagra manages the plan, life, hustle and progress. **Ekagra Studio** is the study room: App #2, a new Vite app in `studio/`, built from scratch (the earlier prototype in `ai_system/ekagra-studio` is not used). **How they connect:**
+  - One Supabase project. Ekagra's `supabase/migrations` own every table, Studio's too. Studio runs at its own address, so the student signs in there separately with the same Google account; then both apps see the same rows. Demo Mode can't connect them.
+  - Each kind of data has one owner. Studio makes notes, mind maps, revision sheets, quizzes and practice. Ekagra shows the notes read-only and keeps its learning screens until Studio replaces them.
+  - Studio's AI is Gemini, which reads a public YouTube link directly (no scraping), through the shared gateway and the same `ai_usage` budget. Ekagra stays Claude only.
+  - Desktop: installable web apps first, then a Tauri `.exe` (a few MB instead of Electron's 100+, and later it can block apps on the laptop).
+
+  **Notes (migration `009_studio.sql`, M16 step 1):**
+  - One `notes` table for notes, mind maps and revision sheets. A note needs a subject and is deleted with it; its topic and material links are cleared when those are deleted. `status` is `processing`, `ready` or `failed`, for notes made in the background.
+  - Ekagra lists only ready notes, without their text. Because Studio changes them from another app, these queries look again when the student comes back to Ekagra (10-second stale time; the app's default is no refetch on focus), and an open note that is still processing is checked every 15 seconds.
+  - A mind map is a Markdown outline, drawn as a centre with a card per branch (`parseOutline`, pure and tested). Studio's prompts will avoid tables and LaTeX, which the Markdown reader doesn't render (no new libraries).
+  - "Open Studio" and "Edit in Studio" open `studioPageUrl(VITE_STUDIO_URL, 'subjects/<id>' | 'notes/<id>')`, in the browser on Android.
+  - Deleting a subject in Ekagra deletes its Studio notes too; the delete dialog and the privacy page say so.

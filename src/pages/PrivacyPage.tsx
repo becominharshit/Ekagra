@@ -75,7 +75,8 @@ export function PrivacyPage() {
           <List>
             <li>From Google sign-in: your name, email address and profile photo.</li>
             <li>
-              What you add: your profile, routine and settings; subjects, topics and past-paper results; the PDFs you upload; AI Anchors, tutor
+              What you add: your profile, routine and settings; subjects, topics and past-paper results; the PDFs you upload; notes, mind maps and
+              revision sheets you make in Ekagra Studio; AI Anchors, tutor
               answers, lessons, quizzes and flashcards with your answers and reviews; the mistake notebook; Coding Lab code; tasks and your plan;
               focus sessions, distractions and Tollbooth quizzes; evening check-ins (energy, mood, biggest distraction); hustles, clients, income,
               expenses and hours; the apps you chose to block.
@@ -161,6 +162,10 @@ export function PrivacyPage() {
           <p>
             "Open in Ekagra Studio" puts that AI Anchor (its text, your question and the answer, cut to fit) into the link it opens, so the other
             app can show it. Nothing else is sent. If you're signed in to both apps with the same account, your anchors show in both.
+          </p>
+          <p>
+            Ekagra Studio uses the same account and the same private storage. Notes you make there show under each subject here; deleting a
+            subject, wiping your data or deleting your account here deletes them too.
           </p>
         </Section>
 

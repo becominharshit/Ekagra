@@ -11,6 +11,7 @@ import {
   readMessage,
   studioBase,
   studioDeepLink,
+  studioPageUrl,
   studioWebUrl,
 } from './protocol'
 
@@ -69,6 +70,11 @@ describe('links and messages', () => {
       'http://localhost:5174',
       'http://localhost:5174',
     ])
+  })
+
+  it('links to pages of Studio (notes, subjects), with or without a path in VITE_STUDIO_URL', () => {
+    expect(studioPageUrl('http://localhost:5174', 'notes/n1')).toBe('http://localhost:5174/notes/n1')
+    expect(studioPageUrl('https://ekagra.example/studio/', '/subjects/s1')).toBe('https://ekagra.example/studio/subjects/s1')
   })
 
   it('reads a payload from a link to Ekagra, and opens the anchor at its page', () => {

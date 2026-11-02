@@ -46,7 +46,7 @@ npm run db:types
 
 - `login` opens your browser to allow the Supabase command-line tool.
 - `link` asks for the database password from step 1.
-- `db:push` creates every table, security rule (RLS) and storage bucket from the files in `supabase/migrations/` (`001_phase1_core.sql`, then `002_hustle_mode.sql`, `003_beta.sql` (feedback), `004_attendance_grades.sql`, `005_adaptive.sql` (practice ratings, weekly metrics and challenges), `006_weekly_review.sql`, `007_life.sql` (habits, workouts, meals, sleep, steps and speaking practice), `008_social.sql` (partners, study groups, nudges; it also turns on Realtime for them and for AI Anchors) and any later ones). Run it again whenever a new migration file appears; it only applies the new ones.
+- `db:push` creates every table, security rule (RLS) and storage bucket from the files in `supabase/migrations/` (`001_phase1_core.sql`, then `002_hustle_mode.sql`, `003_beta.sql` (feedback), `004_attendance_grades.sql`, `005_adaptive.sql` (practice ratings, weekly metrics and challenges), `006_weekly_review.sql`, `007_life.sql` (habits, workouts, meals, sleep, steps and speaking practice), `008_social.sql` (partners, study groups, nudges; it also turns on Realtime for them and for AI Anchors), `009_studio.sql` (notes made in Ekagra Studio) and any later ones). Run it again whenever a new migration file appears; it only applies the new ones.
 - `db:types` writes `src/types/database.ts` from your real database. Run it again after every new migration.
 
 **Check:** Supabase → **Table Editor** lists tables such as `profiles`, `subjects`, `hustles`, and each one says RLS is enabled.

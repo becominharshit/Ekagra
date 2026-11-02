@@ -1608,6 +1608,82 @@ export type Database = {
           },
         ]
       }
+      notes: {
+        Row: {
+          content: string
+          created_at: string
+          error: string | null
+          id: string
+          kind: string
+          material_id: string | null
+          model: string | null
+          prompt_version: string | null
+          source: string
+          status: string
+          subject_id: string
+          title: string
+          topic_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          content?: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          kind?: string
+          material_id?: string | null
+          model?: string | null
+          prompt_version?: string | null
+          source?: string
+          status?: string
+          subject_id: string
+          title: string
+          topic_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          kind?: string
+          material_id?: string | null
+          model?: string | null
+          prompt_version?: string | null
+          source?: string
+          status?: string
+          subject_id?: string
+          title?: string
+          topic_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notes_material_id_user_id_fkey"
+            columns: ["material_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "materials"
+            referencedColumns: ["id", "user_id"]
+          },
+          {
+            foreignKeyName: "notes_subject_id_user_id_fkey"
+            columns: ["subject_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
+            referencedColumns: ["id", "user_id"]
+          },
+          {
+            foreignKeyName: "notes_topic_id_user_id_fkey"
+            columns: ["topic_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "topics"
+            referencedColumns: ["id", "user_id"]
+          },
+        ]
+      }
       nudges: {
         Row: {
           created_at: string
@@ -2894,6 +2970,30 @@ export type Database = {
           updated_at: string | null
           user_id: string | null
           week_start: string | null
+        }
+        Insert: {
+          display_name?: string | null
+          focus_minutes?: number | null
+          on_leaderboard?: boolean | null
+          plan_pct?: number | null
+          streak_days?: number | null
+          studying_now?: never
+          studying_until?: never
+          updated_at?: string | null
+          user_id?: string | null
+          week_start?: string | null
+        }
+        Update: {
+          display_name?: string | null
+          focus_minutes?: number | null
+          on_leaderboard?: boolean | null
+          plan_pct?: number | null
+          streak_days?: number | null
+          studying_now?: never
+          studying_until?: never
+          updated_at?: string | null
+          user_id?: string | null
+          week_start?: string | null
         }
         Relationships: []
       }

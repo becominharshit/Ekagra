@@ -1,7 +1,17 @@
 import { Browser } from '@capacitor/browser'
 import { Capacitor } from '@capacitor/core'
 import type { Tables } from '@/types/database'
-import { anchorPayload, BRIDGE_CHANNEL, encodePayload, studioBase, studioDeepLink, studioWebUrl, type BridgeMessage, type BridgePayload } from './protocol'
+import {
+  anchorPayload,
+  BRIDGE_CHANNEL,
+  encodePayload,
+  studioBase,
+  studioDeepLink,
+  studioPageUrl,
+  studioWebUrl,
+  type BridgeMessage,
+  type BridgePayload,
+} from './protocol'
 
 // The Studio Bridge in this app: opening an anchor in Ekagra Studio, and telling Studio tabs (same
 // address) about saved and deleted anchors. (A link from Studio is read by launch.ts.)
@@ -62,4 +72,17 @@ export async function openInStudio(anchor: Tables<'ai_anchors'>, materialTitle: 
     return
   }
   window.open(web, 'ekagra-studio')
+}
+
+/**
+ * Opens a page of Ekagra Studio, e.g. 'notes/<id>' or 'subjects/<id>': on the web in the Studio tab,
+ * on Android in the browser (Studio is a web app there).
+ */
+export async function openStudioPage(page: string): Promise<void> {
+  const url = studioPageUrl(studioUrl(), page)
+  if (Capacitor.isNativePlatform()) {
+    await Browser.open({ url })
+    return
+  }
+  window.open(url, 'ekagra-studio')
 }

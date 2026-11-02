@@ -120,6 +120,13 @@ export function studioWebUrl(base: string, encoded: string): string {
   return url.toString()
 }
 
+/** A page of Ekagra Studio, e.g. 'notes/<id>': `base` may have a path (e.g. https://example.com/studio). */
+export function studioPageUrl(base: string, page: string): string {
+  const url = new URL(base)
+  url.pathname = `${url.pathname.replace(/\/+$/, '')}/${page.replace(/^\/+/, '')}`
+  return url.toString()
+}
+
 /** Ekagra Studio's Android app with the payload. */
 export function studioDeepLink(encoded: string): string {
   return `${STUDIO_DEEP_LINK}?${BRIDGE_PARAM}=${encoded}`

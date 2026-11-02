@@ -16,6 +16,7 @@ export const USER_TABLES = [
   'code_snippets',
   'flashcards',
   'ai_anchors',
+  'notes',
   'material_pages',
   'material_sections',
   'lessons',
