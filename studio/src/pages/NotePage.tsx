@@ -30,6 +30,7 @@ import { BackLink } from '@studio/components/BackLink'
 import { useLibrary } from '@studio/features/library/library'
 import { makeNotes, type MakeNotesInput } from '@studio/features/notes/makeNotes'
 import { deleteNote, stillMaking, updateNote } from '@studio/features/notes/studioNotes'
+import { NoteQuiz } from '@studio/features/quiz/NoteQuiz'
 
 /** Long text reads better a little larger, with headings that stand out (as in Ekagra). */
 const READING = 'text-base [&_h1]:text-xl [&_h2]:mt-6 [&_h2]:text-lg [&_h3]:mt-4'
@@ -151,6 +152,7 @@ function NoteView({ note }: { note: Note }) {
               <Markdown className={READING}>{note.content}</Markdown>
             </article>
           )}
+          {note.status === 'ready' && note.content.trim() !== '' && <NoteQuiz note={note} />}
         </>
       )}
 

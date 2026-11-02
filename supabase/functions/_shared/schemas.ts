@@ -373,6 +373,43 @@ export const StudioNotesResponseSchema = z.object({ noteId: z.uuid() })
 export type StudioNotesResponse = z.infer<typeof StudioNotesResponseSchema>
 
 // ---------------------------------------------------------------------------
+// Ekagra Studio: a multiple-choice quiz from a note (studio-quiz, Gemini)
+// ---------------------------------------------------------------------------
+
+export const StudioQuizRequestSchema = z.object({
+  noteId: z.uuid(),
+  title: z.string().trim().min(1).max(200),
+  /** The note's Markdown. */
+  text: z.string().trim().min(1).max(MAX_TEXT_LENGTH),
+  count: z.number().int().min(3).max(15),
+  program: z.string().max(120).nullable().optional(),
+  year: z.number().int().min(1).max(8).nullable().optional(),
+})
+export type StudioQuizRequest = z.infer<typeof StudioQuizRequestSchema>
+
+export const StudioQuizQuestionSchema = z.object({
+  prompt: z.string().min(1).max(600).describe('The question, in one or two sentences'),
+  options: z.array(z.string().min(1).max(200)).min(4).max(4).describe('Exactly four answer options, each different'),
+  correctOption: z.number().int().min(0).max(3).describe('Index (0 to 3) of the right option'),
+  explanation: z.string().min(1).max(600).describe('Why that option is right, in one or two sentences'),
+  difficulty: z.number().int().min(1).max(5).describe('1 = easy … 5 = hard'),
+})
+export type StudioQuizQuestion = z.infer<typeof StudioQuizQuestionSchema>
+
+export const StudioQuizAnswerSchema = z
+  .object({ questions: z.array(StudioQuizQuestionSchema).min(1).max(15) })
+  .superRefine((answer, context) => {
+    answer.questions.forEach((question, index) => {
+      const seen = new Set(question.options.map((option) => option.trim().toLowerCase()))
+      if (seen.size !== question.options.length) context.addIssue({ code: 'custom', message: 'The four options must all be different', path: ['questions', index, 'options'] })
+    })
+  })
+
+/** What studio-quiz returns. The app saves the questions (questions, source "generated") and the student's answers. */
+export const StudioQuizResponseSchema = StudioQuizAnswerSchema.safeExtend({ model: z.string(), promptVersion: z.string() })
+export type StudioQuizResponse = z.infer<typeof StudioQuizResponseSchema>
+
+// ---------------------------------------------------------------------------
 // Morning brief: today's plan, deadlines and last check-in → 3 short lines (ai-brief)
 // ---------------------------------------------------------------------------
 

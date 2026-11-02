@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest'
 import { createAiGateway } from './ai.ts'
 import { readStudioAiConfig } from './aiCore.ts'
 import { studioNotesInstructions, studioNotesPrompt } from './prompts/studioNotes.ts'
-import { StudioNoteAnswerSchema, type StudioNotesRequest } from './schemas.ts'
+import { STUDIO_QUIZ_INSTRUCTIONS, studioQuizPrompt } from './prompts/studioQuiz.ts'
+import { StudioNoteAnswerSchema, StudioQuizAnswerSchema, type StudioNotesRequest } from './schemas.ts'
 import { memoryUsage } from './testing.ts'
 
 // The AI gateway with the real Gemini provider (@ai-sdk/google) and a pretend network: what Ekagra
@@ -78,5 +79,23 @@ describe('Ekagra Studio on Gemini (the real provider, no network)', () => {
     const text = await generate({ ...BASE, kind: 'revision_sheet', source: { kind: 'text', text: 'BCNF: every determinant is a key.' } }, null, 'smart')
     expect(JSON.stringify(parts(text.sent[0]?.body))).toContain('BCNF: every determinant is a key.')
     expect(JSON.stringify(text.sent[0]?.body.systemInstruction)).toContain('revision sheet')
+  })
+
+  it("gives Gemini the quiz's answer shape and reads the questions back", async () => {
+    const question = { prompt: 'What does an inner join keep?', options: ['Matching rows', 'All rows', 'No rows', 'Left rows'], correctOption: 0, explanation: 'Only matches.', difficulty: 2 }
+    const gemini = fakeGemini({ questions: [question] })
+    const ai = createAiGateway({ config: readStudioAiConfig({ GEMINI_API_KEY: 'gemini-test-key' }), usage: memoryUsage(), model: gemini.model })
+    const result = await ai.generate({
+      userId: 'student-1',
+      feature: 'studio-quiz',
+      tier: 'smart',
+      schema: StudioQuizAnswerSchema,
+      instructions: STUDIO_QUIZ_INSTRUCTIONS,
+      prompt: studioQuizPrompt({ noteId: BASE.materialId, title: 'SQL joins', text: '## Inner join\n- Matching rows', count: 5 }),
+    })
+    expect(result.data.questions).toEqual([question])
+    const config = (gemini.sent[0]?.body.generationConfig ?? {}) as Json
+    expect(config.responseMimeType).toBe('application/json')
+    expect(JSON.stringify(config.responseSchema ?? config.responseJsonSchema)).toContain('correctOption')
   })
 })

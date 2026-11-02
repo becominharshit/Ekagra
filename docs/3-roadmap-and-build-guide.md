@@ -101,10 +101,16 @@ Built in this order (M12 comes first: attendance helps students in the middle of
   1. The shared `notes` table (notes, mind maps and revision sheets made in Studio, filed under a subject and maybe a topic and the material they came from); a Notes card on each subject and a reader (`/academics/notes/:noteId`; a mind map is drawn from its Markdown outline); "Open Studio" and "Edit in Studio" links (`VITE_STUDIO_URL`). Done 2026-11-02
   2. Installable web app (manifest, icons, a small service worker on the web only) and a desktop layout (a side menu on wide screens, wider pages). Done 2026-11-02
   3. The Add inbox: upload, drop or photograph a syllabus, timetable, past paper, study material or notice; `ai-inbox` (Claude, Fast) says what it is and the student confirms where it goes (syllabus import, routine, past papers, materials, tasks). Done 2026-11-02
-- [ ] **M17 Ekagra Studio MVP (`studio/`), in 3 steps** (Gemini)
+- [x] **M17 Ekagra Studio MVP (`studio/`), in 3 steps** (Gemini; Edge Functions `studio-notes` and `studio-quiz`, no new migration). Done 2026-11-02. Studio needs sign-in: it has no Demo Mode. **Your steps** (after M16's):
+  1. Add `GEMINI_API_KEY` (and, recommended, `YOUTUBE_API_KEY`) to `supabase/functions/.env`, then `npm run functions:secrets` (docs/4, "Ekagra Studio's AI").
+  2. `npm run functions:deploy` (now 16 functions: Ekagra's 14 with `studio-notes` and `studio-quiz`).
+  3. `npm run dev:studio` next to `npm run dev`, open http://localhost:5174 and sign in with the same Google account as in Ekagra (docs/4, "Ekagra Studio").
+  4. Online: put Studio up as a second site, add its `/auth/callback` to Supabase's Redirect URLs, and set `VITE_STUDIO_URL` in Ekagra and `VITE_EKAGRA_URL` in Studio (docs/4, "Ekagra Studio online").
+
+  The steps:
   1. The app: the same sign-in and database as Ekagra; a library of subjects and materials (PDFs, photos, text and YouTube links, with drag and drop and the camera); installable. Done 2026-11-02
   2. Notes, mind maps and revision sheets from a material or a YouTube link (`studio-notes`; long ones are made in the background). Done 2026-11-02
-  3. Quizzes from a note (`studio-quiz`, multiple choice); results go into Ekagra's `questions`, `quizzes`, `attempts` and `mistakes`, so its progress counts them
+  3. Quizzes from a note (`studio-quiz`, multiple choice); results go into Ekagra's `questions`, `quizzes`, `attempts` and `mistakes`, so its progress counts them. Done 2026-11-02
 
 Later: coding, flashcards, practice and mock tests move to Studio; Tauri `.exe`; Android share target; reminders.
 

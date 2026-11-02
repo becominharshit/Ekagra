@@ -186,14 +186,16 @@ The Coding Lab doesn't need any of this: Python runs on the device. Its first ru
 
 ### Ekagra Studio's AI (Gemini, by Google)
 
-Studio makes notes, mind maps and revision sheets with Gemini, which can also watch a YouTube video from its link. Same steps as above, with a Google key:
+Studio makes notes, mind maps, revision sheets and quizzes with Gemini, which can also watch a YouTube video from its link. Same steps as above, with a Google key:
 
 1. Get a Gemini API key at https://aistudio.google.com/api-keys → **Create API key**.
 2. In `supabase/functions/.env`, add the Studio part of `supabase/functions/.env.example`: remove the `#` before `GEMINI_API_KEY=` and paste the key. The models (Gemini 3.8 Flash for PDFs, photos and text; Gemini 3.5 Flash-Lite for videos, which are long) and their prices are filled in already.
 3. Optional, recommended: a YouTube Data API key, so Studio checks a video before spending anything on it (it must be public and at most 3 hours long) and names the material after the video. Google Cloud console → **APIs & Services** → enable **YouTube Data API v3** → **Credentials** → **Create credentials → API key**, restricted to that API. Paste it after `YOUTUBE_API_KEY=` (remove the `#`).
-4. `npm run functions:secrets`, then `npm run functions:deploy` (now 15 functions, with `studio-notes`).
+4. `npm run functions:secrets`, then `npm run functions:deploy` (now 16 functions, with `studio-notes` and `studio-quiz`).
 
 **Check:** in Studio (signed in), open a subject → **Add** → **YouTube** → paste a public lecture's link → **Add the video**, then on its page **Make from this** → **Notes**. The note says "Being made…" for up to a minute or two and then shows the notes; Ekagra shows them under that subject too. **Me → AI usage** in Ekagra lists "Studio: notes, mind maps and revision sheets".
+
+**Check the quiz:** under a finished note, **Test yourself** → **5 questions**. After a few seconds the first question shows; answer all five (get one wrong on purpose). The result says how many were right, and the wrong one is in Ekagra's mistake notebook (Academics → **Mistakes**), with the right answer. The questions stay with the note: **Practise the 5 saved questions** asks them again without the AI.
 
 **Free tier and cost:** on Gemini's free tier, Google may use the prompts to improve its products; turn on billing before friends add their own material. While on the free tier, set the four `STUDIO_AI_PRICE_…` secrets to `0`, or Studio counts prices that aren't paid against the app's budget. Studio counts Gemini 3.8 Flash at Google's price from 1 January 2027 ($1.50 / $7.50 per million tokens), so the budget is never under-counted. A one-hour lecture is about 360,000 tokens: about $0.11 with Flash-Lite. YouTube links are free while that feature is in preview.
 

@@ -246,3 +246,15 @@ Add a dated line whenever an important decision is made or changed.
   - PDFs are read on the device as text, from a chosen page, as many whole pages as fit in 60,000 characters (`textForNotes`). Scanned PDFs (up to 5 MB) and photos are sent as files.
   - The prompt keeps to what the reader shows (no tables, no LaTeX) and makes mind maps as outlines for `parseOutline`.
   - Studio edits a note (title and Markdown, with a preview) and deletes it; Ekagra shows only finished notes.
+- 2026-11-02: **Ekagra Studio, step 3: quizzes from a note** (Edge Function `studio-quiz`, Gemini Smart, prompt `studio-quiz-v1`; now 16 functions). M17 is done. **How it works:**
+  - **Test yourself** under a finished note asks for 5 or 10 multiple-choice questions: exactly 4 different options, the right one's index, an explanation and a difficulty. The function shuffles the options, because models like putting the right one first.
+  - `studio-quiz` starts through `_shared/studioServer.ts` and `studioHttp.ts` (Studio's versions of `server.ts` and `http.ts`: Gemini secrets and models, the same limits), so Ekagra's functions still don't bundle Gemini.
+
+  **Saved in Ekagra's tables, no new migration:**
+  - The questions use Ekagra's check-question format (`type 'mcq'`, `options`, `answer { correct }`) with `source_ref { kind: 'studio', noteId }`, so they can be practised again without the AI. Ekagra's lessons, Practice and mock tests read only `kind: 'check'`, so they never mix them in (and regenerating a lesson can't delete them). The Academic Tollbooth asks any multiple-choice question of the subject, these included, which suits it.
+  - Studio asks them with Ekagra's `CheckQuiz`. A finished quiz is saved like a lesson's check quiz: a `quizzes` row (kind `subject`, or `topic` when the note has one), an `attempts` row per answer and a mistake-notebook entry per wrong answer, so progress, the weekly review and the notebook count them. Topic mastery isn't changed: that stays with Ekagra's lessons. A stopped quiz saves nothing.
+  - Deleting a note keeps its questions, because deleting them would delete their answers too.
+
+  **Tested:** the function (`studio-quiz/feature.test.ts`), Google's real provider with the quiz's answer shape (`_shared/gemini.test.ts`, no network), the data layer (`studio/src/features/quiz/quiz.test.ts`, including that Ekagra reads a saved question back), and the whole quiz in the browser on Demo Mode data, through a temporary change that was removed again.
+
+  **Lint:** oxlint's React Compiler rule `react/purity` flags `new Date()` in a click handler passed to a component like `Button`, as if it ran while drawing. Like `SpeakingTab`'s `nowMs`, the start time comes from a small helper outside the component.

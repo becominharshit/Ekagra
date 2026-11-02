@@ -23,6 +23,7 @@ export const AI_FUNCTIONS: { name: AiFunction; label: string; features: string[]
   { name: 'ai-meal', label: 'Meal estimates', features: ['meal'] },
   { name: 'ai-speak', label: 'Speaking practice', features: ['speak'] },
   { name: 'studio-notes', label: 'Studio: notes, mind maps and revision sheets', features: ['studio-notes'] },
+  { name: 'studio-quiz', label: 'Studio: quizzes from notes', features: ['studio-quiz'] },
 ]
 
 export interface UsageRow {

@@ -76,7 +76,7 @@ export function PrivacyPage() {
             <li>From Google sign-in: your name, email address and profile photo.</li>
             <li>
               What you add: your profile, routine and settings; subjects, topics and past-paper results; the PDFs you upload, and the photos and
-              text you save as study material; notes, mind maps and revision sheets you make in Ekagra Studio; AI Anchors, tutor
+              text you save as study material; notes, mind maps, revision sheets and quizzes you make in Ekagra Studio; AI Anchors, tutor
               answers, lessons, quizzes and flashcards with your answers and reviews; the mistake notebook; Coding Lab code; tasks and your plan;
               focus sessions, distractions and Tollbooth quizzes; evening check-ins (energy, mood, biggest distraction); hustles, clients, income,
               expenses and hours; the apps you chose to block.
@@ -165,8 +165,9 @@ export function PrivacyPage() {
             app can show it. Nothing else is sent. If you're signed in to both apps with the same account, your anchors show in both.
           </p>
           <p>
-            Ekagra Studio uses the same account and the same private storage. Notes you make there show under each subject here; deleting a
-            subject, wiping your data or deleting your account here deletes them too.
+            Ekagra Studio uses the same account and the same private storage. Notes you make there show under each subject here, and your answers
+            to its quizzes count in your progress here, with wrong ones in the mistake notebook. Deleting a subject here deletes its notes and
+            quiz answers; wiping your data or deleting your account deletes all of it, the mistake notebook too.
           </p>
         </Section>
 
@@ -204,9 +205,10 @@ export function PrivacyPage() {
           </p>
           <p>
             Ekagra Studio asks Google's Gemini API instead. To make notes, a mind map or a revision sheet, it sends the material you chose: its
-            text, the photo or scanned pages, or a YouTube video's link (Gemini watches the public video itself), with your course and year. With
-            the paid Gemini API, Google doesn't use these requests to improve its products (ai.google.dev/gemini-api/terms); on its free tier it
-            may. The notes are saved to your account, and Ekagra shows them.
+            text, the photo or scanned pages, or a YouTube video's link (Gemini watches the public video itself), with your course and year. To
+            write quiz questions, it sends that note's text. With the paid Gemini API, Google doesn't use these requests to improve its products
+            (ai.google.dev/gemini-api/terms); on its free tier it may. The notes and questions are saved to your account, and Ekagra shows the
+            notes.
           </p>
         </Section>
 
