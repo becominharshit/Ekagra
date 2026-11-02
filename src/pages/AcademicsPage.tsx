@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { format } from 'date-fns'
-import { BookOpen, CalendarCheck, ChevronRight, Code2, FlaskConical, GraduationCap, Library, LoaderCircle, Plus, TrendingUp } from 'lucide-react'
+import { BookOpen, CalendarCheck, ChevronRight, Code2, FileUp, FlaskConical, GraduationCap, Library, LoaderCircle, Plus, TrendingUp } from 'lucide-react'
 import { Link, useNavigate } from 'react-router'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Badge } from '@/components/ui/badge'
@@ -14,6 +14,7 @@ import { useAcademicsMutation, useSubjects } from '@/features/academics/subjects
 import { priorityLabels } from '@/features/academics/topicTree'
 import { PracticeCard } from '@/features/academics/PracticeCard'
 import { useAuthStore } from '@/features/auth/authStore'
+import { useInboxStore } from '@/features/inbox/inboxStore'
 import { examReadiness, percentText } from '@/features/metrics/readiness'
 import { ShareBar } from '@/features/metrics/ReadinessCard'
 import { useLatestMocks } from '@/features/mock/mockTest'
@@ -27,6 +28,7 @@ export function AcademicsPage() {
   const study = useStudy()
   const mocks = useLatestMocks()
   const [adding, setAdding] = useState(false)
+  const showInbox = useInboxStore((state) => state.show)
   const now = useNow(60_000)
   const today = format(now, 'yyyy-MM-dd')
   const samples = useAcademicsMutation<void, void>((source) => addSampleSubjects(source, today))
@@ -42,6 +44,10 @@ export function AcademicsPage() {
           <Button onClick={() => setAdding(true)}>
             <Plus aria-hidden />
             Add subject
+          </Button>
+          <Button variant="outline" onClick={() => showInbox()}>
+            <FileUp aria-hidden />
+            Add a file
           </Button>
           <Button asChild variant="outline">
             <Link to="/academics/library">

@@ -4,6 +4,8 @@ import { FeedbackSheet } from '@/features/feedback/FeedbackSheet'
 import { FocusBar } from '@/features/focus/FocusBar'
 import { FocusGuardSync } from '@/features/focus/FocusGuardSync'
 import { LaunchpadBar } from '@/features/hustle/LaunchpadBar'
+import { InboxDropTarget } from '@/features/inbox/InboxDropTarget'
+import { InboxSheet } from '@/features/inbox/InboxSheet'
 import { ModeSwitchGuard } from '@/features/mode/ModeSwitchGuard'
 import { usePlanKeeper } from '@/features/planner/replan'
 import { CaptureButton } from '@/features/tasks/CaptureButton'
@@ -54,6 +56,9 @@ export function AppShell() {
       <BottomTabBar />
       <CaptureButton />
       <CaptureSheet />
+      {/* Add a syllabus, timetable, past paper, notes or a notice: the top bar's Add, or a file dropped on the window. */}
+      <InboxSheet />
+      <InboxDropTarget />
       <FeedbackSheet />
       <ModeSwitchGuard />
     </div>

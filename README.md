@@ -205,3 +205,15 @@ Add a dated line whenever an important decision is made or changed.
   - Tested on a production build: installed, then reloaded with the server stopped, and the app opened from the saved copy.
 
   **Desktop:** at 1024 px (`lg`) a side menu (`SideNav`, the same `TABS` as the bottom bar) replaces the bottom tabs, the top bar spans the window, pages widen from `max-w-2xl` to `max-w-4xl`, and the + button moves to the corner. The two places that stretch to the page edges (the mock test bar and the pipeline board) follow the wider padding.
+- 2026-11-02: **The Add inbox** (M16 step 3, Edge Function `ai-inbox`, Fast, prompt `inbox-v1`; now 14 functions). M16 is done. **How it works:**
+  - **Add** in the top bar, **Add a file** on Academics, or a file dropped anywhere on the window opens one sheet: choose a file, take a photo, or paste text. The + capture sheet links to it ("A syllabus, timetable, past paper or notes?").
+  - `ai-inbox` gets the file name, the text of a PDF's first pages (read on the device) or the photo/scan, and the subject list. It answers the kind (syllabus, timetable, past paper, study material, task, other), a title, one sentence, the subject (or a new course name) and, for timetables, the weekly classes.
+  - Nothing is saved until the student confirms. They can change the kind and the subject, and leave out classes.
+
+  **Where it goes:**
+  - A syllabus or past paper opens its own import screen already filled in. The hand-off is in memory for 10 minutes (`importHandoff.ts`); the screen reads it purely and clears it in an effect, which is safe with React's double rendering in development. So `ai-syllabus` and `ai-papers` still do the reading, with the student's check.
+  - A timetable replaces only the class blocks, through the routine form model (`rowsToRoutine` → classes replaced → `validateRoutine` → `routineToRows`), so sleep, meals and the gym stay. Its courses can become subjects (a checkbox; off by default, because timetables also list things like "Library"). The routine is checked before any subject is made.
+  - Study material: a PDF goes to the library (`addPdf` takes a title now). A photo becomes `materials.kind = 'image'` in the `images` bucket (the AI's 1600 px JPEG; Demo Mode keeps it in IndexedDB). Text becomes `kind = 'text'` with its text in `material_pages`. Ekagra's library still lists only PDFs; Ekagra Studio will show every kind. `deleteMaterial` now picks the bucket by kind.
+  - A task or notice opens the capture sheet filled in (`captureStore.openWith`); `ai-capture` then finds the tasks. Demo Mode hands over text only.
+
+  **Demo Mode:** no AI, so `classify.ts` guesses from words in the file name (counted 3 times) and the text, each rule counting once ("due to" isn't a deadline). It can't read timetables or photos and says so. When signed in, the same guess is used for a scanned PDF over 5 MB, which can't be sent to the AI.

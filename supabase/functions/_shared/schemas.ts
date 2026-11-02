@@ -279,6 +279,65 @@ export const CaptureResponseSchema = CaptureAnswerSchema.extend({ model: z.strin
 export type CaptureResponse = z.infer<typeof CaptureResponseSchema>
 
 // ---------------------------------------------------------------------------
+// The Add inbox: an upload → what it is and where it goes (ai-inbox)
+// ---------------------------------------------------------------------------
+
+export const INBOX_KINDS = ['syllabus', 'timetable', 'past_paper', 'study_material', 'task', 'other'] as const
+export type InboxKind = (typeof INBOX_KINDS)[number]
+
+export const InboxRequestSchema = z
+  .object({
+    /** The file's name (it often says what it is), or null for typed text. */
+    fileName: z.string().max(200).nullable(),
+    /** Typed text, or the text of a PDF's first pages, read on the device. */
+    text: z.string().max(MAX_TEXT_LENGTH).optional(),
+    /** A photo, or a scanned PDF (one with no text in it). */
+    file: SourceFileSchema.optional(),
+    pageCount: z.number().int().min(1).max(100_000).nullable(),
+    /** The student's subjects with short keys (s1, s2, …). */
+    subjects: z
+      .array(z.object({ key: z.string().min(1).max(10), name: z.string().min(1).max(120), code: z.string().max(40).nullable() }))
+      .max(40),
+  })
+  .refine(hasSource, NO_SOURCE)
+export type InboxRequest = z.infer<typeof InboxRequestSchema>
+
+/** A time of day as H:MM or HH:MM (24-hour). */
+const TIME_OF_DAY = /^([01]?\d|2[0-3]):[0-5]\d$/
+
+export const InboxClassSchema = z.object({
+  subject: z.string().min(1).max(120).describe('The course as the timetable names it'),
+  subjectKey: z.string().nullable().describe('Key of the listed subject it is, or null'),
+  days: z.array(z.number().int().min(0).max(6)).min(1).max(7).describe('0 = Sunday, 1 = Monday … 6 = Saturday'),
+  start: z.string().describe('Start time, 24-hour HH:MM'),
+  end: z.string().describe('End time, 24-hour HH:MM'),
+})
+export type InboxClass = z.infer<typeof InboxClassSchema>
+
+export const InboxAnswerSchema = z
+  .object({
+    kind: z.enum(INBOX_KINDS).describe('What it is'),
+    title: z.string().min(1).max(120).describe('A short name for it, e.g. "DBMS syllabus" or "Unit 3 notes: SQL joins"'),
+    summary: z.string().min(1).max(300).describe('One plain sentence on what it is'),
+    subjectKey: z.string().nullable().describe('Key of the listed subject it belongs to, or null (always null for a timetable)'),
+    newSubject: z.string().max(120).nullable().describe('The course it belongs to when that course is not in the list, else null'),
+    year: z.number().int().min(1990).max(2100).nullable().describe('Past papers: the exam year when the paper shows it, else null'),
+    classes: z.array(InboxClassSchema).max(80).describe('Timetables: every weekly class; an empty list for anything else'),
+  })
+  .superRefine((answer, context) => {
+    answer.classes.forEach((item, index) => {
+      if (!TIME_OF_DAY.test(item.start) || !TIME_OF_DAY.test(item.end)) {
+        context.addIssue({ code: 'custom', message: 'start and end must be 24-hour times like 09:00 or 13:30', path: ['classes', index] })
+      }
+    })
+  })
+export type InboxAnswer = z.infer<typeof InboxAnswerSchema>
+
+/** What ai-inbox returns. Nothing is saved until the student confirms where it goes. */
+export const InboxResponseSchema = InboxAnswerSchema.safeExtend({ model: z.string(), promptVersion: z.string() })
+export type InboxResponse = z.infer<typeof InboxResponseSchema>
+
+// ---------------------------------------------------------------------------
 // Morning brief: today's plan, deadlines and last check-in → 3 short lines (ai-brief)
 // ---------------------------------------------------------------------------
 

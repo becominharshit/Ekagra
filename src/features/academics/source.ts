@@ -11,6 +11,9 @@ export interface SourceDraft {
 
 export const EMPTY_SOURCE: SourceDraft = { kind: 'text', text: '', file: null, note: null }
 
+/** A PDF with less text than this (not counting spaces) is probably scanned: pictures of pages. */
+export const MIN_PDF_TEXT = 100
+
 export function sourceReady(source: SourceDraft): boolean {
   return source.text.trim().length > 0 || source.file !== null
 }

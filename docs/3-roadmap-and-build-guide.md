@@ -92,10 +92,15 @@ Built in this order (M12 comes first: attendance helps students in the middle of
 ### Two apps: Ekagra and Ekagra Studio (decided 2026-11-02)
 **Ekagra manages** the student's plan, life, hustle and progress. **Ekagra Studio** (App #2, a separate Vite app in `studio/`, built from scratch) is the study room: notes, mind maps, revision sheets, PDFs, YouTube lectures, quizzes and practice. Both use the same Supabase project, and they are connected only when the student signs in to both with the same account (Demo Mode can't connect them; each app's Demo Mode works on its own). Ekagra's `supabase/migrations` own every table, Studio's too. Ekagra shows Studio's notes read-only and never makes notes; it keeps its current learning screens until Studio replaces them. Ekagra's AI is Claude; Studio's is Gemini (it can read a public YouTube link directly), through the same gateway and the same AI budget. Desktop: installable web apps first, a Tauri `.exe` later.
 
-- [ ] **M16 Ekagra for two apps, in 3 steps** (migration `009_studio.sql`, Edge Function `ai-inbox`)
+- [x] **M16 Ekagra for two apps, in 3 steps** (migration `009_studio.sql`, Edge Function `ai-inbox`). Done 2026-11-02; everything works in Demo Mode too, except that Studio's notes need sign-in and the inbox guesses from keywords there (it can't read timetables or photos). **Your steps:**
+  1. `npm run db:push` (migration 009), then `npm run db:types`.
+  2. `npm run functions:deploy` (now 14 functions: the 12 AI ones with the new `ai-inbox`, `ai-usage` and `account-delete`).
+  3. Put the web app online and install it on your laptop (docs/4, "Install Ekagra as an app").
+
+  The steps:
   1. The shared `notes` table (notes, mind maps and revision sheets made in Studio, filed under a subject and maybe a topic and the material they came from); a Notes card on each subject and a reader (`/academics/notes/:noteId`; a mind map is drawn from its Markdown outline); "Open Studio" and "Edit in Studio" links (`VITE_STUDIO_URL`). Done 2026-11-02
   2. Installable web app (manifest, icons, a small service worker on the web only) and a desktop layout (a side menu on wide screens, wider pages). Done 2026-11-02
-  3. The Add inbox: upload, drop or photograph a syllabus, timetable, past paper, study material or notice; `ai-inbox` (Claude, Fast) says what it is and the student confirms where it goes (syllabus import, routine, past papers, materials, tasks)
+  3. The Add inbox: upload, drop or photograph a syllabus, timetable, past paper, study material or notice; `ai-inbox` (Claude, Fast) says what it is and the student confirms where it goes (syllabus import, routine, past papers, materials, tasks). Done 2026-11-02
 - [ ] **M17 Ekagra Studio MVP (`studio/`), in 3 steps** (Gemini)
   1. The app: the same sign-in and database as Ekagra; a library of subjects and materials (PDFs, photos, text and YouTube links, with drag and drop and the camera); installable
   2. Notes, mind maps and revision sheets from a material or a YouTube link (`studio-notes`; long ones are made in the background)

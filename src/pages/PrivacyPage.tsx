@@ -75,8 +75,8 @@ export function PrivacyPage() {
           <List>
             <li>From Google sign-in: your name, email address and profile photo.</li>
             <li>
-              What you add: your profile, routine and settings; subjects, topics and past-paper results; the PDFs you upload; notes, mind maps and
-              revision sheets you make in Ekagra Studio; AI Anchors, tutor
+              What you add: your profile, routine and settings; subjects, topics and past-paper results; the PDFs you upload, and the photos and
+              text you save as study material; notes, mind maps and revision sheets you make in Ekagra Studio; AI Anchors, tutor
               answers, lessons, quizzes and flashcards with your answers and reviews; the mistake notebook; Coding Lab code; tasks and your plan;
               focus sessions, distractions and Tollbooth quizzes; evening check-ins (energy, mood, biggest distraction); hustles, clients, income,
               expenses and hours; the apps you chose to block.
@@ -105,7 +105,8 @@ export function PrivacyPage() {
           </List>
           <p>
             Photos and screenshots you give the AI to read (a syllabus, a task list, a meal) are sent for that one request and are not stored, on
-            Ekagra's server or anywhere else.
+            Ekagra's server or anywhere else. The same goes for what you add with Add (a file, a photo or text): the AI only works out what it is
+            and where it belongs. It is kept only if you then save it, for example as study material.
           </p>
         </Section>
 

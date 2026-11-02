@@ -7,7 +7,19 @@ import { requireSupabase } from '@/lib/supabase'
 // In Demo Mode there is no server, so each feature uses its sample answers instead.
 
 /** The AI Edge Functions. */
-export type AiFunction = 'ai-syllabus' | 'ai-papers' | 'ai-tutor' | 'ai-generate' | 'ai-capture' | 'ai-brief' | 'ai-hustle' | 'ai-grade' | 'ai-review' | 'ai-meal' | 'ai-speak'
+export type AiFunction =
+  | 'ai-syllabus'
+  | 'ai-papers'
+  | 'ai-tutor'
+  | 'ai-generate'
+  | 'ai-capture'
+  | 'ai-inbox'
+  | 'ai-brief'
+  | 'ai-hustle'
+  | 'ai-grade'
+  | 'ai-review'
+  | 'ai-meal'
+  | 'ai-speak'
 
 /** Every Edge Function the app calls: the AI ones, ai-usage (the AI usage dashboard) and account-delete. */
 export type EdgeFunction = AiFunction | 'ai-usage' | 'account-delete'

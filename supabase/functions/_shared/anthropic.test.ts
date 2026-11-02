@@ -124,6 +124,7 @@ describe('the AI gateway on Claude (the real Anthropic provider, no network)', (
       generate: shapes.GeneratedTopicSchema,
       tutor: shapes.TutorAnswerSchema,
       capture: shapes.CaptureAnswerSchema,
+      inbox: shapes.InboxAnswerSchema,
       brief: shapes.BriefAnswerSchema,
       hustle: shapes.HustlePlanAnswerSchema,
       grade: shapes.gradeAnswerSchemaFor([{ key: 'a1', marks: 5 }]),

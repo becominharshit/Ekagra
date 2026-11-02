@@ -4,10 +4,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { fileToSource } from '@/lib/files'
-import { EMPTY_SOURCE, type SourceDraft } from './source'
-
-/** A PDF with less text than this is probably scanned (pictures of pages). */
-const MIN_PDF_TEXT = 100
+import { EMPTY_SOURCE, MIN_PDF_TEXT, type SourceDraft } from './source'
 
 interface SourcePickerProps {
   value: SourceDraft

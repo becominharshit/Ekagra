@@ -15,6 +15,7 @@ export const AI_FUNCTIONS: { name: AiFunction; label: string; features: string[]
   { name: 'ai-generate', label: 'Lessons, quizzes and cards', features: ['generate'] },
   { name: 'ai-tutor', label: 'AI Anchors and page tutor', features: ['anchor', 'tutor'] },
   { name: 'ai-capture', label: 'Task capture', features: ['capture'] },
+  { name: 'ai-inbox', label: 'Sorting what you add', features: ['inbox'] },
   { name: 'ai-brief', label: 'Morning brief', features: ['brief'] },
   { name: 'ai-hustle', label: 'Custom hustle plans', features: ['hustle'] },
   { name: 'ai-grade', label: 'Marking mock tests', features: ['grade'] },

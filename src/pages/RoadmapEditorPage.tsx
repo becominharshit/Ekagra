@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ArrowLeft, LoaderCircle, Save, Sparkles } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -15,6 +15,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card'
 import { readSyllabus } from '@/features/academics/academicsAi'
+import { clearImport, waitingImport } from '@/features/academics/importHandoff'
 import { saveRoadmap, useRoadmap } from '@/features/academics/roadmap'
 import { EMPTY_SOURCE, sourceReady, type SourceDraft } from '@/features/academics/source'
 import { SourcePicker } from '@/features/academics/SourcePicker'
@@ -78,7 +79,9 @@ function ImportFlow({ subject, existing }: { subject: Subject; existing: Roadmap
   const isDemo = useAuthStore((state) => state.status === 'demo')
   const { source } = useDataSource()
   const profile = useProfile()
-  const [input, setInput] = useState<SourceDraft>(EMPTY_SOURCE)
+  // A syllabus added through the Add inbox arrives filled in.
+  const [input, setInput] = useState<SourceDraft>(() => waitingImport(subject.id, 'syllabus')?.source ?? EMPTY_SOURCE)
+  useEffect(() => clearImport(subject.id, 'syllabus'), [subject.id])
   const [draft, setDraft] = useState<DraftTree | null>(null)
   const [reading, setReading] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)

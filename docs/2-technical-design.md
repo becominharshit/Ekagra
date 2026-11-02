@@ -53,7 +53,8 @@
                ▼                                              ▼
 ┌──────────────────────────────────── Supabase ────────────────────────────────────┐
 │  Postgres + RLS + pgvector · Auth (Google) · Storage (PDFs, images) · Vault       │
-│  Edge Functions: ai-syllabus, ai-papers, ai-capture, ai-generate, ai-grade,       │
+│  Edge Functions: ai-syllabus, ai-papers, ai-capture, ai-inbox, ai-generate,       │
+│    ai-grade,                                                                      │
 │    ai-tutor, ai-brief, ai-hustle, worker · P2: ai-review, ai-hint, oauth-google · │
 │    ai-usage, account-delete (no AI) · P3: integrations                            │
 │  Cron: job worker every minute · P2 weekly review · P3 integration sync           │
@@ -151,7 +152,9 @@ topics              user_id, subject_id, parent_id (unit → topic), title, orde
 topic_prereqs       topic_id, prereq_topic_id
 materials           user_id, subject_id, kind (pdf|youtube|video|audio|image|text|drive),
                     title, storage_path, source_url, page_count, duration_sec,
-                    status (uploaded|processing|ready|failed), error
+                    status (uploaded|processing|ready|failed), error. PDFs are in the
+                    materials bucket (<user_id>/<id>.pdf), photos in the images bucket
+                    (<user_id>/materials/<id>.jpg), text in material_pages (M16)
 material_pages      material_id, user_id, page_no, text, needs_ocr
 material_sections   material_id, user_id, order_index, title, page_start, page_end,
                     ts_start, ts_end, summary, topic_id
@@ -391,6 +394,16 @@ const TopicTree = z.object({
 - Input: text or image + current date, time and timezone + the subject list.
 - Output: `[{ title, area, subjectKey (a listed subject or null), hustleKey (a listed hustle or null), lead (a possible job or client for that hustle: saved as a card on its board), dueAt (ISO 8601 with offset; 23:59 when only a day is given), estMinutes, priority, unsure: [fields it guessed] }]`.
 - The `unsure` fields are highlighted in the confirm sheet. Nothing is saved without confirmation. Demo Mode reads typed tasks on the device with simple rules (screenshots need the AI).
+
+**g2) The Add inbox (`ai-inbox`, Fast; built in M16):** the top bar's **Add**, Academics → **Add a file**, or a file dropped anywhere on the window (desktop). `src/features/inbox/`.
+- Input: the file name, the text of a PDF's first pages (read on the device, up to 15,000 characters) or typed text, or the file itself for a photo (made smaller on the device, longest side 1600 px) or a scanned PDF (up to 5 MB), the page count and the subject list (s1, s2, …).
+- Output: `{ kind (syllabus|timetable|past_paper|study_material|task|other), title, summary, subjectKey (a listed subject or null; always null for a timetable), newSubject (a course that isn't listed, for a syllabus, past paper or study material), year (past papers), classes: [{ subject, subjectKey, days 0–6, start, end }] (timetables only) }`. Zod checks the times (one retry); code drops unknown subject keys and classes that end before they start, and merges a course's classes at the same time into one block.
+- The student confirms the kind and subject (an existing one, or a new one that is made then), and it is filed:
+  - a syllabus or past paper opens its import screen with it filled in (`importHandoff.ts`, in memory for 10 minutes), where `ai-syllabus` or `ai-papers` does the real work;
+  - a timetable replaces only the class blocks of the routine (sleep, meals and the rest stay), optionally adding its new courses as subjects, and the plan re-plans;
+  - study material is saved to `materials`: a PDF into the library, a photo as kind `image` (bucket `images`, `<user_id>/materials/<id>.jpg`), text as kind `text` (its text in `material_pages`, page 1). Ekagra Studio sees them;
+  - a task or notice opens the + capture sheet with it filled in (`ai-capture`).
+- Nothing is saved before the student confirms. Demo Mode guesses the kind from words in the file name and text (`classify.ts`) and can't read timetables or photos.
 
 **h) Grading (`ai-grade`, Fast; built in M11):** up to 15 written answers (short and long answers, programs and past-paper questions of a mock test) per request, each with its marks and, when known, key points or a model answer → marks in steps of 0.5, 2–4 sentences of feedback, the missing points and a full-marks answer. Zod checks one grade per answer and never more than its marks (one retry). Without key points the model decides what the marks need. The student's answer is never followed as an instruction. Without the AI (Demo Mode, or when it fails) the device gives a rough mark by matching key words with the key points or the model answer, and the student marks what it can't compare.
 

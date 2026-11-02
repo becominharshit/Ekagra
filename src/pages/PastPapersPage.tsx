@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ArrowLeft, LoaderCircle, Plus, Save, Sparkles, Trash2, X } from 'lucide-react'
 import { Link, useParams } from 'react-router'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { readPastPaper } from '@/features/academics/academicsAi'
+import { clearImport, waitingImport } from '@/features/academics/importHandoff'
 import { countLabel } from '@/features/academics/labels'
 import { deletePaper, savePaper, usePapers, type PastPaper } from '@/features/academics/papers'
 import { draftsFromAnswer, leafTopics, topicKeys, type Question, type QuestionDraft } from '@/features/academics/pastPapers'
@@ -48,7 +49,8 @@ export function PastPapersPage() {
 }
 
 function PapersView({ subject, topics, papers, questions }: { subject: Subject; topics: Topic[]; papers: PastPaper[]; questions: Question[] }) {
-  const [adding, setAdding] = useState(false)
+  // A paper added through the Add inbox opens the form straight away.
+  const [adding, setAdding] = useState(() => waitingImport(subject.id, 'past_paper') !== null)
   const remove = useAcademicsMutation(deletePaper)
 
   return (
@@ -129,8 +131,9 @@ interface Review {
 function AddPaper({ subject, topics, onDone }: { subject: Subject; topics: Topic[]; onDone: () => void }) {
   const isDemo = useAuthStore((state) => state.status === 'demo')
   const { source } = useDataSource()
-  const [year, setYear] = useState('')
-  const [input, setInput] = useState<SourceDraft>(EMPTY_SOURCE)
+  const [year, setYear] = useState(() => String(waitingImport(subject.id, 'past_paper')?.year ?? ''))
+  const [input, setInput] = useState<SourceDraft>(() => waitingImport(subject.id, 'past_paper')?.source ?? EMPTY_SOURCE)
+  useEffect(() => clearImport(subject.id, 'past_paper'), [subject.id])
   const [review, setReview] = useState<Review | null>(null)
   const [reading, setReading] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)

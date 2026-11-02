@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { useSubjects } from '@/features/academics/subjects'
 import { useAuthStore } from '@/features/auth/authStore'
 import { primaryHustle, useHustles } from '@/features/hustle/hustles'
+import { useInboxStore } from '@/features/inbox/inboxStore'
 import { need, useDataSource } from '@/lib/dataSource'
 import { fileToSource } from '@/lib/files'
 import { useCaptureStore } from './captureStore'
@@ -35,8 +36,10 @@ function CaptureFlow({ onDone }: { onDone: () => void }) {
   const { source } = useDataSource()
   const subjects = useSubjects()
   const hustles = useHustles()
-  const [text, setText] = useState('')
-  const [file, setFile] = useState<{ source: SourceFile; name: string } | null>(null)
+  // Filled in when the Add inbox hands over something it recognised as a task.
+  const [text, setText] = useState(() => useCaptureStore.getState().prefill?.text ?? '')
+  const [file, setFile] = useState<{ source: SourceFile; name: string } | null>(() => useCaptureStore.getState().prefill?.file ?? null)
+  const showInbox = useInboxStore((state) => state.show)
   const [drafts, setDrafts] = useState<TaskDraft[] | null>(null)
   const [reading, setReading] = useState(false)
   const [problems, setProblems] = useState<string[]>([])
@@ -107,6 +110,19 @@ function CaptureFlow({ onDone }: { onDone: () => void }) {
           </label>
         )}
         {file && <p className="text-xs text-muted-foreground">The AI will read {file.name}.</p>}
+        <p className="text-xs text-muted-foreground">
+          A syllabus, timetable, past paper or notes?{' '}
+          <button
+            type="button"
+            className="underline underline-offset-3 hover:text-foreground"
+            onClick={() => {
+              onDone()
+              showInbox()
+            }}
+          >
+            Add a file instead
+          </button>
+        </p>
         {problems.length > 0 && (
           <p role="alert" className="text-sm text-destructive">
             {problems[0]}
