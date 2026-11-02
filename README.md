@@ -197,3 +197,11 @@ Add a dated line whenever an important decision is made or changed.
   - A mind map is a Markdown outline, drawn as a centre with a card per branch (`parseOutline`, pure and tested). Studio's prompts will avoid tables and LaTeX, which the Markdown reader doesn't render (no new libraries).
   - "Open Studio" and "Edit in Studio" open `studioPageUrl(VITE_STUDIO_URL, 'subjects/<id>' | 'notes/<id>')`, in the browser on Android.
   - Deleting a subject in Ekagra deletes its Studio notes too; the delete dialog and the privacy page say so.
+- 2026-11-02: **Installable web app and desktop layout** (M16 step 2, no new library). **The app:**
+  - `manifest.webmanifest` and a new icon: a white ring and dot ("one-pointed focus", what *ekagra* means) on the Academics blue. It replaces Vite's logo as the favicon; the PNGs (192, 512, maskable 512, Apple 180) were drawn with Windows' System.Drawing from the same shapes. The Android launcher icon is still Capacitor's default.
+  - A hand-written service worker instead of Workbox or `vite-plugin-pwa`. It runs only in web production builds (`src/lib/pwa.ts`), so development and the Android app never see a cache.
+  - Pages are network first, falling back to the saved `index.html`, also on a 5xx answer (found in testing: the in-app browser's proxy answers 502 when the server is down). Built files are saved on first load and read with `ignoreVary` (also found in testing: hosts add `Vary: Origin`, and module scripts send an `Origin` header that the saved copies lack, so nothing matched offline).
+  - Only files already opened are saved, not every page of the app, to spare mobile data. Each build gets its own cache through `/sw.js?v=<__APP_BUILD__>`; there's no `skipWaiting`, so open windows keep their files until they close.
+  - Tested on a production build: installed, then reloaded with the server stopped, and the app opened from the saved copy.
+
+  **Desktop:** at 1024 px (`lg`) a side menu (`SideNav`, the same `TABS` as the bottom bar) replaces the bottom tabs, the top bar spans the window, pages widen from `max-w-2xl` to `max-w-4xl`, and the + button moves to the corner. The two places that stretch to the page edges (the mock test bar and the pipeline board) follow the wider padding.

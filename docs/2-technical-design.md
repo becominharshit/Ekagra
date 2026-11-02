@@ -63,6 +63,8 @@
                                                    GitHub, Notion, PayPal/Stripe APIs
 ```
 
+**Installable web app and desktop (M16):** `public/manifest.webmanifest` (name, icons in `public/icons/`, standalone window) and a hand-written service worker, `public/sw.js`, registered by `src/lib/pwa.ts` on the web in production builds only (never in the Android app or `npm run dev`). Pages come from the network first, else the saved `index.html`, also when the server answers 5xx (proxies and captive Wi-Fi do). Built files (`/assets/…`, hashed names) are saved the first time they load and then read from the saved copy; other files of the site are network first. Other sites (Supabase, the AI, Pyodide's CDN) and non-GET requests are left alone. Each build registers `/sw.js?v=<__APP_BUILD__>` with a cache of its own, and the old cache is deleted when the new worker takes over (no `skipWaiting`, so open pages keep their files). On screens 1024 px and wider (`lg`), a side menu replaces the bottom tabs and pages get wider (`max-w-4xl`). A Tauri `.exe` comes later.
+
 ## 4. Folder structure
 
 ```

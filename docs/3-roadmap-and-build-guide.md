@@ -94,7 +94,7 @@ Built in this order (M12 comes first: attendance helps students in the middle of
 
 - [ ] **M16 Ekagra for two apps, in 3 steps** (migration `009_studio.sql`, Edge Function `ai-inbox`)
   1. The shared `notes` table (notes, mind maps and revision sheets made in Studio, filed under a subject and maybe a topic and the material they came from); a Notes card on each subject and a reader (`/academics/notes/:noteId`; a mind map is drawn from its Markdown outline); "Open Studio" and "Edit in Studio" links (`VITE_STUDIO_URL`). Done 2026-11-02
-  2. Installable web app (manifest, icons, a small service worker on the web only) and a desktop layout (a side menu on wide screens, wider pages)
+  2. Installable web app (manifest, icons, a small service worker on the web only) and a desktop layout (a side menu on wide screens, wider pages). Done 2026-11-02
   3. The Add inbox: upload, drop or photograph a syllabus, timetable, past paper, study material or notice; `ai-inbox` (Claude, Fast) says what it is and the student confirms where it goes (syllabus import, routine, past papers, materials, tasks)
 - [ ] **M17 Ekagra Studio MVP (`studio/`), in 3 steps** (Gemini)
   1. The app: the same sign-in and database as Ekagra; a library of subjects and materials (PDFs, photos, text and YouTube links, with drag and drop and the camera); installable

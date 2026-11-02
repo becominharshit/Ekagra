@@ -15,7 +15,7 @@ export function CaptureButton() {
     <Button
       size="icon"
       aria-label="Capture a task"
-      className="fixed right-4 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-30 size-12 rounded-full shadow-lg"
+      className="fixed right-4 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-30 size-12 rounded-full shadow-lg lg:right-8 lg:bottom-8"
       onClick={() => setOpen(true)}
     >
       <Plus className="size-6" aria-hidden />

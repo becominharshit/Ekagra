@@ -204,6 +204,16 @@ Any static host works. These steps use Netlify; Vercel and Cloudflare Pages are 
 
 **Check:** open the site, sign in with Google, open Academics and reload the page (it must not say "Page not found"), and open `https://<your-site>/privacy` in a private window (it shows without signing in).
 
+### Install Ekagra as an app (laptop, Chromebook or phone)
+
+The online site is an installable web app: it gets its own window and icon, and it updates itself with every deploy.
+
+1. Open the site in Chrome or Edge.
+2. Click the install icon at the right end of the address bar (or menu → **Cast, save and share → Install page as app** in Chrome, **Apps → Install this site as an app** in Edge). On Android Chrome: menu → **Add to home screen → Install**. On an iPhone, Safari: **Share → Add to Home Screen**.
+3. Ekagra opens in its own window. On a wide screen it shows a side menu instead of the bottom tabs.
+
+Pages you have opened before also open without a connection (the data still needs one, except in Demo Mode). This works only in production builds, never in `npm run dev`, so changes always show while you build. To try it on your computer: `npm run build`, then `npx vite preview`, open http://localhost:4173 and install it from there. To remove it: Chrome → `chrome://apps` (or the app's menu) → **Uninstall**.
+
 ## 8. The APK for friends
 
 The APK that **Run ▶** installs is a debug build for your own phone. For friends, make a signed release APK:

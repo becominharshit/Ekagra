@@ -63,7 +63,7 @@ export function PipelineBoard({ hustle }: { hustle: Hustle }) {
         </p>
       )}
       {/* Columns scroll sideways; each one snaps into place on a phone. */}
-      <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2">
+      <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 lg:-mx-8 lg:px-8">
         {stages.map((stage, stageIndex) => {
           const cards = columns.get(stage) ?? []
           const total = cards.reduce((sum, card) => sum + (card.amount === null ? 0 : Number(card.amount)), 0)

@@ -1,26 +1,11 @@
-import { CircleUser, GraduationCap, HeartPulse, Rocket, Sun, type LucideIcon } from 'lucide-react'
 import { NavLink } from 'react-router'
 import { cn } from '@/lib/utils'
+import { TABS } from './tabs'
 
-interface Tab {
-  to: string
-  label: string
-  icon: LucideIcon
-  /** Colour of the tab when it's open (matches its mode colour). */
-  activeClass: string
-}
-
-const TABS: Tab[] = [
-  { to: '/today', label: 'Today', icon: Sun, activeClass: 'text-foreground' },
-  { to: '/academics', label: 'Academics', icon: GraduationCap, activeClass: 'text-mode-study' },
-  { to: '/hustle', label: 'Hustle', icon: Rocket, activeClass: 'text-mode-hustle' },
-  { to: '/life', label: 'Life', icon: HeartPulse, activeClass: 'text-mode-life' },
-  { to: '/me', label: 'Me', icon: CircleUser, activeClass: 'text-foreground' },
-]
-
+/** The main menu on phones and narrow windows (wide screens get the side menu instead). */
 export function BottomTabBar() {
   return (
-    <nav aria-label="Main" className="pb-safe border-t bg-background">
+    <nav aria-label="Main" className="pb-safe border-t bg-background lg:hidden">
       <ul className="mx-auto grid h-16 w-full max-w-2xl grid-cols-5">
         {TABS.map(({ to, label, icon: Icon, activeClass }) => (
           <li key={to}>

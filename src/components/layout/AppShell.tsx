@@ -12,9 +12,10 @@ import { ReviewReminder } from '@/features/review/ReviewNudges'
 import { SocialSync } from '@/features/social/SocialSync'
 import { CaptureSheet } from '@/features/tasks/CaptureSheet'
 import { BottomTabBar } from './BottomTabBar'
+import { SideNav } from './SideNav'
 import { TopBar } from './TopBar'
 
-/** The frame around every page: top bar, the page itself (scrolls), bottom tabs. */
+/** The frame around every page: top bar, the page itself (scrolls), bottom tabs (a side menu on wide screens). */
 export function AppShell() {
   const { pathname } = useLocation()
   const mainRef = useRef<HTMLElement>(null)
@@ -41,12 +42,15 @@ export function AppShell() {
       <SocialSync />
       {/* AI Anchors handed over from Ekagra Studio, and Studio's changes as they happen. */}
       <StudioBridge />
-      <main ref={mainRef} className="flex-1 overflow-y-auto">
-        {/* Extra space at the bottom so the floating + button never covers the last item. */}
-        <div className="mx-auto w-full max-w-2xl px-4 pt-5 pb-24">
-          <Outlet />
-        </div>
-      </main>
+      <div className="flex min-h-0 flex-1">
+        <SideNav />
+        <main ref={mainRef} className="min-w-0 flex-1 overflow-y-auto">
+          {/* Extra space at the bottom so the floating + button never covers the last item. */}
+          <div className="mx-auto w-full max-w-2xl px-4 pt-5 pb-24 lg:max-w-4xl lg:px-8">
+            <Outlet />
+          </div>
+        </main>
+      </div>
       <BottomTabBar />
       <CaptureButton />
       <CaptureSheet />
