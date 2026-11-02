@@ -338,6 +338,41 @@ export const InboxResponseSchema = InboxAnswerSchema.safeExtend({ model: z.strin
 export type InboxResponse = z.infer<typeof InboxResponseSchema>
 
 // ---------------------------------------------------------------------------
+// Ekagra Studio: notes, mind maps and revision sheets from a material (studio-notes, Gemini)
+// ---------------------------------------------------------------------------
+
+export const NOTE_KINDS = ['notes', 'mind_map', 'revision_sheet'] as const
+export type StudioNoteKind = (typeof NOTE_KINDS)[number]
+
+export const StudioNotesRequestSchema = z.object({
+  materialId: z.uuid(),
+  subjectId: z.uuid(),
+  kind: z.enum(NOTE_KINDS),
+  /** The material's name, for the note's first title (the AI may give a better one). */
+  title: z.string().trim().min(1).max(200),
+  /** What to read: a public YouTube video's link, text (typed, or read from a PDF on the device), or a photo or scanned PDF. */
+  source: z.discriminatedUnion('kind', [
+    z.object({ kind: z.literal('youtube'), url: z.string().max(300) }),
+    z.object({ kind: z.literal('text'), text: z.string().trim().min(1).max(MAX_TEXT_LENGTH) }),
+    z.object({ kind: z.literal('file'), file: SourceFileSchema }),
+  ]),
+  /** The student's course and year, so the notes fit their level. */
+  program: z.string().max(120).nullable().optional(),
+  year: z.number().int().min(1).max(8).nullable().optional(),
+})
+export type StudioNotesRequest = z.infer<typeof StudioNotesRequestSchema>
+
+export const StudioNoteAnswerSchema = z.object({
+  title: z.string().min(1).max(200).describe('A short title, e.g. "SQL joins" or "Normalization: 1NF to BCNF"'),
+  markdown: z.string().min(1).max(200_000).describe('The notes, mind map or revision sheet in Markdown, as the instructions describe'),
+})
+export type StudioNoteAnswer = z.infer<typeof StudioNoteAnswerSchema>
+
+/** What studio-notes returns at once: the new note, which is made in the background (status processing → ready or failed). */
+export const StudioNotesResponseSchema = z.object({ noteId: z.uuid() })
+export type StudioNotesResponse = z.infer<typeof StudioNotesResponseSchema>
+
+// ---------------------------------------------------------------------------
 // Morning brief: today's plan, deadlines and last check-in → 3 short lines (ai-brief)
 // ---------------------------------------------------------------------------
 

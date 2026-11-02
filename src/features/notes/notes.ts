@@ -74,14 +74,14 @@ export function useSubjectNotes(subjectId: string | undefined) {
   })
 }
 
-/** One note. While Studio is still making it, it's checked again every 15 seconds. */
-export function useNote(noteId: string | undefined) {
+/** One note. While Studio is still making it, it's checked again every `pollMs` (Studio itself checks more often). */
+export function useNote(noteId: string | undefined, pollMs = 15_000) {
   const { source, owner } = useDataSource()
   return useQuery({
     queryKey: [...academicsKey(owner), 'note', noteId],
     queryFn: () => getNote(need(source), noteId ?? ''),
     enabled: source !== null && Boolean(noteId),
     ...FROM_STUDIO,
-    refetchInterval: (query) => (query.state.data?.status === 'processing' ? 15_000 : false),
+    refetchInterval: (query) => (query.state.data?.status === 'processing' ? pollMs : false),
   })
 }

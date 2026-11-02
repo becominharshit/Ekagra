@@ -58,7 +58,7 @@ export function PrivacyPage() {
         <Section title="In short">
           <List>
             <li>Your data is private to your account. It is never sold or used for ads. Partners and groups see only the few numbers you pick.</li>
-            <li>AI features send only what a request needs to Anthropic's Claude, through Ekagra's server.</li>
+            <li>AI features send only what a request needs to Anthropic's Claude (in Ekagra Studio, Google's Gemini), through Ekagra's server.</li>
             <li>Meal photos are used once for an estimate and never stored. Speaking-practice recordings never leave your phone.</li>
             <li>FocusGuard's app checks stay on your phone. Health Connect is only read, and only sleep and steps, when you allow it.</li>
             <li>You can export all your data or delete it at any time: Me → Account and privacy.</li>
@@ -194,12 +194,19 @@ export function PrivacyPage() {
 
         <Section title="How the AI uses your data">
           <p>
-            When you use an AI feature (reading a syllabus or past paper, AI Anchors and the page tutor, lessons and quizzes, task capture, the
-            morning brief, custom hustle plans, marking mock tests, the weekly review, meal estimates, speaking feedback), the app sends only what
-            that request needs, such as the selected text, the page, the photo, the words of your speaking practice or the week's numbers, to
-            Ekagra's server (Supabase Edge Functions). The server asks Anthropic's Claude API and sends the answer back. Your name and email
-            address are not sent with it. Anthropic processes these requests under its Commercial Terms (anthropic.com/legal/commercial-terms) and,
-            by default, doesn't use them to train its models. Ekagra doesn't use your data to train AI models either.
+            When you use an AI feature (reading a syllabus or past paper, sorting what you add with Add, AI Anchors and the page tutor, lessons and
+            quizzes, task capture, the morning brief, custom hustle plans, marking mock tests, the weekly review, meal estimates, speaking
+            feedback), the app sends only what that request needs, such as the selected text, the page, the photo, the words of your speaking
+            practice or the week's numbers, to Ekagra's server (Supabase Edge Functions). The server asks Anthropic's Claude API and sends the
+            answer back. Your name and email address are not sent with it. Anthropic processes these requests under its Commercial Terms
+            (anthropic.com/legal/commercial-terms) and, by default, doesn't use them to train its models. Ekagra doesn't use your data to train AI
+            models either.
+          </p>
+          <p>
+            Ekagra Studio asks Google's Gemini API instead. To make notes, a mind map or a revision sheet, it sends the material you chose: its
+            text, the photo or scanned pages, or a YouTube video's link (Gemini watches the public video itself), with your course and year. With
+            the paid Gemini API, Google doesn't use these requests to improve its products (ai.google.dev/gemini-api/terms); on its free tier it
+            may. The notes are saved to your account, and Ekagra shows them.
           </p>
         </Section>
 

@@ -103,7 +103,7 @@ Built in this order (M12 comes first: attendance helps students in the middle of
   3. The Add inbox: upload, drop or photograph a syllabus, timetable, past paper, study material or notice; `ai-inbox` (Claude, Fast) says what it is and the student confirms where it goes (syllabus import, routine, past papers, materials, tasks). Done 2026-11-02
 - [ ] **M17 Ekagra Studio MVP (`studio/`), in 3 steps** (Gemini)
   1. The app: the same sign-in and database as Ekagra; a library of subjects and materials (PDFs, photos, text and YouTube links, with drag and drop and the camera); installable. Done 2026-11-02
-  2. Notes, mind maps and revision sheets from a material or a YouTube link (`studio-notes`; long ones are made in the background)
+  2. Notes, mind maps and revision sheets from a material or a YouTube link (`studio-notes`; long ones are made in the background). Done 2026-11-02
   3. Quizzes from a note (`studio-quiz`, multiple choice); results go into Ekagra's `questions`, `quizzes`, `attempts` and `mistakes`, so its progress counts them
 
 Later: coding, flashcards, practice and mock tests move to Studio; Tauri `.exe`; Android share target; reminders.

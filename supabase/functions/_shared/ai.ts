@@ -48,12 +48,17 @@ export interface AiResult<T> {
 
 export interface AiGateway {
   generate<T>(task: AiTask<T>): Promise<AiResult<T>>
+  /** Throws the student's daily-limit or the app's budget error now, before work that ends in an AI call is started. */
+  ensureQuota(userId: string): Promise<void>
 }
 
 export interface AiGatewayOptions {
   config: AiConfig
   usage: UsageStore
-  /** Turns a model name into a model. Tests pass a fake; by default the configured provider is used. */
+  /**
+   * Turns a model name into a model. Tests pass a fake. Without it, Claude models are made for the
+   * 'anthropic' provider; Studio's functions pass Gemini's (_shared/gemini.ts), so only they bundle it.
+   */
   model?: (modelId: string) => LanguageModel
   now?: () => Date
 }
@@ -69,13 +74,31 @@ function claudeModels(apiKey: string): (modelId: string) => LanguageModel {
   return (modelId) => anthropic(modelId)
 }
 
-/** A failed call as an error the student can act on. Only the status and Anthropic's message are logged, never the prompt. */
-function providerError(error: unknown, modelId: string): AiError {
+function noModels(): LanguageModel {
+  throw new AiError(500, 'not_configured', 'This AI function has no models set up (pass them to createAiGateway).')
+}
+
+/** A failed call as an error the student can act on. Only the status and the provider's message are logged, never the prompt. */
+function providerError(error: unknown, modelId: string, provider: AiConfig['provider']): AiError {
   // The AI SDK tries busy and rate-limited calls again by itself, then wraps the last error.
   const last = RetryError.isInstance(error) ? error.lastError : error
   const status = APICallError.isInstance(last) ? last.statusCode : undefined
   const detail = APICallError.isInstance(last) ? (last.responseBody ?? last.message) : last instanceof Error ? last.message : String(last)
   console.error(`AI request to ${modelId} failed${status ? ` (${status})` : ''}: ${detail.slice(0, 500)}`)
+  if (provider === 'google') {
+    // Google answers a wrong key with 400 API_KEY_INVALID, and an unusable one with 403.
+    if ((status === 400 || status === 401 || status === 403) && /api[ _]?key/i.test(detail)) {
+      return new AiError(500, 'not_configured', 'Google refused the Gemini key. Check the GEMINI_API_KEY secret (docs/4-setup-guide.md, step 6).', { cause: error })
+    }
+    if (status === 429) {
+      return new AiError(503, 'provider_busy', 'Gemini is busy or has reached its limit for now. Please try again later.', { cause: error })
+    }
+    // Something Gemini can't use, e.g. a private or unlisted YouTube video.
+    if (status === 400 || status === 403) {
+      return new AiError(422, 'unreadable_input', "Gemini couldn't read this. A YouTube video must be public.", { cause: error })
+    }
+    return new AiError(502, 'provider_error', 'The AI service did not answer. Please try again in a minute.', { cause: error })
+  }
   if (status === 401 || status === 403) {
     return new AiError(500, 'not_configured', 'Anthropic refused the AI key. Check the AI_API_KEY secret (docs/4-setup-guide.md, step 6).', { cause: error })
   }
@@ -89,7 +112,7 @@ function providerError(error: unknown, modelId: string): AiError {
 export function createAiGateway(options: AiGatewayOptions): AiGateway {
   const { config, usage } = options
   const now = options.now ?? (() => new Date())
-  const modelFor = options.model ?? claudeModels(config.apiKey)
+  const modelFor = options.model ?? (config.provider === 'anthropic' ? claudeModels(config.apiKey) : noModels)
 
   async function ensureQuota(userId: string): Promise<void> {
     const since = dayBefore(now())
@@ -105,6 +128,7 @@ export function createAiGateway(options: AiGatewayOptions): AiGateway {
   }
 
   return {
+    ensureQuota,
     async generate<T>(task: AiTask<T>): Promise<AiResult<T>> {
       await ensureQuota(task.userId)
 
@@ -151,7 +175,9 @@ export function createAiGateway(options: AiGatewayOptions): AiGateway {
             continue
           }
           await log()
-          throw providerError(error, modelId)
+          // Our own errors (e.g. no models set up) pass through as they are.
+          if (error instanceof AiError) throw error
+          throw providerError(error, modelId, config.provider)
         }
       }
 

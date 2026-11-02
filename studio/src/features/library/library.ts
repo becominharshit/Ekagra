@@ -37,6 +37,19 @@ export async function fileUrl(source: DataSource, material: Material): Promise<s
   return data.signedUrl
 }
 
+/** A PDF's or photo's file itself (to read it on the device, or send it to the AI). */
+export async function downloadMaterial(source: DataSource, material: Material): Promise<Blob> {
+  if (source.kind === 'demo') {
+    const file = await deviceFiles.get(material.id)
+    if (!file) throw new Error('This file is no longer on this device.')
+    return file
+  }
+  if (!material.storage_path) throw new Error('This material has no file.')
+  const { data, error } = await source.client.storage.from(material.kind === 'image' ? 'images' : 'materials').download(material.storage_path)
+  if (error) throw new Error(`The file could not be downloaded: ${error.message}`)
+  return data
+}
+
 /** The text of a text material (its one page). */
 export async function materialText(source: DataSource, materialId: string): Promise<string> {
   if (source.kind === 'demo') return demoDb.list('material_pages').find((page) => page.material_id === materialId && page.page_no === 1)?.text ?? ''

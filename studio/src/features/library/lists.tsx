@@ -5,6 +5,7 @@ import { Link } from 'react-router'
 import { countLabel } from '@/features/academics/labels'
 import { noteKindLabel, noteSourceLabel, type NoteSummary } from '@/features/notes/notes'
 import { cn } from '@/lib/utils'
+import { stillMaking } from '@studio/features/notes/studioNotes'
 import { kindIcon, kindLabel } from './kinds'
 import type { Material } from './library'
 
@@ -45,19 +46,22 @@ export function NoteList({ notes }: { notes: NoteSummary[] }) {
   return (
     <ul className="grid divide-y overflow-hidden rounded-xl border bg-card">
       {notes.map((note) => {
-        const Icon = note.status === 'processing' ? LoaderCircle : (NOTE_ICON[note.kind] ?? FileText)
+        const making = stillMaking(note)
+        // Failed, or 'processing' for so long that it has stopped.
+        const broken = note.status === 'failed' || (note.status === 'processing' && !making)
+        const Icon = making ? LoaderCircle : (NOTE_ICON[note.kind] ?? FileText)
         const details = [
-          note.status === 'processing' ? 'Being made…' : note.status === 'failed' ? "Couldn't be made" : noteKindLabel(note.kind),
+          making ? 'Being made…' : broken ? "Couldn't be made" : noteKindLabel(note.kind),
           noteSourceLabel(note.source),
           format(new Date(note.updated_at), 'd MMM'),
         ].filter(Boolean)
         return (
           <li key={note.id}>
             <Link to={`/notes/${note.id}`} className={rowClass}>
-              <Icon className={cn('size-4 shrink-0 text-studio', note.status === 'processing' && 'animate-spin', note.status === 'failed' && 'text-destructive')} aria-hidden />
+              <Icon className={cn('size-4 shrink-0 text-studio', making && 'animate-spin', broken && 'text-destructive')} aria-hidden />
               <span className="grid min-w-0 flex-1 gap-0.5">
                 <span className="truncate text-sm font-medium">{note.title}</span>
-                <span className={cn('text-xs text-muted-foreground', note.status === 'failed' && 'text-destructive')}>{details.join(' · ')}</span>
+                <span className={cn('text-xs text-muted-foreground', broken && 'text-destructive')}>{details.join(' · ')}</span>
               </span>
             </Link>
           </li>

@@ -20,14 +20,15 @@ export async function pdfPageCount(data: ArrayBuffer): Promise<number> {
   }
 }
 
-/** The text of each page (up to `maxPages`), read on this device. */
-export async function readPdfText(data: ArrayBuffer, maxPages = 80): Promise<{ pages: string[]; pageCount: number }> {
+/** The text of each page (up to `maxPages`, from `firstPage` on), read on this device. */
+export async function readPdfText(data: ArrayBuffer, maxPages = 80, firstPage = 1): Promise<{ pages: string[]; pageCount: number }> {
   // pdf.js takes over the buffer it is given, so it gets a copy and the caller keeps the original.
   const task = pdfjs.getDocument({ data: new Uint8Array(data.slice(0)) })
   const document = await task.promise
   try {
     const pages: string[] = []
-    for (let number = 1; number <= Math.min(document.numPages, maxPages); number++) {
+    const start = Math.max(1, Math.floor(firstPage))
+    for (let number = start; number <= Math.min(document.numPages, start + maxPages - 1); number++) {
       const page = await document.getPage(number)
       const content = await page.getTextContent()
       pages.push(

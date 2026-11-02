@@ -20,6 +20,7 @@ export type AiFunction =
   | 'ai-review'
   | 'ai-meal'
   | 'ai-speak'
+  | 'studio-notes'
 
 /** Every Edge Function the app calls: the AI ones, ai-usage (the AI usage dashboard) and account-delete. */
 export type EdgeFunction = AiFunction | 'ai-usage' | 'account-delete'

@@ -231,3 +231,18 @@ Add a dated line whenever an important decision is made or changed.
   - Notes lists show notes being made (checked every 10 seconds) and failed ones; Ekagra shows only finished ones.
   - The Studio pages were tested in the browser with Demo Mode data through a temporary change, removed again: Studio itself still needs sign-in.
   - Studio's own queries look again when the student comes back to it, because Ekagra may have changed things meanwhile.
+- 2026-11-02: **Ekagra Studio, step 2: notes, mind maps and revision sheets with Gemini** (M17; Edge Function `studio-notes`, prompt `studio-notes-v1`; now 15 functions; `@ai-sdk/google` 4.0.109 added as a dev dependency like `@ai-sdk/anthropic`, approved). **Models and cost** (checked on Google's pricing page, November 2026):
+  - Smart = Gemini 3.8 Flash for PDFs, photos and text; Fast = Gemini 3.5 Flash-Lite for YouTube videos. A video is about 100 tokens a second (an hour is about 360,000 tokens, about $0.11 with Flash-Lite), so the cheap model reads the long input.
+  - 3.8 Flash is counted at Google's announced 2027 price ($1.50 / $7.50 instead of $0.75 / $3.75), so the shared $10 budget is never under-counted. On the free tier the price secrets can be 0.
+  - Thinking is `low`: Gemini 3 has no "none" level, and the provider would then leave the model's own, higher default (read in the provider's source).
+
+  **Gateway:** `readStudioAiConfig` (own key and models, shared limits). Provider-specific errors. `ensureQuota` is public, so the daily limit is answered before a note is saved. Gemini's model factory is in `_shared/gemini.ts`, so Ekagra's 14 functions don't bundle Google's SDK.
+
+  **How a note is made:**
+  - The note is saved as `processing` and returned at once; Gemini works in the background (`EdgeRuntime.waitUntil`), then the note becomes `ready` (title, Markdown, model, prompt version) or `failed` with the reason.
+  - Problems known beforehand save nothing: no key, the daily limit, a wrong link, and with `YOUTUBE_API_KEY` a private, missing or over-3-hour video. A public video's title and length then go to the material.
+  - A note still processing after 10 minutes was stopped by the function's time limit: Studio shows it as failed, with **Try again**.
+  - A YouTube video goes to Gemini as its link (`fileData.fileUri`), never downloaded or transcribed by us; `_shared/gemini.test.ts` checks the real provider's request without a network.
+  - PDFs are read on the device as text, from a chosen page, as many whole pages as fit in 60,000 characters (`textForNotes`). Scanned PDFs (up to 5 MB) and photos are sent as files.
+  - The prompt keeps to what the reader shows (no tables, no LaTeX) and makes mind maps as outlines for `parseOutline`.
+  - Studio edits a note (title and Markdown, with a preview) and deletes it; Ekagra shows only finished notes.

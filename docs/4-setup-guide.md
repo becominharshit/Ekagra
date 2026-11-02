@@ -182,9 +182,20 @@ Demo Mode never uses this: there, AI features give sample answers made on the de
 
 The Coding Lab doesn't need any of this: Python runs on the device. Its first run downloads Python (about 13 MB) from the jsDelivr CDN, so that one needs the internet.
 
-**Limits:** every AI request goes through `supabase/functions/_shared/ai.ts`. Each student can make `AI_USER_DAILY_REQUESTS` requests in 24 hours, and the whole app can spend at most `AI_MONTHLY_BUDGET_USD` ÷ 30 in 24 hours. Every request's tokens and cost are saved in the `ai_usage` table.
+**Limits:** every AI request goes through `supabase/functions/_shared/ai.ts`. Each student can make `AI_USER_DAILY_REQUESTS` requests in 24 hours, and the whole app can spend at most `AI_MONTHLY_BUDGET_USD` ÷ 30 in 24 hours. Every request's tokens and cost are saved in the `ai_usage` table. Ekagra Studio's requests count against the same limits.
 
-**Free tier:** Google may use free-tier prompts to improve its models. Turn on billing for the key before friends upload their own material.
+### Ekagra Studio's AI (Gemini, by Google)
+
+Studio makes notes, mind maps and revision sheets with Gemini, which can also watch a YouTube video from its link. Same steps as above, with a Google key:
+
+1. Get a Gemini API key at https://aistudio.google.com/api-keys → **Create API key**.
+2. In `supabase/functions/.env`, add the Studio part of `supabase/functions/.env.example`: remove the `#` before `GEMINI_API_KEY=` and paste the key. The models (Gemini 3.8 Flash for PDFs, photos and text; Gemini 3.5 Flash-Lite for videos, which are long) and their prices are filled in already.
+3. Optional, recommended: a YouTube Data API key, so Studio checks a video before spending anything on it (it must be public and at most 3 hours long) and names the material after the video. Google Cloud console → **APIs & Services** → enable **YouTube Data API v3** → **Credentials** → **Create credentials → API key**, restricted to that API. Paste it after `YOUTUBE_API_KEY=` (remove the `#`).
+4. `npm run functions:secrets`, then `npm run functions:deploy` (now 15 functions, with `studio-notes`).
+
+**Check:** in Studio (signed in), open a subject → **Add** → **YouTube** → paste a public lecture's link → **Add the video**, then on its page **Make from this** → **Notes**. The note says "Being made…" for up to a minute or two and then shows the notes; Ekagra shows them under that subject too. **Me → AI usage** in Ekagra lists "Studio: notes, mind maps and revision sheets".
+
+**Free tier and cost:** on Gemini's free tier, Google may use the prompts to improve its products; turn on billing before friends add their own material. While on the free tier, set the four `STUDIO_AI_PRICE_…` secrets to `0`, or Studio counts prices that aren't paid against the app's budget. Studio counts Gemini 3.8 Flash at Google's price from 1 January 2027 ($1.50 / $7.50 per million tokens), so the budget is never under-counted. A one-hour lecture is about 360,000 tokens: about $0.11 with Flash-Lite. YouTube links are free while that feature is in preview.
 
 ## 7. Put the web app online
 

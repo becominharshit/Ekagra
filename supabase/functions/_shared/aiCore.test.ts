@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { AiError, checkQuota, costUsd, dailyBudgetUsd, dayBefore, isAiConfigured, KNOWN_PRICES, readAiConfig, readUsageLimits } from './aiCore.ts'
+import { AiError, checkQuota, costUsd, dailyBudgetUsd, dayBefore, isAiConfigured, KNOWN_PRICES, readAiConfig, readStudioAiConfig, readUsageLimits } from './aiCore.ts'
 import { TEST_SECRETS } from './testing.ts'
 
 describe('readUsageLimits', () => {
@@ -67,6 +67,34 @@ describe('readAiConfig', () => {
   it('only uses Anthropic (Claude)', () => {
     expect(readAiConfig({ ...TEST_SECRETS, AI_PROVIDER: 'anthropic' }).provider).toBe('anthropic')
     expect(() => readAiConfig({ ...TEST_SECRETS, AI_PROVIDER: 'google' })).toThrow(/AI_PROVIDER/)
+  })
+})
+
+describe('readStudioAiConfig (Ekagra Studio, Gemini)', () => {
+  it('needs only the Gemini key: Gemini 3.8 Flash and 3.5 Flash-Lite with their prices, thinking a little, on the shared limits', () => {
+    expect(readStudioAiConfig({ GEMINI_API_KEY: 'gm-test', AI_API_KEY: 'sk-ant-test', AI_MONTHLY_BUDGET_USD: '20' })).toEqual({
+      provider: 'google',
+      apiKey: 'gm-test',
+      models: { smart: 'gemini-3.8-flash', fast: 'gemini-3.5-flash-lite' },
+      prices: { smart: { input: 1.5, output: 7.5 }, fast: { input: 0.3, output: 2.5 } },
+      reasoning: { smart: 'low', fast: 'low' },
+      monthlyBudgetUsd: 20,
+      userDailyRequests: 150,
+    })
+  })
+
+  it("prefers STUDIO_AI_API_KEY, reads other Gemini models (free tier: prices of 0), and names what's missing", () => {
+    const free = readStudioAiConfig({
+      STUDIO_AI_API_KEY: 'studio-key',
+      GEMINI_API_KEY: 'other',
+      STUDIO_AI_MODEL_FAST: 'gemini-3.8-flash',
+      STUDIO_AI_PRICE_FAST_INPUT: '0',
+      STUDIO_AI_PRICE_FAST_OUTPUT: '0',
+    })
+    expect(free).toMatchObject({ apiKey: 'studio-key', models: { fast: 'gemini-3.8-flash' }, prices: { fast: { input: 0, output: 0 } } })
+    expect(() => readStudioAiConfig({ AI_API_KEY: 'sk-ant-test' })).toThrow(/GEMINI_API_KEY/)
+    expect(() => readStudioAiConfig({ GEMINI_API_KEY: 'k', STUDIO_AI_MODEL_SMART: 'claude-sonnet-5-5' })).toThrow(/STUDIO_AI_MODEL_SMART/)
+    expect(() => readStudioAiConfig({ GEMINI_API_KEY: 'k', STUDIO_AI_MODEL_SMART: 'gemini-next' })).toThrow(/STUDIO_AI_PRICE_SMART_INPUT, STUDIO_AI_PRICE_SMART_OUTPUT/)
   })
 })
 

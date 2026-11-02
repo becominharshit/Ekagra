@@ -22,6 +22,7 @@ import { BackLink } from '@studio/components/BackLink'
 import { kindLabel } from '@studio/features/library/kinds'
 import { moveMaterial, useLibrary, useMaterialFile, useMaterialText, type Material } from '@studio/features/library/library'
 import { embedUrl, youtubeId } from '@studio/features/library/youtube'
+import { MakeFromMaterial } from '@studio/features/notes/MakeFromMaterial'
 
 const NONE = '__none__'
 
@@ -106,6 +107,7 @@ function MaterialView({ material }: { material: Material }) {
         </p>
       )}
 
+      <MakeFromMaterial material={material} />
       <Viewer material={material} />
 
       <AlertDialog open={deleting} onOpenChange={setDeleting}>

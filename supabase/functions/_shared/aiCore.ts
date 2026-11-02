@@ -33,8 +33,11 @@ export interface Price {
 export const REASONING_LEVELS = ['none', 'low', 'medium', 'high'] as const
 export type Reasoning = (typeof REASONING_LEVELS)[number]
 
+/** Ekagra's functions use Claude (Anthropic); Ekagra Studio's use Gemini (Google), which can watch YouTube videos. */
+export type AiProvider = 'anthropic' | 'google'
+
 export interface AiConfig {
-  provider: 'anthropic'
+  provider: AiProvider
   apiKey: string
   models: Record<Tier, string>
   prices: Record<Tier, Price>
@@ -49,8 +52,21 @@ export const DEFAULT_MODELS: Record<Tier, string> = { smart: 'claude-sonnet-5-5'
 export const DEFAULT_REASONING: Record<Tier, Reasoning> = { smart: 'low', fast: 'none' }
 
 /**
- * Claude prices in USD per million tokens (platform.claude.com/docs/en/about-claude/pricing,
- * November 2026), used when the AI_PRICE_* secrets aren't set. Another model needs those secrets.
+ * Ekagra Studio's Gemini models when STUDIO_AI_MODEL_SMART and STUDIO_AI_MODEL_FAST aren't set.
+ * Fast (cheap per token) reads YouTube videos, which are long: about 100 tokens a second. Smart
+ * makes notes from PDFs, photos and text.
+ */
+export const STUDIO_DEFAULT_MODELS: Record<Tier, string> = { smart: 'gemini-3.8-flash', fast: 'gemini-3.5-flash-lite' }
+/** Gemini 3 models always think a little: 'none' isn't one of their levels (the provider would leave the model's own, higher default). */
+export const STUDIO_DEFAULT_REASONING: Record<Tier, Reasoning> = { smart: 'low', fast: 'low' }
+
+/**
+ * Prices in USD per million tokens, used when the price secrets aren't set. Another model needs
+ * those secrets. Claude: platform.claude.com/docs/en/about-claude/pricing; Gemini:
+ * ai.google.dev/gemini-api/docs/pricing (November 2026; one price for text, images, video and
+ * audio). Where Google has announced a higher price, that one is used, so the budget is never
+ * under-counted: Gemini 3.8 and 3.6 Flash cost $0.75 / $3.75 until 31 December 2026, Gemini 4
+ * Argon $2 / $10 until 30 November 2026.
  */
 export const KNOWN_PRICES: Readonly<Record<string, Price>> = {
   'claude-haiku-5-5': { input: 0.1, output: 0.5, longPrompt: { inputTokens: 100_000, input: 0.5, output: 2.5 } },
@@ -58,6 +74,10 @@ export const KNOWN_PRICES: Readonly<Record<string, Price>> = {
   'claude-opus-5-5': { input: 4, output: 20 },
   'claude-sonnet-4-6': { input: 3, output: 15 },
   'claude-haiku-4-5': { input: 1, output: 5 },
+  'gemini-3.8-flash': { input: 1.5, output: 7.5 },
+  'gemini-3.6-flash': { input: 1.5, output: 7.5 },
+  'gemini-3.5-flash-lite': { input: 0.3, output: 2.5 },
+  'gemini-4-argon': { input: 4, output: 20 },
 }
 
 /** The known price of a model, by its name or a dated name of it (claude-haiku-4-5-20251001). */
@@ -137,6 +157,63 @@ export function readAiConfig(env: Record<string, string | undefined>): AiConfig 
 }
 
 export type UsageLimits = Pick<AiConfig, 'monthlyBudgetUsd' | 'userDailyRequests'>
+
+const optionalText = z.preprocess(blankToMissing, z.string().optional())
+/** Only Gemini models for Studio, like only Claude models for Ekagra. */
+const geminiModel = (fallback: string) => z.preprocess(blankToMissing, z.string().trim().startsWith('gemini-').default(fallback))
+
+const studioSecretsSchema = limitsSchema
+  .extend({
+    // STUDIO_AI_API_KEY wins; GEMINI_API_KEY is the name Google's own guides use.
+    STUDIO_AI_API_KEY: optionalText,
+    GEMINI_API_KEY: optionalText,
+    STUDIO_AI_MODEL_SMART: geminiModel(STUDIO_DEFAULT_MODELS.smart),
+    STUDIO_AI_MODEL_FAST: geminiModel(STUDIO_DEFAULT_MODELS.fast),
+    STUDIO_AI_PRICE_SMART_INPUT: price,
+    STUDIO_AI_PRICE_SMART_OUTPUT: price,
+    STUDIO_AI_PRICE_FAST_INPUT: price,
+    STUDIO_AI_PRICE_FAST_OUTPUT: price,
+    STUDIO_AI_REASONING_SMART: reasoning(STUDIO_DEFAULT_REASONING.smart),
+    STUDIO_AI_REASONING_FAST: reasoning(STUDIO_DEFAULT_REASONING.fast),
+  })
+  .transform((secrets, context) => {
+    const apiKey = secrets.STUDIO_AI_API_KEY ?? secrets.GEMINI_API_KEY
+    if (!apiKey) context.addIssue({ code: 'custom', path: ['GEMINI_API_KEY'], message: 'Needed for Ekagra Studio' })
+    const priceOf = (tier: 'SMART' | 'FAST', model: string, input: number | undefined, output: number | undefined): Price => {
+      const known = knownPrice(model)
+      if (input === undefined && output === undefined && known) return known
+      if (input === undefined) context.addIssue({ code: 'custom', path: [`STUDIO_AI_PRICE_${tier}_INPUT`], message: `Needed for ${model}` })
+      if (output === undefined) context.addIssue({ code: 'custom', path: [`STUDIO_AI_PRICE_${tier}_OUTPUT`], message: `Needed for ${model}` })
+      return { input: input ?? 0, output: output ?? 0 }
+    }
+    return {
+      ...secrets,
+      apiKey: apiKey ?? '',
+      prices: {
+        smart: priceOf('SMART', secrets.STUDIO_AI_MODEL_SMART, secrets.STUDIO_AI_PRICE_SMART_INPUT, secrets.STUDIO_AI_PRICE_SMART_OUTPUT),
+        fast: priceOf('FAST', secrets.STUDIO_AI_MODEL_FAST, secrets.STUDIO_AI_PRICE_FAST_INPUT, secrets.STUDIO_AI_PRICE_FAST_OUTPUT),
+      },
+    }
+  })
+
+/**
+ * Reads Ekagra Studio's AI secrets: Gemini, with its own key and models, but the same daily limit
+ * and budget as Ekagra (both apps log to ai_usage). If any are missing or wrong, one error names all.
+ */
+export function readStudioAiConfig(env: Record<string, string | undefined>): AiConfig {
+  const parsed = studioSecretsSchema.safeParse(env)
+  if (!parsed.success) throw notConfigured(parsed.error)
+  const secrets = parsed.data
+  return {
+    provider: 'google',
+    apiKey: secrets.apiKey,
+    models: { smart: secrets.STUDIO_AI_MODEL_SMART, fast: secrets.STUDIO_AI_MODEL_FAST },
+    prices: secrets.prices,
+    reasoning: { smart: secrets.STUDIO_AI_REASONING_SMART, fast: secrets.STUDIO_AI_REASONING_FAST },
+    monthlyBudgetUsd: secrets.AI_MONTHLY_BUDGET_USD,
+    userDailyRequests: secrets.AI_USER_DAILY_REQUESTS,
+  }
+}
 
 /** Only the two limits, with the same defaults: the AI usage dashboard works before the AI is set up. */
 export function readUsageLimits(env: Record<string, string | undefined>): UsageLimits {

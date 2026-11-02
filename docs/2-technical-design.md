@@ -324,6 +324,13 @@ Model names change often, so the code only knows **tiers**; real model IDs live 
 
 **Data use:** Anthropic's API doesn't use requests to train its models by default (Commercial Terms). It is paid only (no free tier); set a spend limit in the Claude Console next to the app's own budget.
 
+**Ekagra Studio: Gemini** (M17), through the same gateway with `@ai-sdk/google` (4.0.109, approved). `readStudioAiConfig` reads its own secrets (`STUDIO_AI_API_KEY` or `GEMINI_API_KEY`, `STUDIO_AI_MODEL_*`, `STUDIO_AI_PRICE_*`, `STUDIO_AI_REASONING_*`) and the shared limits, so both apps log to `ai_usage` against one budget.
+- **Models:** Smart = `gemini-3.8-flash` (PDFs, photos, text), Fast = `gemini-3.5-flash-lite` (YouTube videos: about 100 tokens a second at the default low media resolution, so a one-hour lecture is about 360,000 tokens). Only `gemini-` names are accepted.
+- **Prices:** known for 3.8 and 3.6 Flash (counted at Google's price from 1 January 2027, $1.50 / $7.50, so the budget is never under-counted), 3.5 Flash-Lite ($0.30 / $2.50) and 4 Argon; these have one price for text, images, video and audio. On the free tier the price secrets can be 0.
+- **Thinking:** `low` for both. Gemini 3 models have no "none" level, and the provider would leave the model's higher default.
+- **Bundling:** the Gemini factory is in `_shared/gemini.ts`, imported only by `studio-*` functions, so Ekagra's functions don't bundle Google's SDK. `ai.ts` gives provider-specific errors (a refused key names `GEMINI_API_KEY`; Google's 400/403 otherwise means it couldn't read the input, e.g. a private video) and exposes `ensureQuota`, so a function can refuse before it starts background work.
+- **YouTube:** the watch link goes to Gemini as a file part (`fileData.fileUri`). The provider knows YouTube URLs and doesn't download them; `_shared/gemini.test.ts` checks the request with the real provider and no network. Gemini reads public videos only; the YouTube URL feature is in preview, free, with 8 hours a day on the free tier.
+
 ### 7.2 Rules for every AI call
 - Goes through `supabase/functions/_shared/ai.ts`, which picks the tier → checks the user's quota → calls the model → validates the JSON with Zod (one retry) → logs tokens and cost in `ai_usage`.
 - Prompts live in `supabase/functions/_shared/prompts/` with a version number; generated rows store `prompt_version`.
@@ -406,6 +413,13 @@ const TopicTree = z.object({
   - study material is saved to `materials`: a PDF into the library, a photo as kind `image` (bucket `images`, `<user_id>/materials/<id>.jpg`), text as kind `text` (its text in `material_pages`, page 1). Ekagra Studio sees them;
   - a task or notice opens the + capture sheet with it filled in (`ai-capture`).
 - Nothing is saved before the student confirms. Demo Mode guesses the kind from words in the file name and text (`classify.ts`) and can't read timetables or photos.
+
+**g3) Studio notes (`studio-notes`, Gemini; built in M17):** notes, a mind map or a revision sheet from one material, on its page in Studio (**Make from this**).
+- Input: the material, its subject, the kind, its title, the student's program and year, and what to read: a YouTube link; text (a text material, or a PDF's text read on the device from a chosen page, as many whole pages as fit in 60,000 characters); or a file (a photo, or a scanned PDF of up to 5 MB).
+- Before anything is saved: the daily limit and budget (`ensureQuota`), the Gemini secrets, the link, and with `YOUTUBE_API_KEY` the video itself (videos.list, 1 quota unit). It must exist, be public and be at most 3 hours long; its title and length go to the material.
+- The note is saved as `processing` and its id returned at once. The AI works in the background (`EdgeRuntime.waitUntil`, within the function's time limit; the gateway stops after 120 seconds) and fills in `title`, `content`, `model` and `prompt_version` (`studio-notes-v1`), or sets `failed` with the reason. Videos use the Fast tier, everything else Smart.
+- Output: `{ title, markdown }`. The prompt asks for Markdown the reader can show (no tables, no LaTeX), a mind map as an outline `parseOutline` can draw, and only facts from the material.
+- Studio checks a note being made every 5 seconds (its lists every 10). A note still `processing` after 10 minutes has been stopped by the time limit; it shows as failed, with **Try again** (a new note, then the old one is deleted). Studio edits a note's title and Markdown and deletes notes; Ekagra only reads finished ones.
 
 **h) Grading (`ai-grade`, Fast; built in M11):** up to 15 written answers (short and long answers, programs and past-paper questions of a mock test) per request, each with its marks and, when known, key points or a model answer → marks in steps of 0.5, 2–4 sentences of feedback, the missing points and a full-marks answer. Zod checks one grade per answer and never more than its marks (one retry). Without key points the model decides what the marks need. The student's answer is never followed as an instruction. Without the AI (Demo Mode, or when it fails) the device gives a rough mark by matching key words with the key points or the model answer, and the student marks what it can't compare.
 
