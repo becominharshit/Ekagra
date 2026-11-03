@@ -36,7 +36,7 @@ const BASE: StudioNotesRequest = {
   source: { kind: 'youtube', url: 'https://youtu.be/9hE5-98ZeCg' },
 }
 
-async function generate(request: StudioNotesRequest, videoUrl: string | null, tier: 'smart' | 'fast') {
+async function generate(request: StudioNotesRequest, videoUrl: string | null, tier: 'smart' | 'fast', fps?: number) {
   const gemini = fakeGemini({ title: 'SQL joins', markdown: '## Joins\n- Inner' })
   const usage = memoryUsage()
   const ai = createAiGateway({ config: readStudioAiConfig({ GEMINI_API_KEY: 'gemini-test-key' }), usage, model: gemini.model })
@@ -46,7 +46,7 @@ async function generate(request: StudioNotesRequest, videoUrl: string | null, ti
     tier,
     schema: StudioNoteAnswerSchema,
     instructions: studioNotesInstructions(request.kind),
-    prompt: studioNotesPrompt(request, videoUrl),
+    prompt: studioNotesPrompt(request, videoUrl, fps),
   })
   return { result, sent: gemini.sent, usage }
 }
@@ -69,6 +69,14 @@ describe('Ekagra Studio on Gemini (the real provider, no network)', () => {
     expect(config.responseSchema ?? config.responseJsonSchema).toBeDefined()
     // 200,000 tokens in and 4,000 out at $0.30 / $2.50 per million.
     expect(usage.logged).toEqual([expect.objectContaining({ feature: 'studio-notes', model: 'gemini-3.5-flash-lite', inputTokens: 200_000, outputTokens: 4_000, costUsd: 0.07 })])
+  })
+
+  it('tells Gemini how many frames a second to look at, next to the link', async () => {
+    const { sent } = await generate(BASE, 'https://www.youtube.com/watch?v=9hE5-98ZeCg', 'fast', 0.2)
+    expect(parts(sent[0]?.body)).toContainEqual({
+      fileData: { mimeType: 'video/mp4', fileUri: 'https://www.youtube.com/watch?v=9hE5-98ZeCg' },
+      videoMetadata: { fps: 0.2 },
+    })
   })
 
   it('sends a photo inline, and text as text, to the smart model', async () => {

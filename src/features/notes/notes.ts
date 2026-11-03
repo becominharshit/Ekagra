@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { academicsKey } from '@/features/academics/subjects'
-import { dbError, need, useDataSource, type DataSource } from '@/lib/dataSource'
+import { dbError, need, readAll, useDataSource, type DataSource } from '@/lib/dataSource'
 import { demoDb } from '@/lib/demoDb'
 import type { Tables } from '@/types/database'
 
@@ -51,6 +51,14 @@ export async function listSubjectNotes(source: DataSource, subjectId: string): P
   return data
 }
 
+/** Every finished note, of every subject, the most recently changed first (the Library lists them). */
+export async function listNotes(source: DataSource): Promise<NoteSummary[]> {
+  if (source.kind === 'demo') return demoDb.list('notes').filter((note) => note.status === 'ready').sort(newestFirst)
+  return readAll((from, to) =>
+    source.client.from('notes').select(NOTE_SUMMARY_COLUMNS).eq('user_id', source.userId).eq('status', 'ready').order('updated_at', { ascending: false }).range(from, to),
+  )
+}
+
 /** One note with its text; null when there's no note with that id (or it belongs to someone else). */
 export async function getNote(source: DataSource, id: string): Promise<Note | null> {
   if (!UUID.test(id)) return null
@@ -70,6 +78,16 @@ export function useSubjectNotes(subjectId: string | undefined) {
     queryKey: [...academicsKey(owner), 'notes', subjectId],
     queryFn: () => listSubjectNotes(need(source), subjectId ?? ''),
     enabled: source !== null && Boolean(subjectId),
+    ...FROM_STUDIO,
+  })
+}
+
+export function useNotes() {
+  const { source, owner } = useDataSource()
+  return useQuery({
+    queryKey: [...academicsKey(owner), 'all-notes'],
+    queryFn: () => listNotes(need(source)),
+    enabled: source !== null,
     ...FROM_STUDIO,
   })
 }

@@ -1,16 +1,17 @@
 import { useQuery } from '@tanstack/react-query'
 import type { SourceFile } from '@shared/schemas.ts'
 import { academicsKey } from '@/features/academics/subjects'
-import { dbError, need, useDataSource, type DataSource } from '@/lib/dataSource'
+import { dbError, need, readAll, useDataSource, type DataSource } from '@/lib/dataSource'
 import { demoDb } from '@/lib/demoDb'
 import { deviceFiles } from '@/lib/deviceFiles'
 import type { Tables } from '@/types/database'
 
-// The PDF library. Signed in: files in the private "materials" bucket (<user_id>/<id>.pdf) and a
-// row in materials. Demo Mode: the file in this device's IndexedDB and the row in demoDb.
+// Study materials. PDFs, signed in: files in the private "materials" bucket (<user_id>/<id>.pdf)
+// and a row in materials; Demo Mode: the file in this device's IndexedDB and the row in demoDb.
 // Page text is read from the PDF on the device when it's needed, so nothing else is stored.
 // The Add inbox also saves photos (kind image, "images" bucket) and text (kind text, its text in
-// material_pages) as study material. The library lists PDFs; Ekagra Studio shows every kind.
+// material_pages), and Ekagra Studio adds YouTube videos (kind youtube, the link in source_url).
+// The Library lists every kind (listStudyMaterials); Ekagra Studio uses the same functions.
 
 export type Material = Tables<'materials'>
 
@@ -19,6 +20,41 @@ export const MAX_PDF_BYTES = 50 * 1024 * 1024
 
 const newestFirst = (a: Material, b: Material) => Date.parse(b.created_at) - Date.parse(a.created_at)
 
+/** Every study material of every kind (PDFs, photos, text, YouTube videos), from either app, newest first. Not syllabi or past papers. */
+export async function listStudyMaterials(source: DataSource): Promise<Material[]> {
+  if (source.kind === 'demo') return demoDb.list('materials').filter((material) => material.purpose === 'study').sort(newestFirst)
+  return readAll((from, to) =>
+    source.client.from('materials').select('*').eq('user_id', source.userId).eq('purpose', 'study').order('created_at', { ascending: false }).range(from, to),
+  )
+}
+
+/** Where a material opens in Ekagra: a PDF in the PDF viewer, anything else on its own page. */
+export function materialPath(material: Pick<Material, 'id' | 'kind'>): string {
+  return material.kind === 'pdf' ? `/academics/library/${material.id}` : `/academics/materials/${material.id}`
+}
+
+/** A link to a photo's or PDF's file that works for an hour (the files are private); in Demo Mode, the copy on this device. */
+export async function materialFileUrl(source: DataSource, material: Material): Promise<string | null> {
+  if (!material.storage_path) return null
+  if (source.kind === 'demo') {
+    const file = await deviceFiles.get(material.id)
+    return file ? URL.createObjectURL(file) : null
+  }
+  const bucket = material.kind === 'image' ? 'images' : 'materials'
+  const { data, error } = await source.client.storage.from(bucket).createSignedUrl(material.storage_path, 60 * 60)
+  if (error) throw new Error(`The file could not be opened: ${error.message}`)
+  return data.signedUrl
+}
+
+/** The text of a text material (its one page). */
+export async function materialText(source: DataSource, materialId: string): Promise<string> {
+  if (source.kind === 'demo') return demoDb.list('material_pages').find((page) => page.material_id === materialId && page.page_no === 1)?.text ?? ''
+  const { data, error } = await source.client.from('material_pages').select('text').eq('material_id', materialId).eq('page_no', 1).maybeSingle()
+  if (error) throw dbError(error)
+  return data?.text ?? ''
+}
+
+/** PDFs only: the PDF viewer finds its PDF here. */
 export async function listMaterials(source: DataSource): Promise<Material[]> {
   if (source.kind === 'demo') {
     return demoDb.list('materials').filter((material) => material.kind === 'pdf' && material.purpose === 'study').sort(newestFirst)
@@ -150,15 +186,55 @@ export async function deleteMaterial(source: DataSource, material: Material): Pr
   if (material.storage_path) await source.client.storage.from(material.kind === 'image' ? 'images' : 'materials').remove([material.storage_path])
 }
 
-export function useMaterials() {
+// Ekagra Studio adds and changes materials from another app or tab, so these look again (when a
+// minute-old answer would be stale) whenever the student comes back.
+const FROM_OTHER_APP = { staleTime: 10_000, refetchOnWindowFocus: true } as const
+
+/** Every study material (the Library). */
+export function useStudyMaterials() {
   const { source, owner } = useDataSource()
   return useQuery({
-    queryKey: [...academicsKey(owner), 'materials'],
-    queryFn: () => listMaterials(need(source)),
+    queryKey: [...academicsKey(owner), 'study-materials'],
+    queryFn: () => listStudyMaterials(need(source)),
     enabled: source !== null,
+    ...FROM_OTHER_APP,
   })
 }
 
+/** One study material of any kind, or null when there's none with that id. */
+export function useStudyMaterial(materialId: string | undefined) {
+  const { source, owner } = useDataSource()
+  return useQuery({
+    queryKey: [...academicsKey(owner), 'study-materials'],
+    queryFn: () => listStudyMaterials(need(source)),
+    enabled: source !== null && Boolean(materialId),
+    ...FROM_OTHER_APP,
+    select: (materials) => materials.find((material) => material.id === materialId) ?? null,
+  })
+}
+
+/** A photo's (or PDF's) file link; fetched again well before it stops working after an hour. */
+export function useMaterialFile(material: Material | null | undefined) {
+  const { source, owner } = useDataSource()
+  return useQuery({
+    queryKey: ['material-file', owner, material?.id, material?.storage_path],
+    queryFn: () => materialFileUrl(need(source), material as Material),
+    enabled: source !== null && Boolean(material?.storage_path),
+    staleTime: 45 * 60 * 1000,
+    gcTime: 50 * 60 * 1000,
+  })
+}
+
+export function useMaterialText(material: Material | null | undefined) {
+  const { source, owner } = useDataSource()
+  return useQuery({
+    queryKey: [...academicsKey(owner), 'material-text', material?.id],
+    queryFn: () => materialText(need(source), material?.id ?? ''),
+    enabled: source !== null && material?.kind === 'text',
+  })
+}
+
+/** One PDF, for the PDF viewer. */
 export function useMaterial(materialId: string | undefined) {
   const { source, owner } = useDataSource()
   return useQuery({

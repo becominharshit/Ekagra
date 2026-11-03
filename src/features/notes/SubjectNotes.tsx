@@ -1,13 +1,12 @@
 import { format } from 'date-fns'
-import { ExternalLink, FileText, ListChecks, Network, type LucideIcon } from 'lucide-react'
+import { ExternalLink } from 'lucide-react'
 import { Link } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useAuthStore } from '@/features/auth/authStore'
 import { openStudioPage } from '@/features/bridge/studio'
+import { NoteIcon } from '@/features/materials/KindIcons'
 import { noteKindLabel, noteSourceLabel, useSubjectNotes, type NoteSummary } from './notes'
-
-const NOTE_ICON: Record<string, LucideIcon> = { notes: FileText, mind_map: Network, revision_sheet: ListChecks }
 
 /** The subject's notes from Ekagra Studio: read here, made and edited there. */
 export function SubjectNotes({ subjectId }: { subjectId: string }) {
@@ -58,12 +57,11 @@ export function SubjectNotes({ subjectId }: { subjectId: string }) {
 }
 
 function NoteRow({ note }: { note: NoteSummary }) {
-  const Icon = NOTE_ICON[note.kind] ?? FileText
   const details = [noteKindLabel(note.kind), noteSourceLabel(note.source), format(new Date(note.updated_at), 'd MMM')].filter(Boolean)
   return (
     <li>
       <Link to={`/academics/notes/${note.id}`} className="-mx-2 flex items-start gap-3 rounded-lg px-2 py-2 hover:bg-muted">
-        <Icon className="mt-0.5 size-4 shrink-0 text-mode-study" aria-hidden />
+        <NoteIcon kind={note.kind} className="mt-0.5 size-4 shrink-0 text-mode-study" aria-hidden />
         <span className="grid min-w-0 gap-0.5">
           <span className="truncate font-medium">{note.title}</span>
           <span className="text-xs text-muted-foreground">{details.join(' · ')}</span>

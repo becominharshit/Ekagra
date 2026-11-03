@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { format } from 'date-fns'
-import { ArrowLeft, ExternalLink, FileText, LoaderCircle } from 'lucide-react'
+import { ArrowLeft, ExternalLink, LoaderCircle } from 'lucide-react'
 import { Link, useParams } from 'react-router'
 import { Markdown } from '@/components/Markdown'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -10,7 +10,8 @@ import { useRoadmap } from '@/features/academics/roadmap'
 import { useSubject } from '@/features/academics/subjects'
 import { useAuthStore } from '@/features/auth/authStore'
 import { openStudioPage } from '@/features/bridge/studio'
-import { useMaterial } from '@/features/materials/materials'
+import { MaterialIcon } from '@/features/materials/KindIcons'
+import { materialPath, useStudyMaterial } from '@/features/materials/materials'
 import { MindMap } from '@/features/notes/MindMap'
 import { noteKindLabel, noteSourceLabel, useNote, type Note } from '@/features/notes/notes'
 import { parseOutline } from '@/features/notes/outline'
@@ -50,7 +51,8 @@ function NoteView({ note }: { note: Note }) {
   const isDemo = useAuthStore((state) => state.status === 'demo')
   const subject = useSubject(note.subject_id)
   const roadmap = useRoadmap(note.subject_id)
-  const material = useMaterial(note.material_id ?? undefined)
+  // What it was made from, of any kind (a PDF, YouTube video, photo or text).
+  const material = useStudyMaterial(note.material_id ?? undefined)
   const topic = roadmap.data?.topics.find((candidate) => candidate.id === note.topic_id) ?? null
   const outline = useMemo(() => (note.kind === 'mind_map' ? parseOutline(note.content, note.title) : null), [note.kind, note.content, note.title])
   const details = [noteKindLabel(note.kind), noteSourceLabel(note.source), `updated ${format(new Date(note.updated_at), 'd MMM yyyy')}`].filter(Boolean)
@@ -73,8 +75,8 @@ function NoteView({ note }: { note: Note }) {
         )}
         {material.data && (
           <Button asChild variant="outline" size="sm">
-            <Link to={`/academics/library/${material.data.id}`}>
-              <FileText aria-hidden />
+            <Link to={materialPath(material.data)}>
+              <MaterialIcon kind={material.data.kind} aria-hidden />
               {material.data.title}
             </Link>
           </Button>

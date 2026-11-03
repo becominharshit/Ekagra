@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { fetchVideoDetails, isoDurationSeconds } from './youtube.ts'
+import { embedUrl, fetchVideoDetails, isoDurationSeconds, lectureFps } from './youtube.ts'
+
+describe('how Gemini watches a lecture', () => {
+  it('sees every second of a short video, and 1 frame every 5 seconds of a long one or one of unknown length', () => {
+    expect([lectureFps(60), lectureFps(20 * 60), lectureFps(20 * 60 + 1), lectureFps(7155), lectureFps(null)]).toEqual([1, 1, 0.2, 0.2, 0.2])
+  })
+
+  it('plays it in the privacy-enhanced player', () => {
+    expect(embedUrl('9hE5-98ZeCg')).toBe('https://www.youtube-nocookie.com/embed/9hE5-98ZeCg')
+  })
+})
 
 describe('YouTube video details', () => {
   it('reads ISO 8601 durations as YouTube gives them', () => {

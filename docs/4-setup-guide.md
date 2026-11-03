@@ -188,7 +188,10 @@ The Coding Lab doesn't need any of this: Python runs on the device. Its first ru
 
 Studio makes notes, mind maps, revision sheets and quizzes with Gemini, which can also watch a YouTube video from its link. Same steps as above, with a Google key:
 
-1. Get a Gemini API key at https://aistudio.google.com/api-keys → **Create API key**.
+1. Get a Gemini API key at https://aistudio.google.com/api-keys → **Create API key**. Its project decides how it is paid (AI Studio → **Projects**):
+   - **Free tier** (no billing): free, with limits per minute and per day (see AI Studio → **Rate limits**), and Google may use the prompts to improve its products.
+   - **Billing with prepaid credit**: when the credit is used up, Google refuses every request, and Studio says "Gemini's prepaid credit has run out". Add credit under AI Studio → **Projects → Billing**.
+   - To change the key later: edit `GEMINI_API_KEY` in `supabase/functions/.env`, then `npm run functions:secrets`. No new deploy is needed for a key.
 2. In `supabase/functions/.env`, add the Studio part of `supabase/functions/.env.example`: remove the `#` before `GEMINI_API_KEY=` and paste the key. The models (Gemini 3.8 Flash for PDFs, photos and text; Gemini 3.5 Flash-Lite for videos, which are long) and their prices are filled in already.
 3. Optional, recommended: a YouTube Data API key, so Studio checks a video before spending anything on it (it must be public and at most 3 hours long) and names the material after the video. Google Cloud console → **APIs & Services** → enable **YouTube Data API v3** → **Credentials** → **Create credentials → API key**, restricted to that API. Paste it after `YOUTUBE_API_KEY=` (remove the `#`).
 4. `npm run functions:secrets`, then `npm run functions:deploy` (now 16 functions, with `studio-notes` and `studio-quiz`).
@@ -197,7 +200,7 @@ Studio makes notes, mind maps, revision sheets and quizzes with Gemini, which ca
 
 **Check the quiz:** under a finished note, **Test yourself** → **5 questions**. After a few seconds the first question shows; answer all five (get one wrong on purpose). The result says how many were right, and the wrong one is in Ekagra's mistake notebook (Academics → **Mistakes**), with the right answer. The questions stay with the note: **Practise the 5 saved questions** asks them again without the AI.
 
-**Free tier and cost:** on Gemini's free tier, Google may use the prompts to improve its products; turn on billing before friends add their own material. While on the free tier, set the four `STUDIO_AI_PRICE_…` secrets to `0`, or Studio counts prices that aren't paid against the app's budget. Studio counts Gemini 3.8 Flash at Google's price from 1 January 2027 ($1.50 / $7.50 per million tokens), so the budget is never under-counted. A one-hour lecture is about 360,000 tokens: about $0.11 with Flash-Lite. YouTube links are free while that feature is in preview.
+**Free tier and cost:** on Gemini's free tier, Google may use the prompts to improve its products; turn on billing before friends add their own material. While on the free tier, set the four `STUDIO_AI_PRICE_…` secrets to `0`, or Studio counts prices that aren't paid against the app's budget. Studio counts Gemini 3.8 Flash at Google's price from 1 January 2027 ($1.50 / $7.50 per million tokens), so the budget is never under-counted. Studio has Gemini look at a lecture longer than 20 minutes at 1 frame every 5 seconds (the sound in full), so a one-hour lecture is about 166,000 tokens: about $0.05 with Flash-Lite. YouTube links are free while that feature is in preview.
 
 ## 7. Put the web app online
 
@@ -287,6 +290,10 @@ Me → Feedback shows when the running app was built ("App build … (UTC)"), so
 | "The AI features aren't on the server yet" | Deploy them: `npm run functions:deploy` (step 6) |
 | "AI is not set up on the server yet. Check these Edge Function secrets: …" | Fill in those names in `supabase/functions/.env`, then `npm run functions:secrets` (step 6) |
 | "The app's AI budget for today is used up" | Wait up to 24 hours, or raise `AI_MONTHLY_BUDGET_USD` (see the costs in the `ai_usage` table) |
+| A Studio note says "Gemini's prepaid credit has run out" | The Gemini key's project pays in advance and its credit is used up. Add credit (AI Studio → Projects → Billing), or put a free-tier key in `supabase/functions/.env` and `npm run functions:secrets` (step 6, "Ekagra Studio's AI"). Then **Try again** on the note |
+| "Anthropic's credit has run out" | Add credit at https://platform.claude.com/settings/billing |
+| "This is more than Gemini's free tier reads in one minute" | The video (or PDF) is bigger than the free tier's tokens-a-minute limit. Use a shorter video, or a key with billing |
+| "Gemini needed more than 2 minutes to watch this video" | Try again. If it keeps happening, the lecture is too long for now: use a shorter video |
 | "The ai-usage function isn't on the server yet" (Me → AI usage) or "The account-delete function isn't on the server yet" | Deploy them: `npm run functions:deploy` (step 6) |
 | "Deleting didn't finish" | Tap the button again: it carries on with what is left. If it keeps failing, check Supabase → **Edge Functions → account-delete → Logs** |
 | The online app says "Page not found" after a reload | The host must answer every address with `index.html` (step 7, item 3) |

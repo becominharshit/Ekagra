@@ -78,10 +78,19 @@ function noModels(): LanguageModel {
   throw new AiError(500, 'not_configured', 'This AI function has no models set up (pass them to createAiGateway).')
 }
 
+/** The request was stopped because it took longer than TIMEOUT_MS (AbortSignal.timeout). */
+function isTimeout(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'name' in error && (error.name === 'TimeoutError' || error.name === 'AbortError')
+}
+
 /** A failed call as an error the student can act on. Only the status and the provider's message are logged, never the prompt. */
 function providerError(error: unknown, modelId: string, provider: AiConfig['provider']): AiError {
   // The AI SDK tries busy and rate-limited calls again by itself, then wraps the last error.
   const last = RetryError.isInstance(error) ? error.lastError : error
+  if (isTimeout(last)) {
+    console.error(`AI request to ${modelId} took more than ${TIMEOUT_MS / 1000} seconds and was stopped`)
+    return new AiError(504, 'provider_timeout', `The AI took more than ${TIMEOUT_MS / 60_000} minutes, so it was stopped. Please try again.`, { cause: error })
+  }
   const status = APICallError.isInstance(last) ? last.statusCode : undefined
   const detail = APICallError.isInstance(last) ? (last.responseBody ?? last.message) : last instanceof Error ? last.message : String(last)
   console.error(`AI request to ${modelId} failed${status ? ` (${status})` : ''}: ${detail.slice(0, 500)}`)
@@ -90,7 +99,29 @@ function providerError(error: unknown, modelId: string, provider: AiConfig['prov
     if ((status === 400 || status === 401 || status === 403) && /api[ _]?key/i.test(detail)) {
       return new AiError(500, 'not_configured', 'Google refused the Gemini key. Check the GEMINI_API_KEY secret (docs/4-setup-guide.md, step 6).', { cause: error })
     }
+    // 402: the project pays in advance (prepay billing) and its credit is used up.
+    if (status === 402) {
+      return new AiError(
+        503,
+        'provider_billing',
+        "Gemini's prepaid credit has run out, so Google refused the request. Add credit in Google AI Studio (ai.studio/projects → Billing), or use a Gemini key from a free-tier project (docs/4-setup-guide.md, \"Ekagra Studio's AI\").",
+        { cause: error },
+      )
+    }
+    if (status === 404) {
+      return new AiError(500, 'not_configured', `Gemini has no model called "${modelId}". Check STUDIO_AI_MODEL_SMART and STUDIO_AI_MODEL_FAST (docs/4-setup-guide.md).`, { cause: error })
+    }
     if (status === 429) {
+      // Over the tokens-a-minute limit: one big request (a long video) can be over it on its own, so waiting doesn't help.
+      if (/input_token/i.test(detail)) {
+        const freeTier = /free_tier/i.test(detail)
+        return new AiError(
+          503,
+          'provider_limit',
+          `This is more than ${freeTier ? "Gemini's free tier" : 'your Gemini plan'} reads in one minute. Try a shorter video or fewer pages${freeTier ? ', or use a Gemini key with billing' : ''}.`,
+          { cause: error },
+        )
+      }
       return new AiError(503, 'provider_busy', 'Gemini is busy or has reached its limit for now. Please try again later.', { cause: error })
     }
     // Something Gemini can't use, e.g. a private or unlisted YouTube video.
@@ -101,6 +132,12 @@ function providerError(error: unknown, modelId: string, provider: AiConfig['prov
   }
   if (status === 401 || status === 403) {
     return new AiError(500, 'not_configured', 'Anthropic refused the AI key. Check the AI_API_KEY secret (docs/4-setup-guide.md, step 6).', { cause: error })
+  }
+  // 400 "Your credit balance is too low to access the Anthropic API": the prepaid credit is used up.
+  if (status === 402 || (status === 400 && /credit balance/i.test(detail))) {
+    return new AiError(503, 'provider_billing', "Anthropic's credit has run out, so Claude refused the request. Add credit at platform.claude.com → Billing (docs/4-setup-guide.md, step 6).", {
+      cause: error,
+    })
   }
   // 429: a rate limit or the plan's monthly cap; 529: overloaded; 400 "…reached your specified API usage limits": the spend limit set in the Console.
   if (status === 429 || status === 529 || (status === 400 && /usage limits/i.test(detail))) {

@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react'
 import { format } from 'date-fns'
-import { FileText, ListChecks, LoaderCircle, Network, type LucideIcon } from 'lucide-react'
+import { LoaderCircle } from 'lucide-react'
 import { Link } from 'react-router'
 import { countLabel } from '@/features/academics/labels'
+import { noteIcon } from '@/features/materials/kinds'
 import { noteKindLabel, noteSourceLabel, type NoteSummary } from '@/features/notes/notes'
 import { cn } from '@/lib/utils'
 import { stillMaking } from '@studio/features/notes/studioNotes'
@@ -39,8 +40,6 @@ export function MaterialList({ materials, subjectName }: { materials: Material[]
   )
 }
 
-const NOTE_ICON: Record<string, LucideIcon> = { notes: FileText, mind_map: Network, revision_sheet: ListChecks }
-
 /** Notes, mind maps and revision sheets as a list; ones still being made or that failed say so. */
 export function NoteList({ notes }: { notes: NoteSummary[] }) {
   return (
@@ -49,7 +48,7 @@ export function NoteList({ notes }: { notes: NoteSummary[] }) {
         const making = stillMaking(note)
         // Failed, or 'processing' for so long that it has stopped.
         const broken = note.status === 'failed' || (note.status === 'processing' && !making)
-        const Icon = making ? LoaderCircle : (NOTE_ICON[note.kind] ?? FileText)
+        const Icon = making ? LoaderCircle : noteIcon(note.kind)
         const details = [
           making ? 'Being made…' : broken ? "Couldn't be made" : noteKindLabel(note.kind),
           noteSourceLabel(note.source),

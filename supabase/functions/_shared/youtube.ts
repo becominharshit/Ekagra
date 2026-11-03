@@ -26,6 +26,21 @@ export function youtubeId(input: string): string | null {
 /** The plain watch link, the form Gemini reads. */
 export const watchUrl = (id: string) => `https://www.youtube.com/watch?v=${id}`
 
+/** The privacy-enhanced player: no YouTube cookies until the student plays the video. */
+export const embedUrl = (id: string) => `https://www.youtube-nocookie.com/embed/${id}`
+
+/** Videos up to this long are watched at Gemini's usual 1 frame a second. */
+const FULL_FRAME_RATE_SECONDS = 20 * 60
+
+/**
+ * Frames a second Gemini looks at in a lecture video. The sound (what the teacher says) is always
+ * heard in full; slides and the board change slowly, so a longer video (or one of unknown length)
+ * is seen at 1 frame every 5 seconds. A 2-hour lecture is then about 330,000 tokens instead of 740,000.
+ */
+export function lectureFps(durationSec: number | null): number {
+  return durationSec !== null && durationSec <= FULL_FRAME_RATE_SECONDS ? 1 : 0.2
+}
+
 /** Seconds in an ISO 8601 duration as YouTube gives it ("PT1H2M3S" = 3723), or null. */
 export function isoDurationSeconds(iso: string): number | null {
   const match = /^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/.exec(iso)

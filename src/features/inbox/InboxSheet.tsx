@@ -14,7 +14,7 @@ import { handOverImport } from '@/features/academics/importHandoff'
 import { academicsKey, listSubjects, useSubjects, type Subject } from '@/features/academics/subjects'
 import { useAuthStore } from '@/features/auth/authStore'
 import { openStudioPage } from '@/features/bridge/studio'
-import type { Material } from '@/features/materials/materials'
+import { materialPath, type Material } from '@/features/materials/materials'
 import { useCaptureStore } from '@/features/tasks/captureStore'
 import { need, useDataSource } from '@/lib/dataSource'
 import { cn } from '@/lib/utils'
@@ -258,13 +258,13 @@ function Confirm({ item, suggestion, onBack, onClose, onSaved }: ConfirmProps) {
       { item, subjectId, newName: choice === NEW ? newName : null, title },
       {
         onSuccess: (saved) => {
-          const where = subjectName ? `your ${subjectName} materials` : 'your materials'
+          const where = `“${saved.title}” is in your Library${subjectName ? `, under ${subjectName}` : ''}`
           const message =
             saved.kind === 'pdf'
-              ? `“${saved.title}” is in your Library${subjectName ? `, under ${subjectName}` : ''}.`
+              ? `${where}.`
               : isDemo
-                ? `“${saved.title}” is saved in ${where} on this device. Ekagra Studio needs sign-in, so it can't see Demo Mode's files.`
-                : `“${saved.title}” is saved in ${where}. Ekagra Studio can make notes, mind maps and quizzes from it.`
+                ? `${where}, on this device. Ekagra Studio needs sign-in, so it can't see Demo Mode's files.`
+                : `${where}. Ekagra Studio can make notes, mind maps and quizzes from it.`
           onSaved('Saved', message, saved)
         },
       },
@@ -312,7 +312,7 @@ function Confirm({ item, suggestion, onBack, onClose, onSaved }: ConfirmProps) {
   const hint = {
     syllabus: 'Opens Import syllabus for this subject with it filled in. The AI then makes the roadmap for you to check.',
     past_paper: `Opens Past papers for this subject with it filled in${suggestion.year ? ` (${suggestion.year})` : ''}. Its questions are matched to the subject's topics.`,
-    study_material: item.kind === 'pdf' ? 'The PDF goes into your Library.' : 'It is saved privately in your account, where Ekagra Studio can use it.',
+    study_material: item.kind === 'pdf' ? 'The PDF goes into your Library.' : 'It goes into your Library, saved privately in your account, where Ekagra Studio can use it too.',
     task:
       isDemo && item.kind === 'photo'
         ? "Opens Capture tasks. Demo Mode can't read photos, so type the task there."
@@ -472,15 +472,15 @@ function Done({ stage, onAnother, onClose }: { stage: Extract<Stage, { name: 'do
         <Button variant="outline" onClick={onAnother}>
           Add another
         </Button>
-        {material?.kind === 'pdf' && (
+        {material && (
           <Button
             variant="outline"
             onClick={() => {
               onClose()
-              navigate(`/academics/library/${material.id}`)
+              navigate(materialPath(material))
             }}
           >
-            Open the PDF
+            {material.kind === 'pdf' ? 'Open the PDF' : 'Open it'}
           </Button>
         )}
         {material && material.kind !== 'pdf' && !isDemo && (

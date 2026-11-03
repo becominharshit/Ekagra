@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { DataSource } from '@/lib/dataSource'
 import { demoDb } from '@/lib/demoDb'
 import { stubLocalStorage } from '@/test/memoryStorage'
-import { getNote, listSubjectNotes, noteKindLabel, noteSourceLabel } from './notes'
+import { getNote, listNotes, listSubjectNotes, noteKindLabel, noteSourceLabel } from './notes'
 
 stubLocalStorage()
 
@@ -23,6 +23,18 @@ describe('notes in Demo Mode', () => {
     expect(notes.map((note) => note.title)).toEqual(['SQL', 'ER model'])
     expect(await getNote(DEMO, older?.id ?? '')).toMatchObject({ title: 'ER model', content: '' })
     expect((await getNote(DEMO, newer?.id ?? ''))?.kind).toBe('revision_sheet')
+  })
+
+  it('lists the finished notes of every subject for the Library, the most recently changed first', async () => {
+    const [dbms, maths] = demoDb.insert('subjects', [{ name: 'DBMS' }, { name: 'Maths' }])
+    if (!dbms || !maths) throw new Error('No subjects')
+    demoDb.insert('notes', [
+      { subject_id: dbms.id, title: 'ER model', updated_at: '2026-11-01T10:00:00.000Z' },
+      { subject_id: maths.id, title: 'Limits', kind: 'mind_map', updated_at: '2026-11-02T10:00:00.000Z' },
+      { subject_id: dbms.id, title: 'Still being made', status: 'processing' },
+      { subject_id: dbms.id, title: 'Failed', status: 'failed' },
+    ])
+    expect((await listNotes(DEMO)).map((note) => note.title)).toEqual(['Limits', 'ER model'])
   })
 
   it('finds nothing for an unknown or broken id', async () => {
@@ -70,6 +82,26 @@ describe('notes when signed in', () => {
       ['eq', 'subject_id', 'subject-1'],
       ['eq', 'status', 'ready'],
       ['order', 'updated_at', { ascending: false }],
+    ])
+  })
+
+  it("asks for every finished note of the student, without their text, a page at a time", async () => {
+    const calls: unknown[][] = []
+    const query = {
+      select: (columns: string) => (calls.push(['select', columns]), query),
+      eq: (column: string, value: string) => (calls.push(['eq', column, value]), query),
+      order: (column: string, options: unknown) => (calls.push(['order', column, options]), query),
+      range: async (from: number, to: number) => (calls.push(['range', from, to]), { data: [{ id: 'n1', title: 'SQL' }], error: null }),
+    }
+    const source = { kind: 'supabase', userId: 'student-1', client: { from: (table: string) => (calls.push(['from', table]), query) } } as unknown as DataSource
+    expect(await listNotes(source)).toEqual([{ id: 'n1', title: 'SQL' }])
+    expect(calls.find((call) => call[0] === 'select')?.[1]).not.toEqual(expect.stringContaining('content'))
+    expect(calls.filter((call) => call[0] !== 'select')).toEqual([
+      ['from', 'notes'],
+      ['eq', 'user_id', 'student-1'],
+      ['eq', 'status', 'ready'],
+      ['order', 'updated_at', { ascending: false }],
+      ['range', 0, 999],
     ])
   })
 

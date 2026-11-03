@@ -41,8 +41,11 @@ export function studioNotesInstructions(kind: StudioNoteKind): string {
   return `${SHARED}\n\n${KIND[kind]}\n\nAnswer only with JSON in the required format.`
 }
 
-/** The material as the prompt's content: the video (by its link), the text, or the file. */
-export function studioNotesPrompt(request: StudioNotesRequest, videoUrl: string | null): string | ModelMessage[] {
+/**
+ * The material as the prompt's content: the video (by its link, seen at `fps` frames a second,
+ * see lectureFps), the text, or the file.
+ */
+export function studioNotesPrompt(request: StudioNotesRequest, videoUrl: string | null, fps?: number): string | ModelMessage[] {
   const student = [request.program, request.year ? `year ${request.year}` : null].filter(Boolean).join(', ')
   const ask = [`The material is called "${request.title}".`, student ? `The student studies ${student}.` : null, 'Make it from this material.'].filter(Boolean).join(' ')
   if (videoUrl) {
@@ -51,7 +54,12 @@ export function studioNotesPrompt(request: StudioNotesRequest, videoUrl: string 
         role: 'user',
         content: [
           { type: 'text', text: `${ask} It is a YouTube lecture video.` },
-          { type: 'file', data: new URL(videoUrl), mediaType: 'video/mp4' },
+          {
+            type: 'file',
+            data: new URL(videoUrl),
+            mediaType: 'video/mp4',
+            ...(fps ? { providerOptions: { google: { videoMetadata: { fps } } } } : {}),
+          },
         ],
       },
     ]

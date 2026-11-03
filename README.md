@@ -258,3 +258,21 @@ Add a dated line whenever an important decision is made or changed.
   **Tested:** the function (`studio-quiz/feature.test.ts`), Google's real provider with the quiz's answer shape (`_shared/gemini.test.ts`, no network), the data layer (`studio/src/features/quiz/quiz.test.ts`, including that Ekagra reads a saved question back), and the whole quiz in the browser on Demo Mode data, through a temporary change that was removed again.
 
   **Lint:** oxlint's React Compiler rule `react/purity` flags `new Date()` in a click handler passed to a component like `Button`, as if it ran while drawing. Like `SpeakingTab`'s `nowMs`, the start time comes from a small helper outside the component.
+- 2026-11-03: **Studio's failed notes, and a Library with everything.** **Why every YouTube note failed:**
+  - Found with the timing in `notes` (each failed 1 second after it started, so not a timeout), free checks with the Gemini key (both models exist; the 2-hour video is 736,967 tokens, within the 1,048,576 limit) and the same request sent from this computer. Google answered **402 "Your prepayment credits are depleted"**: the key's project pays in advance and its credit was used up.
+  - The gateway didn't know 402, so it showed "The AI service did not answer. Please try again in a minute", which hid the reason.
+
+  **Fixed in the gateway (`providerError`):**
+  - A plain message for no credit: Google's 402, and Anthropic's 400 "credit balance is too low", which had the same problem for Ekagra.
+  - Gemini's tokens-a-minute 429 (waiting doesn't help when one request is too big), Gemini's 404 (a wrong model name), and the 2-minute timeout each get their own message.
+  - `studio-notes` no longer blames the AI when saving fails, and says when Gemini ran out of time on a video.
+
+  **Lectures are lighter:**
+  - Videos over 20 minutes (or of unknown length) are sent with `videoMetadata.fps: 0.2`, one frame every 5 seconds; the sound stays in full.
+  - Google's countTokens on the same 2-hour lecture: 330,563 tokens instead of 736,967, so about half the cost and time. That makes it more likely to finish within the 2 minutes and to fit a free tier's per-minute limit.
+
+  **Ekagra's Library lists everything** (the product spec, §8.4, always had YouTube links in it):
+  - PDFs, YouTube videos, photos, text and Studio's finished notes in one list, the newest first, with subject (now also "No subject") and type filters (`libraryItems.ts`, pure and tested).
+  - PDFs still open in the PDF viewer. A new page, `/academics/materials/:id`, shows a video (YouTube's privacy-enhanced player, with "Open on YouTube"), a photo or text, with the notes made from it. The note reader now links back to a video too, and the Add inbox's "Open it" works for photos and text.
+  - Studio's own copies of the listing, file links, text, names and icons moved into Ekagra's `src/features/materials/` (`materials.ts`, `kinds.ts`, `KindIcons.tsx`); Studio re-exports them, so both libraries show the same.
+  - React's lint rule `react/static-components` warns about `const Icon = kindIcon(kind)` in a component: it can't tell the function returns the same icon each time. So icons are drawn by `MaterialIcon` and `NoteIcon`, which look them up in a fixed map.

@@ -5,10 +5,7 @@ import { watchUrl } from '@shared/youtube.ts'
 // only; oEmbed can't see private ones either, so a missing title is the first hint.
 // Tested in youtube.test.ts.
 
-export { watchUrl, youtubeId } from '@shared/youtube.ts'
-
-/** The privacy-enhanced player: no YouTube cookies until the student plays the video. */
-export const embedUrl = (id: string) => `https://www.youtube-nocookie.com/embed/${id}`
+export { embedUrl, watchUrl, youtubeId } from '@shared/youtube.ts'
 
 /** The video's title and channel from YouTube, or null when it's private, gone, or YouTube can't be reached. */
 export async function youtubeTitle(id: string, fetcher: typeof fetch = fetch): Promise<{ title: string; channel: string | null } | null> {

@@ -1,5 +1,5 @@
 import { MockLanguageModelV4 } from 'ai/test'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { memoryUsage, modelAnswer } from '../_shared/testing.ts'
 import { handleStudioNotes, type NoteRow, type NotesStore } from './handler.ts'
 
@@ -41,8 +41,17 @@ const fakeGemini = (...answers: unknown[]) =>
     supportedUrls: { 'video/*': [/^https:\/\/www\.youtube\.com\/watch\?v=/] },
   })
 
-async function call(body: unknown, { env = ENV as Record<string, string>, answers = [ANSWER] as unknown[], usage = memoryUsage(), fetcher }: { env?: Record<string, string>; answers?: unknown[]; usage?: ReturnType<typeof memoryUsage>; fetcher?: typeof fetch } = {}) {
-  const model = fakeGemini(...answers)
+async function call(
+  body: unknown,
+  {
+    env = ENV as Record<string, string>,
+    answers = [ANSWER] as unknown[],
+    usage = memoryUsage(),
+    fetcher,
+    model: given,
+  }: { env?: Record<string, string>; answers?: unknown[]; usage?: ReturnType<typeof memoryUsage>; fetcher?: typeof fetch; model?: MockLanguageModelV4 } = {},
+) {
+  const model = given ?? fakeGemini(...answers)
   const notes = memoryStore()
   const tasks: Promise<void>[] = []
   const handler = handleStudioNotes(() => ({ env, authenticate: async () => 'student-1', usage, store: notes.store, background: (task) => tasks.push(task), model: () => model, fetcher }))
@@ -102,6 +111,27 @@ describe('studio-notes', () => {
     const down = await call(request({ kind: 'youtube', url: VIDEO }), { env, fetcher: youtube({ error: 'quota' }, 403) })
     expect(down.response.status).toBe(200)
     expect(down.notes.finished).toHaveLength(1)
+  })
+
+  it('watches a long lecture at 1 frame every 5 seconds and a short one at every second (the sound always in full)', async () => {
+    const env = { ...ENV, YOUTUBE_API_KEY: 'yt-key' }
+    const long = await call(request({ kind: 'youtube', url: VIDEO }), { env, fetcher: youtube(video('public', 'PT1H59M15S')) })
+    expect(JSON.stringify(long.model.doGenerateCalls[0]?.prompt)).toContain('"videoMetadata":{"fps":0.2}')
+    const short = await call(request({ kind: 'youtube', url: VIDEO }), { env, fetcher: youtube(video('public', 'PT12M')) })
+    expect(JSON.stringify(short.model.doGenerateCalls[0]?.prompt)).toContain('"videoMetadata":{"fps":1}')
+  })
+
+  it('says so when Gemini needed too long to watch the video', async () => {
+    const quiet = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const slow = new MockLanguageModelV4({
+      doGenerate: async () => {
+        throw new DOMException('The operation was aborted due to timeout', 'TimeoutError')
+      },
+      supportedUrls: { 'video/*': [/^https:\/\/www\.youtube\.com\/watch\?v=/] },
+    })
+    const { body, notes } = await call(request({ kind: 'youtube', url: VIDEO }), { model: slow })
+    expect(notes.failed).toEqual([{ noteId: body.noteId, error: expect.stringContaining('more than 2 minutes to watch this video') }])
+    quiet.mockRestore()
   })
 
   it('marks the note as failed, with the reason, when the AI gives no usable answer', async () => {
