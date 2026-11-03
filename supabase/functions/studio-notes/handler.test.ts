@@ -70,7 +70,7 @@ describe('studio-notes', () => {
     expect(body).toEqual({ noteId: '33333333-3333-4333-8333-333333333331' })
     expect(notes.created).toEqual([{ userId: 'student-1', subjectId: SUBJECT, materialId: MATERIAL, kind: 'notes', title: 'Lecture 4', source: 'material' }])
     expect(notes.finished).toEqual([
-      { noteId: body.noteId, title: 'SQL joins', content: '## Inner join\n- Matching rows only', model: 'gemini-3.8-flash', promptVersion: 'studio-notes-v1' },
+      { noteId: body.noteId, title: 'SQL joins', content: '## Inner join\n- Matching rows only', model: 'gemini-3.8-flash', promptVersion: 'studio-notes-v2' },
     ])
     expect(usage.logged).toEqual([expect.objectContaining({ feature: 'studio-notes', model: 'gemini-3.8-flash' })])
     const prompt = JSON.stringify(model.doGenerateCalls[0]?.prompt)
@@ -103,9 +103,9 @@ describe('studio-notes', () => {
     const gone = await call(request({ kind: 'youtube', url: VIDEO }), { env, fetcher: youtube({ items: [] }) })
     expect(gone.body).toMatchObject({ code: 'video_not_found' })
 
-    const ok = await call(request({ kind: 'youtube', url: VIDEO }), { env, fetcher: youtube(video('public', 'PT45M')) })
+    const ok = await call(request({ kind: 'youtube', url: VIDEO }), { env, fetcher: youtube(video('public', 'PT25M')) })
     expect(ok.response.status).toBe(200)
-    expect(ok.notes.described).toEqual([{ materialId: MATERIAL, title: 'SQL joins in one shot', durationSec: 2700 }])
+    expect(ok.notes.described).toEqual([{ materialId: MATERIAL, title: 'SQL joins in one shot', durationSec: 1500 }])
 
     // When YouTube's API itself fails, the notes are still made (Gemini says if it can't watch the video).
     const down = await call(request({ kind: 'youtube', url: VIDEO }), { env, fetcher: youtube({ error: 'quota' }, 403) })
@@ -113,12 +113,33 @@ describe('studio-notes', () => {
     expect(down.notes.finished).toHaveLength(1)
   })
 
-  it('watches a long lecture at 1 frame every 5 seconds and a short one at every second (the sound always in full)', async () => {
+  it('watches a lecture over 20 minutes at 1 frame every 5 seconds and a short one at every second (the sound always in full)', async () => {
     const env = { ...ENV, YOUTUBE_API_KEY: 'yt-key' }
-    const long = await call(request({ kind: 'youtube', url: VIDEO }), { env, fetcher: youtube(video('public', 'PT1H59M15S')) })
-    expect(JSON.stringify(long.model.doGenerateCalls[0]?.prompt)).toContain('"videoMetadata":{"fps":0.2}')
+    const longer = await call(request({ kind: 'youtube', url: VIDEO }), { env, fetcher: youtube(video('public', 'PT25M')) })
+    expect(JSON.stringify(longer.model.doGenerateCalls[0]?.prompt)).toContain('"videoMetadata":{"fps":0.2}')
     const short = await call(request({ kind: 'youtube', url: VIDEO }), { env, fetcher: youtube(video('public', 'PT12M')) })
     expect(JSON.stringify(short.model.doGenerateCalls[0]?.prompt)).toContain('"videoMetadata":{"fps":1}')
+  })
+
+  it('watches a lecture over 30 minutes in parts at the same time, then makes one note from them', async () => {
+    const env = { ...ENV, YOUTUBE_API_KEY: 'yt-key' }
+    const pieces = [1, 2, 3, 4].map((n) => ({ title: `Part ${n}`, markdown: `## Topic ${n}\n- Point ${n}` }))
+    const whole = { title: 'Electromagnetic waves', markdown: '## Topic 1\n- Point 1\n## Topic 4\n- Point 4' }
+    const { notes, model, usage } = await call(request({ kind: 'youtube', url: VIDEO }), { env, fetcher: youtube(video('public', 'PT1H59M15S')), answers: [...pieces, whole] })
+
+    expect(model.doGenerateCalls).toHaveLength(5)
+    const asked = model.doGenerateCalls.slice(0, 4).map((part) => JSON.stringify(part.prompt))
+    // 7,155 seconds in 4 equal parts of 1,789 seconds (the last one shorter), each a clip of the video.
+    for (const clip of ['"startOffset":"0s","endOffset":"1789s"', '"startOffset":"1789s","endOffset":"3578s"', '"startOffset":"3578s","endOffset":"5367s"', '"startOffset":"5367s","endOffset":"7155s"']) {
+      expect(asked.some((prompt) => prompt.includes(clip))).toBe(true)
+    }
+    expect(asked.some((prompt) => prompt.includes('This is part 1 of 4 of the video, from 0:00 to 29:49'))).toBe(true)
+    const combine = JSON.stringify(model.doGenerateCalls[4]?.prompt)
+    expect(combine).toContain('Part 4, 1:29:27 to 1:59:15')
+    for (const piece of pieces) expect(combine).toContain(JSON.stringify(piece.markdown).slice(1, -1))
+    expect(JSON.stringify(model.doGenerateCalls[4]?.prompt)).not.toContain('"type":"file"')
+    expect(notes.finished).toEqual([expect.objectContaining({ title: 'Electromagnetic waves', content: whole.markdown, model: 'gemini-3.5-flash-lite' })])
+    expect(usage.logged).toHaveLength(5)
   })
 
   it('says so when Gemini needed too long to watch the video', async () => {

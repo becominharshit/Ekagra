@@ -2,7 +2,7 @@ import { createGoogleGenerativeAI } from '@ai-sdk/google'
 import { describe, expect, it } from 'vitest'
 import { createAiGateway } from './ai.ts'
 import { readStudioAiConfig } from './aiCore.ts'
-import { studioNotesInstructions, studioNotesPrompt } from './prompts/studioNotes.ts'
+import { studioNotesInstructions, studioNotesPrompt, type NumberedPart } from './prompts/studioNotes.ts'
 import { STUDIO_QUIZ_INSTRUCTIONS, studioQuizPrompt } from './prompts/studioQuiz.ts'
 import { StudioNoteAnswerSchema, StudioQuizAnswerSchema, type StudioNotesRequest } from './schemas.ts'
 import { memoryUsage } from './testing.ts'
@@ -36,7 +36,7 @@ const BASE: StudioNotesRequest = {
   source: { kind: 'youtube', url: 'https://youtu.be/9hE5-98ZeCg' },
 }
 
-async function generate(request: StudioNotesRequest, videoUrl: string | null, tier: 'smart' | 'fast', fps?: number) {
+async function generate(request: StudioNotesRequest, videoUrl: string | null, tier: 'smart' | 'fast', fps?: number, part?: NumberedPart) {
   const gemini = fakeGemini({ title: 'SQL joins', markdown: '## Joins\n- Inner' })
   const usage = memoryUsage()
   const ai = createAiGateway({ config: readStudioAiConfig({ GEMINI_API_KEY: 'gemini-test-key' }), usage, model: gemini.model })
@@ -46,7 +46,7 @@ async function generate(request: StudioNotesRequest, videoUrl: string | null, ti
     tier,
     schema: StudioNoteAnswerSchema,
     instructions: studioNotesInstructions(request.kind),
-    prompt: studioNotesPrompt(request, videoUrl, fps),
+    prompt: studioNotesPrompt(request, videoUrl, fps, part),
   })
   return { result, sent: gemini.sent, usage }
 }
@@ -77,6 +77,15 @@ describe('Ekagra Studio on Gemini (the real provider, no network)', () => {
       fileData: { mimeType: 'video/mp4', fileUri: 'https://www.youtube.com/watch?v=9hE5-98ZeCg' },
       videoMetadata: { fps: 0.2 },
     })
+  })
+
+  it('sends one part of a long video as a clip, and says which part it is', async () => {
+    const { sent } = await generate(BASE, 'https://www.youtube.com/watch?v=9hE5-98ZeCg', 'fast', 0.2, { start: 1789, end: 3578, index: 1, count: 4 })
+    expect(parts(sent[0]?.body)).toContainEqual({
+      fileData: { mimeType: 'video/mp4', fileUri: 'https://www.youtube.com/watch?v=9hE5-98ZeCg' },
+      videoMetadata: { fps: 0.2, startOffset: '1789s', endOffset: '3578s' },
+    })
+    expect(JSON.stringify(parts(sent[0]?.body))).toContain('This is part 2 of 4 of the video, from 29:49 to 59:38')
   })
 
   it('sends a photo inline, and text as text, to the smart model', async () => {

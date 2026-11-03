@@ -19,7 +19,7 @@ const OPTIONS: { kind: StudioNoteKind; label: string; about: string; icon: Lucid
 ]
 
 const READS: Record<string, string> = {
-  youtube: 'Gemini watches the video: public videos of up to 3 hours. A long lecture takes a minute or two.',
+  youtube: 'Gemini watches the video: public videos of up to 3 hours. A long lecture takes about a minute.',
   pdf: "Gemini reads the PDF's text, about 25 to 40 pages at a time.",
   image: 'Gemini reads the photo.',
   text: 'Gemini reads your text.',

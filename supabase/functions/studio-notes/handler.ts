@@ -2,10 +2,10 @@ import type { LanguageModel } from 'ai'
 import { createAiGateway, type UsageStore } from '../_shared/ai.ts'
 import { AiError, readStudioAiConfig } from '../_shared/aiCore.ts'
 import { geminiModels } from '../_shared/gemini.ts'
-import { STUDIO_NOTES_PROMPT_VERSION, studioNotesInstructions, studioNotesPrompt } from '../_shared/prompts/studioNotes.ts'
+import { STUDIO_NOTES_PROMPT_VERSION, studioCombineInstructions, studioCombinePrompt, studioNotesInstructions, studioNotesPrompt } from '../_shared/prompts/studioNotes.ts'
 import { handleJson, readBody, requireUser } from '../_shared/respond.ts'
 import { StudioNoteAnswerSchema, StudioNotesRequestSchema, type StudioNoteKind, type StudioNotesResponse } from '../_shared/schemas.ts'
-import { fetchVideoDetails, lectureFps, watchUrl, youtubeId, type VideoDetails } from '../_shared/youtube.ts'
+import { fetchVideoDetails, lectureFps, videoParts, watchUrl, youtubeId, type VideoDetails, type VideoPart } from '../_shared/youtube.ts'
 
 // studio-notes (Ekagra Studio): notes, a mind map or a revision sheet from one material, made by
 // Gemini. The note is saved at once as 'processing' and its id returned; the AI then works in the
@@ -92,6 +92,7 @@ export function handleStudioNotes(makeDeps: () => StudioNotesDeps): (request: Re
 
     let videoUrl: string | null = null
     let fps: number | undefined
+    let parts: VideoPart[] = []
     if (input.source.kind === 'youtube') {
       const id = youtubeId(input.source.url)
       if (!id) throw new AiError(400, 'bad_request', "That isn't a link to a YouTube video.")
@@ -99,6 +100,8 @@ export function handleStudioNotes(makeDeps: () => StudioNotesDeps): (request: Re
       const details = await checkVideo(id, deps)
       if (details) await deps.store.describeVideo(input.materialId, userId, details).catch((error: unknown) => console.error('Could not describe the video:', error))
       fps = lectureFps(details?.durationSec ?? null)
+      // Only a video whose length is known (YOUTUBE_API_KEY) can be split; a live stream reports 0.
+      parts = videoParts(details?.durationSec || null)
     }
 
     const noteId = await deps.store.create({
@@ -110,18 +113,36 @@ export function handleStudioNotes(makeDeps: () => StudioNotesDeps): (request: Re
       source: videoUrl ? 'youtube' : 'material',
     })
 
+    const make = (prompt: ReturnType<typeof studioNotesPrompt>) =>
+      ai.generate({
+        userId,
+        feature: 'studio-notes',
+        // A video is long (about 46 tokens a second), so the cheaper model reads it.
+        tier: videoUrl ? 'fast' : 'smart',
+        schema: StudioNoteAnswerSchema,
+        instructions: studioNotesInstructions(input.kind),
+        prompt,
+      })
+
+    /** A long video: its parts at the same time, then one note from theirs (text only, quick). */
+    const inParts = async (url: string) => {
+      const done = await Promise.all(
+        parts.map(async (part, index) => ({ part, made: await make(studioNotesPrompt(input, url, fps, { ...part, index, count: parts.length })) })),
+      )
+      return ai.generate({
+        userId,
+        feature: 'studio-notes',
+        tier: 'fast',
+        schema: StudioNoteAnswerSchema,
+        instructions: studioCombineInstructions(input.kind),
+        prompt: studioCombinePrompt(input.title, done.map(({ part, made }) => ({ ...part, markdown: made.data.markdown }))),
+      })
+    }
+
     deps.background(
       (async () => {
         try {
-          const { data, model } = await ai.generate({
-            userId,
-            feature: 'studio-notes',
-            // A video is long (about 100 tokens a second), so the cheaper model reads it.
-            tier: videoUrl ? 'fast' : 'smart',
-            schema: StudioNoteAnswerSchema,
-            instructions: studioNotesInstructions(input.kind),
-            prompt: studioNotesPrompt(input, videoUrl, fps),
-          })
+          const { data, model } = videoUrl && parts.length > 1 ? await inParts(videoUrl) : await make(studioNotesPrompt(input, videoUrl, fps))
           await deps.store.finish(noteId, userId, { title: data.title.trim() || input.title, content: data.markdown.trim(), model, promptVersion: STUDIO_NOTES_PROMPT_VERSION })
         } catch (error) {
           await deps.store.fail(noteId, userId, failure(error, videoUrl !== null)).catch((stuck: unknown) => console.error('Could not mark the note as failed:', stuck))

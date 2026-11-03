@@ -41,6 +41,36 @@ export function lectureFps(durationSec: number | null): number {
   return durationSec !== null && durationSec <= FULL_FRAME_RATE_SECONDS ? 1 : 0.2
 }
 
+/**
+ * A lecture longer than this is watched in parts of at most this length, all at the same time.
+ * Gemini needed over 2 minutes for a whole 2-hour lecture, but 15 seconds for its four 30-minute
+ * parts together (measured 2026-11-03).
+ */
+export const VIDEO_PART_SECONDS = 30 * 60
+
+/** Seconds from the start of the video. */
+export interface VideoPart {
+  start: number
+  end: number
+}
+
+/** The parts a lecture is watched in: none (the whole video at once) up to 30 minutes or when its length is unknown, else equal parts. */
+export function videoParts(durationSec: number | null): VideoPart[] {
+  if (durationSec === null || durationSec <= VIDEO_PART_SECONDS) return []
+  const count = Math.ceil(durationSec / VIDEO_PART_SECONDS)
+  const length = Math.ceil(durationSec / count)
+  return Array.from({ length: count }, (_, index) => ({ start: index * length, end: Math.min(durationSec, (index + 1) * length) }))
+}
+
+/** 95 → "1:35", 3723 → "1:02:03". */
+export function clockTime(seconds: number): string {
+  const whole = Math.max(0, Math.round(seconds))
+  const hours = Math.floor(whole / 3600)
+  const minutes = Math.floor((whole % 3600) / 60)
+  const rest = String(whole % 60).padStart(2, '0')
+  return hours > 0 ? `${hours}:${String(minutes).padStart(2, '0')}:${rest}` : `${minutes}:${rest}`
+}
+
 /** Seconds in an ISO 8601 duration as YouTube gives it ("PT1H2M3S" = 3723), or null. */
 export function isoDurationSeconds(iso: string): number | null {
   const match = /^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/.exec(iso)

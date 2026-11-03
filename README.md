@@ -269,7 +269,13 @@ Add a dated line whenever an important decision is made or changed.
 
   **Lectures are lighter:**
   - Videos over 20 minutes (or of unknown length) are sent with `videoMetadata.fps: 0.2`, one frame every 5 seconds; the sound stays in full.
-  - Google's countTokens on the same 2-hour lecture: 330,563 tokens instead of 736,967, so about half the cost and time. That makes it more likely to finish within the 2 minutes and to fit a free tier's per-minute limit.
+  - Google's countTokens on the same 2-hour lecture: 330,563 tokens instead of 736,967, so about half the cost.
+
+  **Long lectures in parts** (tested live with a free-tier key):
+  - Even at 0.2 fps, the whole 2-hour lecture took Gemini over 2 minutes and was stopped. Supabase's free plan also stops a function after about 150 seconds.
+  - Its first 30 minutes took 10 seconds, and all four 30-minute parts at the same time took 15 seconds. So the time goes on handling the whole long video at once, not on the amount of content.
+  - So a video over 30 minutes whose length is known (`YOUTUBE_API_KEY`) is split into equal parts (`videoParts`). Each part is a clip (`startOffset`/`endOffset`) told which part it is, and one text-only request combines them (prompt `studio-notes-v2`). If any part fails, the note fails with that reason, and **Try again** redoes it.
+  - End to end with the real handler and Gemini: 40 minutes in 2 parts gave notes with a summary and times from the start, in 17 seconds.
 
   **Ekagra's Library lists everything** (the product spec, §8.4, always had YouTube links in it):
   - PDFs, YouTube videos, photos, text and Studio's finished notes in one list, the newest first, with subject (now also "No subject") and type filters (`libraryItems.ts`, pure and tested).

@@ -1,9 +1,29 @@
 import { describe, expect, it } from 'vitest'
-import { embedUrl, fetchVideoDetails, isoDurationSeconds, lectureFps } from './youtube.ts'
+import { clockTime, embedUrl, fetchVideoDetails, isoDurationSeconds, lectureFps, videoParts } from './youtube.ts'
 
 describe('how Gemini watches a lecture', () => {
   it('sees every second of a short video, and 1 frame every 5 seconds of a long one or one of unknown length', () => {
     expect([lectureFps(60), lectureFps(20 * 60), lectureFps(20 * 60 + 1), lectureFps(7155), lectureFps(null)]).toEqual([1, 1, 0.2, 0.2, 0.2])
+  })
+
+  it('splits a lecture over 30 minutes into equal parts of at most 30 minutes, and not one of unknown length', () => {
+    expect(videoParts(null)).toEqual([])
+    expect(videoParts(30 * 60)).toEqual([])
+    expect(videoParts(45 * 60)).toEqual([
+      { start: 0, end: 1350 },
+      { start: 1350, end: 2700 },
+    ])
+    expect(videoParts(7155)).toEqual([
+      { start: 0, end: 1789 },
+      { start: 1789, end: 3578 },
+      { start: 3578, end: 5367 },
+      { start: 5367, end: 7155 },
+    ])
+    expect(videoParts(3 * 3600)).toHaveLength(6)
+  })
+
+  it('writes times like a video player', () => {
+    expect([clockTime(0), clockTime(95), clockTime(1789), clockTime(3723), clockTime(7155)]).toEqual(['0:00', '1:35', '29:49', '1:02:03', '1:59:15'])
   })
 
   it('plays it in the privacy-enhanced player', () => {
