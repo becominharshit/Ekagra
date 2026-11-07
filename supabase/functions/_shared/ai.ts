@@ -10,6 +10,9 @@ import { AiError, checkQuota, costUsd, dayBefore, type AiConfig, type Tier } fro
 //      `output_config.format`; the provider leaves out the limits Anthropic can't take, such as
 //      maximum lengths, and Zod still checks them). If it doesn't match, the model gets one more try.
 //   4. Tokens and cost are written to ai_usage (one row per request).
+// Gemini (Ekagra Studio) also gets help with Google's refusals, which the AI SDK's quick retries
+// don't solve: a busy Smart model hands over to the Fast one, and a per-minute limit is waited out
+// as long as Google asks (see recoverGemini).
 
 export interface UsageEntry {
   userId: string
@@ -38,6 +41,11 @@ export interface AiTask<T> {
   instructions: string
   /** Text, or messages that can include files (e.g. a photo of a syllabus). */
   prompt: string | ModelMessage[]
+  /**
+   * When to give up, for work that has to end in time (studio-notes' background work: Supabase
+   * stops a function after 150 seconds). A call never takes longer than TIMEOUT_MS anyway.
+   */
+  deadline?: Date
 }
 
 export interface AiResult<T> {
@@ -61,11 +69,23 @@ export interface AiGatewayOptions {
    */
   model?: (modelId: string) => LanguageModel
   now?: () => Date
+  /** Waits before Gemini is asked again; tests pass one that doesn't really wait. */
+  sleep?: (ms: number) => Promise<void>
 }
 
 const RETRY_INSTRUCTION =
   'Your previous answer did not match the required JSON format. Answer again with JSON that matches the schema exactly.'
 const TIMEOUT_MS = 120_000
+/** Gemini: a Smart model that hasn't answered by then (it can hang when it's busy) hands over to the Fast one. */
+const SMART_SHARE_MS = 60_000
+/** Gemini: waiting and asking again is only worth it with at least this long left for the answer. */
+const MIN_ANSWER_MS = 15_000
+/** Gemini: the pause before a busy model is asked once more. */
+const BUSY_PAUSE_MS = 2_000
+/** Gemini: the longest wait for a per-minute limit (Google says how long; a minute always passes). */
+const MAX_LIMIT_WAIT_MS = 61_000
+
+const realSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 /** Room for the longest answer (a whole syllabus) and the thinking before it; only the tokens used are paid for. */
 export const MAX_OUTPUT_TOKENS = 32_000
 
@@ -78,18 +98,75 @@ function noModels(): LanguageModel {
   throw new AiError(500, 'not_configured', 'This AI function has no models set up (pass them to createAiGateway).')
 }
 
-/** The request was stopped because it took longer than TIMEOUT_MS (AbortSignal.timeout). */
+/** The request was stopped because it took too long (AbortSignal.timeout). */
 function isTimeout(error: unknown): boolean {
   return typeof error === 'object' && error !== null && 'name' in error && (error.name === 'TimeoutError' || error.name === 'AbortError')
 }
 
+/** What Google said when it refused a call (or that it didn't answer in time). */
+interface GeminiRefusal {
+  status: number | undefined
+  timedOut: boolean
+  /** 500, 503 ("This model is currently experiencing high demand") or 504: busy for now. */
+  busy: boolean
+  /** 429 over a limit per minute (tokens or requests): over when Google's minute has passed. */
+  perMinute: boolean
+  /** 429 over a limit per day: over at midnight Pacific time. */
+  perDay: boolean
+  /** How long Google asks to wait (its RetryInfo, "retryDelay": "13s"), in milliseconds. */
+  retryMs: number | null
+}
+
+function geminiRefusal(error: unknown): GeminiRefusal {
+  const last = RetryError.isInstance(error) ? error.lastError : error
+  const status = APICallError.isInstance(last) ? last.statusCode : undefined
+  const body = APICallError.isInstance(last) ? (last.responseBody ?? last.message) : ''
+  const delay = /"retryDelay"\s*:\s*"([\d.]+)s"/.exec(body)?.[1] ?? /retry in ([\d.]+)\s*s/i.exec(body)?.[1]
+  const seconds = delay === undefined ? Number.NaN : Number.parseFloat(delay)
+  const retryMs = Number.isFinite(seconds) ? Math.ceil(seconds * 1000) : null
+  const perDay = status === 429 && /PerDay/i.test(body)
+  return {
+    status,
+    timedOut: isTimeout(last),
+    busy: status === 500 || status === 503 || status === 504,
+    perMinute: status === 429 && !perDay && (/PerMinute/i.test(body) || retryMs !== null),
+    perDay,
+    retryMs,
+  }
+}
+
+type GeminiRecovery = { action: 'hand_over' } | { action: 'wait'; ms: number; reason: 'limit' | 'busy' }
+
+/**
+ * What to do when Gemini refused or didn't answer, or null to give up:
+ * - A Smart task hands over to the Fast model once: each model has its own limits, and it's rarely
+ *   busy at the same time.
+ * - Over a per-minute limit: wait as long as Google asks, once. Repeating at once, as the AI SDK
+ *   does, only gets refused again within the same minute.
+ * - Busy: ask once more after a short pause.
+ * Each only when enough time is left for an answer after it.
+ */
+function recoverGemini(refusal: GeminiRefusal, tried: { canHandOver: boolean; waited: boolean; askedAgain: boolean }, msLeft: number): GeminiRecovery | null {
+  if (tried.canHandOver && (refusal.busy || refusal.status === 429 || refusal.timedOut) && msLeft >= MIN_ANSWER_MS) return { action: 'hand_over' }
+  if (refusal.perMinute && refusal.retryMs !== null && !tried.waited) {
+    const ms = Math.min(refusal.retryMs + 1_000, MAX_LIMIT_WAIT_MS)
+    if (msLeft - ms >= MIN_ANSWER_MS) return { action: 'wait', ms, reason: 'limit' }
+  }
+  if (refusal.busy && !tried.askedAgain && msLeft - BUSY_PAUSE_MS >= MIN_ANSWER_MS) return { action: 'wait', ms: BUSY_PAUSE_MS, reason: 'busy' }
+  return null
+}
+
 /** A failed call as an error the student can act on. Only the status and the provider's message are logged, never the prompt. */
 function providerError(error: unknown, modelId: string, provider: AiConfig['provider']): AiError {
-  // The AI SDK tries busy and rate-limited calls again by itself, then wraps the last error.
+  // The AI SDK tries Claude's busy and rate-limited calls again by itself, then wraps the last error.
   const last = RetryError.isInstance(error) ? error.lastError : error
   if (isTimeout(last)) {
-    console.error(`AI request to ${modelId} took more than ${TIMEOUT_MS / 1000} seconds and was stopped`)
-    return new AiError(504, 'provider_timeout', `The AI took more than ${TIMEOUT_MS / 60_000} minutes, so it was stopped. Please try again.`, { cause: error })
+    console.error(`AI request to ${modelId} took too long and was stopped`)
+    const message =
+      provider === 'google'
+        ? 'Gemini took too long to answer, so it was stopped. Please try again in a minute.'
+        : `The AI took more than ${TIMEOUT_MS / 60_000} minutes, so it was stopped. Please try again.`
+    return new AiError(504, 'provider_timeout', message, { cause: error })
   }
   const status = APICallError.isInstance(last) ? last.statusCode : undefined
   const detail = APICallError.isInstance(last) ? (last.responseBody ?? last.message) : last instanceof Error ? last.message : String(last)
@@ -112,17 +189,27 @@ function providerError(error: unknown, modelId: string, provider: AiConfig['prov
       return new AiError(500, 'not_configured', `Gemini has no model called "${modelId}". Check STUDIO_AI_MODEL_SMART and STUDIO_AI_MODEL_FAST (docs/4-setup-guide.md).`, { cause: error })
     }
     if (status === 429) {
-      // Over the tokens-a-minute limit: one big request (a long video) can be over it on its own, so waiting doesn't help.
-      if (/input_token/i.test(detail)) {
-        const freeTier = /free_tier/i.test(detail)
+      const freeTier = /free_?tier/i.test(detail)
+      const plan = freeTier ? "Gemini's free tier" : 'your Gemini plan'
+      if (/PerDay/i.test(detail)) {
         return new AiError(
           503,
           'provider_limit',
-          `This is more than ${freeTier ? "Gemini's free tier" : 'your Gemini plan'} reads in one minute. Try a shorter video or fewer pages${freeTier ? ', or use a Gemini key with billing' : ''}.`,
+          `${freeTier ? "Gemini's free tier" : 'Your Gemini plan'} has reached today's limit. It starts again at midnight US Pacific time, in the early afternoon in India.`,
           { cause: error },
         )
       }
-      return new AiError(503, 'provider_busy', 'Gemini is busy or has reached its limit for now. Please try again later.', { cause: error })
+      // Over the tokens-a-minute limit even after waiting for the next minute (recoverGemini).
+      if (/input_token/i.test(detail)) {
+        return new AiError(503, 'provider_limit', `This is more than ${plan} reads in one minute. Please try again in a minute${freeTier ? ', or use a Gemini key with billing' : ''}.`, {
+          cause: error,
+        })
+      }
+      return new AiError(503, 'provider_busy', `This is more requests than ${plan} takes in one minute. Please try again in a minute.`, { cause: error })
+    }
+    // 503: "This model is currently experiencing high demand", even after asking again and on the other model.
+    if (status === 500 || status === 503 || status === 504) {
+      return new AiError(503, 'provider_busy', 'Gemini is very busy right now (Google reports high demand). Please try again in a few minutes.', { cause: error })
     }
     // Something Gemini can't use, e.g. a private or unlisted YouTube video.
     if (status === 400 || status === 403) {
@@ -149,7 +236,9 @@ function providerError(error: unknown, modelId: string, provider: AiConfig['prov
 export function createAiGateway(options: AiGatewayOptions): AiGateway {
   const { config, usage } = options
   const now = options.now ?? (() => new Date())
+  const sleep = options.sleep ?? realSleep
   const modelFor = options.model ?? (config.provider === 'anthropic' ? claudeModels(config.apiKey) : noModels)
+  const gemini = config.provider === 'google'
 
   async function ensureQuota(userId: string): Promise<void> {
     const since = dayBefore(now())
@@ -169,14 +258,17 @@ export function createAiGateway(options: AiGatewayOptions): AiGateway {
     async generate<T>(task: AiTask<T>): Promise<AiResult<T>> {
       await ensureQuota(task.userId)
 
-      const modelId = config.models[task.tier]
+      const end = Math.min(now().getTime() + TIMEOUT_MS, task.deadline?.getTime() ?? Number.POSITIVE_INFINITY)
+      // Gemini: the Fast model can take over a Smart task (once) when the Smart one is busy.
+      const fastCanTakeOver = gemini && task.tier === 'smart' && config.models.fast !== config.models.smart
+      let tier = task.tier
       const spent = { input: 0, output: 0, costUsd: 0 }
-      // Each try is priced on its own (a long prompt can cost more per token).
+      // Each try is priced on its own (a long prompt can cost more per token, and the Fast model less).
       const count = (used: LanguageModelUsage | undefined) => {
         const tokens = { input: used?.inputTokens ?? 0, output: used?.outputTokens ?? 0 }
         spent.input += tokens.input
         spent.output += tokens.output
-        spent.costUsd += costUsd(tokens, config.prices[task.tier])
+        spent.costUsd += costUsd(tokens, config.prices[tier])
       }
       // Logging must never break a request: the student already waited for the answer.
       const log = async () => {
@@ -184,7 +276,7 @@ export function createAiGateway(options: AiGatewayOptions): AiGateway {
         const entry: UsageEntry = {
           userId: task.userId,
           feature: task.feature,
-          model: modelId,
+          model: config.models[tier],
           inputTokens: spent.input,
           outputTokens: spent.output,
           costUsd: Math.round(spent.costUsd * 1_000_000) / 1_000_000,
@@ -192,16 +284,24 @@ export function createAiGateway(options: AiGatewayOptions): AiGateway {
         await usage.log(entry).catch((error: unknown) => console.error('Could not log AI usage:', error))
       }
 
-      for (let attempt = 1; attempt <= 2; attempt++) {
+      let wrongShapes = 0
+      const tried = { waited: false, askedAgain: false }
+      for (;;) {
+        const modelId = config.models[tier]
+        const handOverPossible = fastCanTakeOver && tier === 'smart'
+        const left = end - now().getTime()
         try {
+          if (left <= 0) throw new DOMException('No time left for this request', 'TimeoutError')
           const result = await generateText({
             model: modelFor(modelId),
-            instructions: attempt === 1 ? task.instructions : `${task.instructions}\n\n${RETRY_INSTRUCTION}`,
+            instructions: wrongShapes === 0 ? task.instructions : `${task.instructions}\n\n${RETRY_INSTRUCTION}`,
             prompt: task.prompt,
             output: Output.object({ schema: task.schema }),
-            reasoning: config.reasoning[task.tier],
+            reasoning: config.reasoning[tier],
             maxOutputTokens: MAX_OUTPUT_TOKENS,
-            abortSignal: AbortSignal.timeout(TIMEOUT_MS),
+            // Gemini's refusals are handled below (Google says how long to wait); Claude's by the AI SDK.
+            ...(gemini ? { maxRetries: 0 } : {}),
+            abortSignal: AbortSignal.timeout(handOverPossible ? Math.min(left, SMART_SHARE_MS) : left),
           })
           count(result.usage)
           await log()
@@ -209,21 +309,36 @@ export function createAiGateway(options: AiGatewayOptions): AiGateway {
         } catch (error) {
           if (NoObjectGeneratedError.isInstance(error)) {
             count(error.usage)
-            continue
+            wrongShapes += 1
+            if (wrongShapes < 2) continue
+            await log()
+            throw new AiError(422, 'invalid_answer', "The AI's answer didn't have the right shape, even after a second try. Please try again.")
+          }
+          // Our own errors (e.g. no models set up) pass through as they are.
+          if (error instanceof AiError) {
+            await log()
+            throw error
+          }
+          if (gemini) {
+            const refusal = geminiRefusal(error)
+            const next = recoverGemini(refusal, { canHandOver: handOverPossible, ...tried }, end - now().getTime())
+            if (next) {
+              const why = refusal.timedOut ? "didn't answer in time" : `refused (${refusal.status ?? 'no status'}${refusal.perMinute ? ', per-minute limit' : ''})`
+              console.warn(`Gemini ${modelId} ${why}: ${next.action === 'hand_over' ? `asking ${config.models.fast} instead` : `asking again in ${Math.round(next.ms / 1000)} s`}`)
+              if (next.action === 'hand_over') {
+                tier = 'fast'
+              } else {
+                if (next.reason === 'limit') tried.waited = true
+                else tried.askedAgain = true
+                await sleep(next.ms)
+              }
+              continue
+            }
           }
           await log()
-          // Our own errors (e.g. no models set up) pass through as they are.
-          if (error instanceof AiError) throw error
           throw providerError(error, modelId, config.provider)
         }
       }
-
-      await log()
-      throw new AiError(
-        422,
-        'invalid_answer',
-        "The AI's answer didn't have the right shape, even after a second try. Please try again.",
-      )
     },
   }
 }

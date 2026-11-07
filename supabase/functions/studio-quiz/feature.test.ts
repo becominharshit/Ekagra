@@ -28,14 +28,15 @@ describe('studio-quiz', () => {
     })
     expect(response.status).toBe(200)
     const body = await response.json()
-    expect(body).toMatchObject({ model: 'gemini-3.8-flash', promptVersion: 'studio-quiz-v1' })
+    // The Fast model: questions from a note need no deep thinking, and it answers in seconds.
+    expect(body).toMatchObject({ model: 'gemini-3.5-flash-lite', promptVersion: 'studio-quiz-v2' })
     expect(body.questions).toHaveLength(3)
     for (const asked of body.questions as { prompt: string; options: string[]; correctOption: number; explanation: string }[]) {
       expect(asked.options[asked.correctOption]).toBe('Only matching rows')
       expect([...asked.options].sort()).toEqual(['Every row of both tables', 'Every row of the left table', 'No rows', 'Only matching rows'])
     }
     expect(body.questions[0]).toMatchObject({ prompt: 'What does an inner join keep?', explanation: 'An inner join keeps rows that match in both tables.' })
-    expect(usage.logged).toEqual([expect.objectContaining({ feature: 'studio-quiz', model: 'gemini-3.8-flash' })])
+    expect(usage.logged).toEqual([expect.objectContaining({ feature: 'studio-quiz', model: 'gemini-3.5-flash-lite' })])
     const prompt = JSON.stringify(model.doGenerateCalls[0]?.prompt)
     expect(prompt).toContain('Write 3 questions about these notes, called \\"SQL joins\\"')
     expect(prompt).toContain('Only matching rows')
@@ -51,6 +52,12 @@ describe('studio-quiz', () => {
   it('needs the note, its text and a sensible number of questions', async () => {
     expect((await call({ ...REQUEST, count: 50 }, { questions: [] })).response.status).toBe(400)
     expect((await call({ ...REQUEST, text: '  ' }, { questions: [] })).response.status).toBe(400)
+  })
+
+  it('reads the full notes of a long lecture (more than other texts)', async () => {
+    const long = `## Topic\n${'- A detailed point about the lecture.\n'.repeat(3_000)}`
+    expect(long.length).toBeGreaterThan(100_000)
+    expect((await call({ ...REQUEST, text: long }, { questions: [question('Q')] })).response.status).toBe(200)
   })
 })
 

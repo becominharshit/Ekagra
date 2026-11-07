@@ -368,6 +368,14 @@ export const StudioNoteAnswerSchema = z.object({
 })
 export type StudioNoteAnswer = z.infer<typeof StudioNoteAnswerSchema>
 
+/** The notes of one part of a long lecture video; studio-notes joins the parts in order into the full notes. */
+export const StudioNotePartAnswerSchema = z.object({
+  summary: z.string().min(1).max(2_000).describe('Two or three sentences: what this part teaches'),
+  markdown: z.string().min(1).max(200_000).describe("This part's detailed notes in Markdown, starting with its first ## heading"),
+  keyPoints: z.array(z.string().min(1).max(500)).max(12).describe('3 to 6 short things to remember from this part'),
+})
+export type StudioNotePartAnswer = z.infer<typeof StudioNotePartAnswerSchema>
+
 /** What studio-notes returns at once: the new note, which is made in the background (status processing → ready or failed). */
 export const StudioNotesResponseSchema = z.object({ noteId: z.uuid() })
 export type StudioNotesResponse = z.infer<typeof StudioNotesResponseSchema>
@@ -376,11 +384,14 @@ export type StudioNotesResponse = z.infer<typeof StudioNotesResponseSchema>
 // Ekagra Studio: a multiple-choice quiz from a note (studio-quiz, Gemini)
 // ---------------------------------------------------------------------------
 
+/** The most of a note a quiz reads: full notes of a long lecture are longer than other texts. */
+export const QUIZ_TEXT_LENGTH = 150_000
+
 export const StudioQuizRequestSchema = z.object({
   noteId: z.uuid(),
   title: z.string().trim().min(1).max(200),
   /** The note's Markdown. */
-  text: z.string().trim().min(1).max(MAX_TEXT_LENGTH),
+  text: z.string().trim().min(1).max(QUIZ_TEXT_LENGTH),
   count: z.number().int().min(3).max(15),
   program: z.string().max(120).nullable().optional(),
   year: z.number().int().min(1).max(8).nullable().optional(),

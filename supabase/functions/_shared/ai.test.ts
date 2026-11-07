@@ -159,10 +159,13 @@ describe('AI gateway', () => {
       quiet.mockRestore()
     })
 
-    it("when a request is more than Gemini's free tier reads in a minute, or the model doesn't exist", async () => {
+    it("when a request is more than Gemini's free tier reads in a minute, or today's limit is reached, or the model doesn't exist", async () => {
       const quiet = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+      vi.spyOn(console, 'warn').mockImplementation(() => undefined)
       const freeTier = apiError(429, '{"error":{"message":"Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_input_token_count, limit: 250000"}}')
       await expect(tryWith(freeTier, gemini)).rejects.toMatchObject({ code: 'provider_limit', message: expect.stringContaining("Gemini's free tier") })
+      const today = apiError(429, '{"error":{"details":[{"violations":[{"quotaId":"GenerateRequestsPerDayPerProjectPerModel-FreeTier"}]}]}}')
+      await expect(tryWith(today, gemini)).rejects.toMatchObject({ code: 'provider_limit', message: expect.stringContaining("today's limit") })
       await expect(tryWith(apiError(429, '{"error":{"message":"Resource has been exhausted."}}'), gemini)).rejects.toMatchObject({ code: 'provider_busy' })
       await expect(tryWith(apiError(404, '{"error":{"message":"models/x is not found"}}'), gemini)).rejects.toMatchObject({
         status: 500,
@@ -170,13 +173,141 @@ describe('AI gateway', () => {
         message: expect.stringContaining('gemini-3.8-flash'),
       })
       quiet.mockRestore()
+      vi.restoreAllMocks()
     })
 
     it('when the AI took longer than the time limit', async () => {
       const quiet = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+      vi.spyOn(console, 'warn').mockImplementation(() => undefined)
       const timeout = new DOMException('The operation was aborted due to timeout', 'TimeoutError')
-      await expect(tryWith(timeout, gemini)).rejects.toMatchObject({ status: 504, code: 'provider_timeout', message: expect.stringContaining('2 minutes') })
+      await expect(tryWith(timeout)).rejects.toMatchObject({ status: 504, code: 'provider_timeout', message: expect.stringContaining('2 minutes') })
+      await expect(tryWith(timeout, gemini)).rejects.toMatchObject({ status: 504, code: 'provider_timeout', message: expect.stringContaining('Gemini took too long') })
       quiet.mockRestore()
+      vi.restoreAllMocks()
+    })
+  })
+
+  describe("Gemini: getting past Google's refusals", () => {
+    const gemini = readStudioAiConfig({ GEMINI_API_KEY: 'gemini-test-key' })
+    const refusal = (statusCode: number, body: unknown) =>
+      new APICallError({ message: `HTTP ${statusCode}`, url: 'https://generativelanguage.googleapis.com', requestBodyValues: {}, statusCode, responseBody: JSON.stringify(body), isRetryable: true })
+    const BUSY = refusal(503, { error: { code: 503, message: 'This model is currently experiencing high demand.', status: 'UNAVAILABLE' } })
+    const PER_MINUTE = refusal(429, {
+      error: {
+        code: 429,
+        message: 'Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_input_token_count, limit: 250000',
+        details: [
+          { '@type': 'type.googleapis.com/google.rpc.QuotaFailure', violations: [{ quotaId: 'GenerateContentInputTokensPerModelPerMinute-FreeTier', quotaValue: '250000' }] },
+          { '@type': 'type.googleapis.com/google.rpc.RetryInfo', retryDelay: '13s' },
+        ],
+      },
+    })
+    /** A model that fails with these errors first, then answers. */
+    const failingFirst = (...errors: unknown[]) => {
+      let calls = 0
+      return new MockLanguageModelV4({
+        doGenerate: async () => {
+          const error = errors[calls]
+          calls += 1
+          if (error) throw error
+          return modelAnswer(GOOD)
+        },
+      })
+    }
+    function setUp(models: Record<string, MockLanguageModelV4>, clock?: () => Date) {
+      const usage = memoryUsage()
+      const waits: number[] = []
+      const ai = createAiGateway({
+        config: gemini,
+        usage,
+        model: (modelId) => models[modelId] ?? failingFirst(new Error(`no model ${modelId}`)),
+        sleep: async (ms) => {
+          waits.push(ms)
+        },
+        now: clock,
+      })
+      return { ai, usage, waits }
+    }
+    const quiet = () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+      vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    }
+
+    it('a busy Smart model hands over to the Fast one at once, which answers and is logged at its price', async () => {
+      quiet()
+      const smart = failingFirst(BUSY)
+      const fast = failingFirst()
+      const { ai, usage, waits } = setUp({ 'gemini-3.8-flash': smart, 'gemini-3.5-flash-lite': fast })
+      await expect(ai.generate(task)).resolves.toMatchObject({ model: 'gemini-3.5-flash-lite' })
+      // No quick retries by the AI SDK: one refused call, then the other model.
+      expect([smart.doGenerateCalls.length, fast.doGenerateCalls.length, waits]).toEqual([1, 1, []])
+      // 1,000 × $0.30/M + 500 × $2.50/M (Flash-Lite)
+      expect(usage.logged).toEqual([expect.objectContaining({ model: 'gemini-3.5-flash-lite', costUsd: 0.00155 })])
+      vi.restoreAllMocks()
+    })
+
+    it('a Smart model that is over its limits hands over too (each model has its own)', async () => {
+      quiet()
+      const fast = failingFirst()
+      const { ai } = setUp({ 'gemini-3.8-flash': failingFirst(PER_MINUTE), 'gemini-3.5-flash-lite': fast })
+      await expect(ai.generate(task)).resolves.toMatchObject({ model: 'gemini-3.5-flash-lite' })
+      vi.restoreAllMocks()
+    })
+
+    it('over the per-minute limit: waits as long as Google asks (13 s, plus 1), once, then answers', async () => {
+      quiet()
+      const fast = failingFirst(PER_MINUTE)
+      const { ai, waits } = setUp({ 'gemini-3.5-flash-lite': fast })
+      await expect(ai.generate({ ...task, tier: 'fast' })).resolves.toMatchObject({ data: { title: 'SQL' } })
+      expect([fast.doGenerateCalls.length, waits]).toEqual([2, [14_000]])
+
+      const twice = setUp({ 'gemini-3.5-flash-lite': failingFirst(PER_MINUTE, PER_MINUTE) })
+      await expect(twice.ai.generate({ ...task, tier: 'fast' })).rejects.toMatchObject({ code: 'provider_limit' })
+      expect(twice.waits).toEqual([14_000])
+      vi.restoreAllMocks()
+    })
+
+    it("doesn't wait when the answer couldn't come in time anyway", async () => {
+      quiet()
+      const start = new Date('2026-11-03T12:00:00.000Z')
+      const { ai, waits } = setUp({ 'gemini-3.5-flash-lite': failingFirst(PER_MINUTE) }, () => start)
+      const deadline = new Date(start.getTime() + 20_000)
+      await expect(ai.generate({ ...task, tier: 'fast', deadline })).rejects.toMatchObject({ code: 'provider_limit' })
+      expect(waits).toEqual([])
+      vi.restoreAllMocks()
+    })
+
+    it('asks a busy Fast model once more after 2 seconds, then says Gemini is busy', async () => {
+      quiet()
+      const once = setUp({ 'gemini-3.5-flash-lite': failingFirst(BUSY) })
+      await expect(once.ai.generate({ ...task, tier: 'fast' })).resolves.toMatchObject({ data: { title: 'SQL' } })
+      expect(once.waits).toEqual([2_000])
+
+      const always = setUp({ 'gemini-3.5-flash-lite': failingFirst(BUSY, BUSY, BUSY, BUSY) })
+      await expect(always.ai.generate({ ...task, tier: 'fast' })).rejects.toMatchObject({ status: 503, code: 'provider_busy', message: expect.stringContaining('very busy') })
+      vi.restoreAllMocks()
+    })
+
+    it('Claude never switches models or waits: the AI SDK handles its retries as before', async () => {
+      const quiet529 = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+      const busy = new APICallError({ message: 'Overloaded', url: 'https://api.anthropic.com/v1/messages', requestBodyValues: {}, statusCode: 529, responseBody: '{}', isRetryable: false })
+      const seen: string[] = []
+      const waits: number[] = []
+      const model = failingFirst(busy)
+      const ai = createAiGateway({
+        config,
+        usage: memoryUsage(),
+        model: (modelId) => {
+          seen.push(modelId)
+          return model
+        },
+        sleep: async (ms) => {
+          waits.push(ms)
+        },
+      })
+      await expect(ai.generate(task)).rejects.toMatchObject({ code: 'provider_busy' })
+      expect([model.doGenerateCalls.length, [...new Set(seen)], waits]).toEqual([1, ['claude-smart-test'], []])
+      quiet529.mockRestore()
     })
   })
 

@@ -48,16 +48,24 @@ export function lectureFps(durationSec: number | null): number {
  */
 export const VIDEO_PART_SECONDS = 30 * 60
 
+/**
+ * Full notes use shorter parts: Gemini writes about as much for each request whatever its length
+ * (about 600 words for 20 minutes, measured 2026-11-03), so more parts give more detailed notes. A
+ * 2-hour lecture's 8 parts (about 275,000 tokens) still all start within Google's free tier minute,
+ * which lets requests in until 250,000 tokens are used.
+ */
+export const NOTES_PART_SECONDS = 15 * 60
+
 /** Seconds from the start of the video. */
 export interface VideoPart {
   start: number
   end: number
 }
 
-/** The parts a lecture is watched in: none (the whole video at once) up to 30 minutes or when its length is unknown, else equal parts. */
-export function videoParts(durationSec: number | null): VideoPart[] {
-  if (durationSec === null || durationSec <= VIDEO_PART_SECONDS) return []
-  const count = Math.ceil(durationSec / VIDEO_PART_SECONDS)
+/** The parts a lecture is watched in: none (the whole video at once) up to `partSeconds` or when its length is unknown, else equal parts. */
+export function videoParts(durationSec: number | null, partSeconds = VIDEO_PART_SECONDS): VideoPart[] {
+  if (durationSec === null || durationSec <= partSeconds) return []
+  const count = Math.ceil(durationSec / partSeconds)
   const length = Math.ceil(durationSec / count)
   return Array.from({ length: count }, (_, index) => ({ start: index * length, end: Math.min(durationSec, (index + 1) * length) }))
 }

@@ -13,13 +13,14 @@ import { makeNotes } from './makeNotes'
 import { useStudioNotes } from './studioNotes'
 
 const OPTIONS: { kind: StudioNoteKind; label: string; about: string; icon: LucideIcon }[] = [
-  { kind: 'notes', label: 'Notes', about: 'Everything, in order, with the key points', icon: FileText },
-  { kind: 'mind_map', label: 'Mind map', about: 'The big picture at a glance', icon: Network },
-  { kind: 'revision_sheet', label: 'Revision sheet', about: 'One page for the night before', icon: ListChecks },
+  { kind: 'notes', label: 'Notes', about: 'Full, detailed notes of everything, in order', icon: FileText },
+  { kind: 'mind_map', label: 'Mind map', about: 'The big picture as a flowchart', icon: Network },
+  { kind: 'revision_sheet', label: 'Revision sheet', about: 'Formulas and key facts on one page', icon: ListChecks },
 ]
 
 const READS: Record<string, string> = {
-  youtube: 'Gemini watches the video: public videos of up to 3 hours. A long lecture takes about a minute.',
+  youtube:
+    'Gemini watches the video: public videos of up to 3 hours. Notes of a long lecture take about half a minute. Make the notes first: a mind map or revision sheet is then made from them in seconds.',
   pdf: "Gemini reads the PDF's text, about 25 to 40 pages at a time.",
   image: 'Gemini reads the photo.',
   text: 'Gemini reads your text.',

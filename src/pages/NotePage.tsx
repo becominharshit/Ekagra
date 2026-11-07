@@ -96,7 +96,7 @@ function NoteView({ note }: { note: Note }) {
               <LoaderCircle className="size-4 animate-spin" aria-hidden />
               Ekagra Studio is still making this
             </CardTitle>
-            <CardDescription>Long videos and PDFs take a few minutes. This page updates by itself.</CardDescription>
+            <CardDescription>This usually takes under a minute. This page updates by itself.</CardDescription>
           </CardHeader>
         </Card>
       ) : note.status === 'failed' ? (

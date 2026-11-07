@@ -42,5 +42,20 @@ export function supabaseNotesStore(client: SupabaseClient): NotesStore {
       const title = await client.from('materials').update({ title: details.title.slice(0, 200) }).eq('id', materialId).eq('user_id', userId).eq('title', PLAIN_VIDEO_TITLE)
       if (title.error) throw title.error
     },
+    async readyNotes(materialId, userId) {
+      const { data, error } = await client
+        .from('notes')
+        .select('content')
+        .eq('user_id', userId)
+        .eq('material_id', materialId)
+        .eq('kind', 'notes')
+        .eq('status', 'ready')
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (error) throw error
+      const content = (data as { content: string } | null)?.content.trim()
+      return content ? content : null
+    },
   }
 }

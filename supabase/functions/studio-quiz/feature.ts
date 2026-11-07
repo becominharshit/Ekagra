@@ -16,7 +16,11 @@ export function shuffleOptions(question: StudioQuizQuestion, random: () => numbe
   }
 }
 
-/** A note → multiple-choice questions (Gemini, Smart). The app saves them and the student's answers. */
+/**
+ * A note → multiple-choice questions (Gemini, Fast: questions from a note need no deep thinking, and
+ * Flash-Lite answers in seconds where the Smart model was often busy). The app saves them and the
+ * student's answers.
+ */
 export const quizFeature: AiFeature<StudioQuizRequest, StudioQuizResponse> = {
   feature: 'studio-quiz',
   input: StudioQuizRequestSchema,
@@ -24,7 +28,7 @@ export const quizFeature: AiFeature<StudioQuizRequest, StudioQuizResponse> = {
     const { data, model } = await ai.generate({
       userId,
       feature: 'studio-quiz',
-      tier: 'smart',
+      tier: 'fast',
       schema: StudioQuizAnswerSchema,
       instructions: STUDIO_QUIZ_INSTRUCTIONS,
       prompt: studioQuizPrompt(input),

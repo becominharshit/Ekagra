@@ -134,7 +134,7 @@ function NoteView({ note }: { note: Note }) {
           {making ? (
             <p className="flex items-center gap-2 text-sm text-muted-foreground">
               <LoaderCircle className="size-4 animate-spin" aria-hidden />
-              Being made… A long lecture takes a minute or two; this page updates by itself, and you can leave it meanwhile.
+              Being made… This usually takes under a minute. This page updates by itself, and you can leave it meanwhile.
             </p>
           ) : broken ? (
             <p role="alert" className="text-sm text-destructive">

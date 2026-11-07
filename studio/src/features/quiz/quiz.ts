@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { StudioQuizResponseSchema } from '@shared/schemas.ts'
+import { QUIZ_TEXT_LENGTH, StudioQuizResponseSchema } from '@shared/schemas.ts'
 import { academicsKey } from '@/features/academics/subjects'
 import { callAiFunction } from '@/features/ai/aiClient'
 import type { QuizAnswer } from '@/features/lessons/lessons'
@@ -55,7 +55,7 @@ export async function makeQuiz(source: DataSource, { note, count, program, year 
   if (!note.content.trim()) throw new Error('This note is empty: there is nothing to ask about.')
   const answer = await callAiFunction(
     'studio-quiz',
-    { noteId: note.id, title: note.title.slice(0, 200), text: note.content.slice(0, 60_000), count, program: program ?? null, year: year ?? null },
+    { noteId: note.id, title: note.title.slice(0, 200), text: note.content.slice(0, QUIZ_TEXT_LENGTH), count, program: program ?? null, year: year ?? null },
     StudioQuizResponseSchema,
   )
   const rows: TablesInsert<'questions'>[] = answer.questions.map((question) => ({
