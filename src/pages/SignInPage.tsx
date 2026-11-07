@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { FlaskConical, LoaderCircle } from 'lucide-react'
+import { CalendarDays, FlaskConical, LoaderCircle, NotebookPen, Target, TrendingUp } from 'lucide-react'
 import { Link, Navigate } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -8,6 +8,14 @@ import { signInWithGoogle } from '@/features/auth/auth'
 import { useAuthStore } from '@/features/auth/authStore'
 import { isSupabaseConfigured } from '@/lib/supabase'
 
+const FEATURES = [
+  { icon: CalendarDays, title: 'A plan for today', text: 'Your syllabus, deadlines and energy in one clear next step.' },
+  { icon: NotebookPen, title: 'Notes that make sense', text: 'Full notes, flowchart mind maps and one-page revision sheets.' },
+  { icon: Target, title: 'Skills beside studies', text: 'A side hustle plan that fits around your college timetable.' },
+  { icon: TrendingUp, title: 'Progress you can see', text: 'Weekly reviews that change the plan when something is not working.' },
+]
+
+/** The first screen: what Ekagra is, and sign-in (Google) or Demo Mode. */
 export function SignInPage() {
   const status = useAuthStore((state) => state.status)
   const storeError = useAuthStore((state) => state.error)
@@ -53,36 +61,90 @@ export function SignInPage() {
   const problem = error ?? storeError
 
   return (
-    <main className="pt-safe pb-safe flex min-h-full items-center justify-center px-4 py-10">
-      <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle className="text-xl">Ekagra</CardTitle>
-          <CardDescription>Studies, side hustle and life in one plan, with one clear next step.</CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-3">
-          {notice && (
-            <p role="status" className="rounded-lg bg-muted px-3 py-2 text-sm">
-              {notice}
+    <main className="pt-safe pb-safe relative isolate min-h-full overflow-hidden">
+      <div
+        aria-hidden
+        className="absolute inset-0 -z-10"
+        style={{
+          background:
+            'radial-gradient(ellipse at 8% 0%, rgb(37 99 235 / 13%), transparent 55%), radial-gradient(ellipse at 95% 90%, rgb(16 185 129 / 9%), transparent 50%)',
+        }}
+      />
+      <div className="mx-auto flex min-h-full w-full max-w-6xl flex-col px-5">
+        <header className="flex items-center justify-between py-6">
+          <Link to="/sign-in" className="flex items-center gap-2.5" aria-label="Ekagra home">
+            <img src="/favicon.svg" alt="" className="size-9" />
+            <span className="font-heading text-xl font-semibold tracking-tight">Ekagra</span>
+          </Link>
+          <Link to="/privacy" className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
+            Privacy
+          </Link>
+        </header>
+
+        <div className="grid flex-1 items-center gap-12 py-10 lg:grid-cols-[1.15fr_0.85fr] lg:gap-16 lg:py-16">
+          <section>
+            <p className="inline-flex items-center gap-2 rounded-full bg-mode-study/10 px-3 py-1 text-xs font-medium text-mode-study">
+              <span className="size-1.5 rounded-full bg-mode-study" aria-hidden />
+              Studies, skills and life in one place
             </p>
-          )}
-          {/* Without Supabase, Demo Mode is the main button. */}
-          {isSupabaseConfigured ? [googleButton, demoButton] : [demoButton, googleButton]}
-          {!isSupabaseConfigured && (
-            <p className="text-sm text-muted-foreground">
-              Google sign-in turns on once Supabase is connected (see docs/4-setup-guide.md).
+            <h1 className="mt-5 font-heading text-4xl font-semibold tracking-tight text-balance sm:text-5xl lg:text-6xl">
+              One clear next step.
+              <br />
+              <span className="text-mode-study">Every day.</span>
+            </h1>
+            <p className="mt-5 max-w-xl text-lg leading-relaxed text-muted-foreground">
+              Ekagra turns your syllabus, deadlines and side hustle into a calm daily plan, with notes and revision made for the way you actually study.
             </p>
-          )}
-          <p className="text-xs text-muted-foreground">Demo Mode keeps everything on this device. Nothing is sent to a server.</p>
-          {problem && (
-            <p role="alert" className="text-sm text-destructive">
-              {problem}
-            </p>
-          )}
-          <Link to="/privacy" className="justify-self-start text-xs text-muted-foreground underline underline-offset-3 hover:text-foreground">
+            <ul className="mt-9 grid max-w-xl gap-x-8 gap-y-5 sm:grid-cols-2">
+              {FEATURES.map(({ icon: Icon, title, text }) => (
+                <li key={title} className="flex gap-3">
+                  <span className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-lg bg-mode-study/10 text-mode-study">
+                    <Icon className="size-4" aria-hidden />
+                  </span>
+                  <div>
+                    <p className="text-sm font-medium">{title}</p>
+                    <p className="mt-0.5 text-sm text-muted-foreground">{text}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          <Card className="w-full max-w-md justify-self-center border-foreground/10 shadow-xl shadow-mode-study/10 lg:justify-self-end">
+            <CardHeader>
+              <CardTitle className="font-heading text-2xl">Start where you are</CardTitle>
+              <CardDescription>Sign in to keep your plan, notes and progress on every device.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-3">
+              {notice && (
+                <p role="status" className="rounded-lg bg-muted px-3 py-2 text-sm">
+                  {notice}
+                </p>
+              )}
+              {/* Without Supabase, Demo Mode is the main button. */}
+              {isSupabaseConfigured ? [googleButton, demoButton] : [demoButton, googleButton]}
+              <p className="text-sm text-muted-foreground">
+                {isSupabaseConfigured
+                  ? 'Demo Mode needs no account. It keeps everything on this device, and nothing is sent to a server.'
+                  : 'Google sign-in turns on once Supabase is connected (see docs/4-setup-guide.md). Demo Mode works now.'}
+              </p>
+              {problem && (
+                <p role="alert" className="text-sm text-destructive">
+                  {problem}
+                </p>
+              )}
+              <p className="mt-1 text-xs text-muted-foreground">Free to start. Your data stays yours.</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 py-6 text-xs text-muted-foreground">
+          <p>Built for students in India. Your data stays yours.</p>
+          <Link to="/privacy" className="underline underline-offset-3 hover:text-foreground">
             Privacy policy and permissions
           </Link>
-        </CardContent>
-      </Card>
+        </footer>
+      </div>
     </main>
   )
 }

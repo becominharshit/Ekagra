@@ -2,6 +2,7 @@ package app.ekagra.student.files
 
 import android.app.Activity
 import android.content.Intent
+import android.util.Base64
 import androidx.activity.result.ActivityResult
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
@@ -46,11 +47,13 @@ class FileSaverPlugin : Plugin() {
             return
         }
         val data = call.getString("data") ?: ""
+        // A PDF comes as base64 and must be written byte for byte; text as UTF-8.
+        val bytes = if (call.getString("encoding") == "base64") Base64.decode(data, Base64.DEFAULT) else data.toByteArray(Charsets.UTF_8)
         // A big export takes a moment to write: not on the screen's thread.
         Thread {
             try {
                 val stream = context.contentResolver.openOutputStream(uri) ?: throw IOException("The file couldn't be opened.")
-                stream.use { it.write(data.toByteArray(Charsets.UTF_8)) }
+                stream.use { it.write(bytes) }
                 call.resolve(JSObject().put("saved", true).put("uri", uri.toString()))
             } catch (error: Exception) {
                 call.reject("The file couldn't be saved: ${error.message}", error)

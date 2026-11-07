@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { format } from 'date-fns'
 import { LoaderCircle, Pencil, RotateCcw, Trash2 } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router'
@@ -22,6 +22,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { useAcademicsMutation, useSubject } from '@/features/academics/subjects'
 import { MindMap } from '@/features/notes/MindMap'
+import { NoteBody } from '@/features/notes/NoteBody'
 import { noteKindLabel, noteSourceLabel, useNote, type Note } from '@/features/notes/notes'
 import { parseOutline } from '@/features/notes/outline'
 import { useProfile } from '@/features/profile/queries'
@@ -79,7 +80,6 @@ function NoteView({ note }: { note: Note }) {
   const retry = useAcademicsMutation(makeAgain)
   const [editing, setEditing] = useState(false)
   const [deleting, setDeleting] = useState(false)
-  const outline = useMemo(() => (note.kind === 'mind_map' ? parseOutline(note.content, note.title) : null), [note.kind, note.content, note.title])
 
   const making = stillMaking(note)
   const broken = note.status === 'failed' || (note.status === 'processing' && !making)
@@ -143,14 +143,8 @@ function NoteView({ note }: { note: Note }) {
                 : `This couldn't be made${note.error ? `: ${note.error.replace(/\.$/, '')}.` : '.'}`}
               {material ? ' Try again, or delete it.' : ' Its material was deleted, so delete this.'}
             </p>
-          ) : outline ? (
-            <MindMap root={outline} />
-          ) : note.content.trim() === '' ? (
-            <p className="text-sm text-muted-foreground">This note is empty.</p>
           ) : (
-            <article className="max-w-3xl">
-              <Markdown className={READING}>{note.content}</Markdown>
-            </article>
+            <NoteBody kind={note.kind} title={note.title} content={note.content} />
           )}
           {note.status === 'ready' && note.content.trim() !== '' && <NoteQuiz note={note} />}
         </>

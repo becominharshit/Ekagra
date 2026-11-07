@@ -66,4 +66,12 @@ describe('plainLabel', () => {
     expect(plainLabel('[x] Revise  __ACID__ ##')).toBe('Revise ACID')
     expect(plainLabel('snake_case and a * b')).toBe('snake_case and a * b')
   })
+
+  it('keeps LaTeX formulas whole, so the mind map can draw them', () => {
+    expect(plainLabel('$c = \\frac{1}{\\sqrt{\\mu_0 \\varepsilon_0}}$')).toBe('$c = \\frac{1}{\\sqrt{\\mu_0 \\varepsilon_0}}$')
+    expect(shape(parseOutline('# Waves\n## Formulas\n- $c = \\frac{1}{\\sqrt{\\mu_0 \\varepsilon_0}}$', 'x'))).toEqual([
+      'Waves',
+      [['Formulas', [['$c = \\frac{1}{\\sqrt{\\mu_0 \\varepsilon_0}}$', []]]]],
+    ])
+  })
 })

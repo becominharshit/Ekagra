@@ -1,8 +1,6 @@
-import { useMemo } from 'react'
 import { format } from 'date-fns'
 import { ArrowLeft, ExternalLink, LoaderCircle } from 'lucide-react'
 import { Link, useParams } from 'react-router'
-import { Markdown } from '@/components/Markdown'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -12,12 +10,8 @@ import { useAuthStore } from '@/features/auth/authStore'
 import { openStudioPage } from '@/features/bridge/studio'
 import { MaterialIcon } from '@/features/materials/KindIcons'
 import { materialPath, useStudyMaterial } from '@/features/materials/materials'
-import { MindMap } from '@/features/notes/MindMap'
+import { NoteBody } from '@/features/notes/NoteBody'
 import { noteKindLabel, noteSourceLabel, useNote, type Note } from '@/features/notes/notes'
-import { parseOutline } from '@/features/notes/outline'
-
-/** Long text reads better a little larger, with headings that stand out. */
-const READING = 'text-base [&_h1]:text-xl [&_h2]:mt-6 [&_h2]:text-lg [&_h3]:mt-4'
 
 /** One note from Ekagra Studio, to read. It's made and edited in Studio. */
 export function NotePage() {
@@ -54,7 +48,6 @@ function NoteView({ note }: { note: Note }) {
   // What it was made from, of any kind (a PDF, YouTube video, photo or text).
   const material = useStudyMaterial(note.material_id ?? undefined)
   const topic = roadmap.data?.topics.find((candidate) => candidate.id === note.topic_id) ?? null
-  const outline = useMemo(() => (note.kind === 'mind_map' ? parseOutline(note.content, note.title) : null), [note.kind, note.content, note.title])
   const details = [noteKindLabel(note.kind), noteSourceLabel(note.source), `updated ${format(new Date(note.updated_at), 'd MMM yyyy')}`].filter(Boolean)
 
   return (
@@ -103,14 +96,8 @@ function NoteView({ note }: { note: Note }) {
         <p role="alert" className="text-sm text-destructive">
           Ekagra Studio couldn't make this{note.error ? `: ${note.error.replace(/\.$/, '')}.` : '.'} Try again in Studio.
         </p>
-      ) : outline ? (
-        <MindMap root={outline} />
-      ) : note.content.trim() === '' ? (
-        <p className="text-sm text-muted-foreground">This note is empty.</p>
       ) : (
-        <article className="max-w-3xl">
-          <Markdown className={READING}>{note.content}</Markdown>
-        </article>
+        <NoteBody kind={note.kind} title={note.title} content={note.content} />
       )}
     </>
   )

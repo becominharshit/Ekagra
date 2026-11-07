@@ -87,7 +87,7 @@ describe('studio-notes', () => {
     expect(body).toEqual({ noteId: '33333333-3333-4333-8333-333333333331' })
     expect(notes.created).toEqual([{ userId: 'student-1', subjectId: SUBJECT, materialId: MATERIAL, kind: 'notes', title: 'Lecture 4', source: 'material' }])
     expect(notes.finished).toEqual([
-      { noteId: body.noteId, title: 'SQL joins', content: '## Inner join\n- Matching rows only', model: 'gemini-3.8-flash', promptVersion: 'studio-notes-v3' },
+      { noteId: body.noteId, title: 'SQL joins', content: '## Inner join\n- Matching rows only', model: 'gemini-3.8-flash', promptVersion: 'studio-notes-v4' },
     ])
     expect(usage.logged).toEqual([expect.objectContaining({ feature: 'studio-notes', model: 'gemini-3.8-flash' })])
     const prompt = JSON.stringify(model.doGenerateCalls[0]?.prompt)
@@ -161,7 +161,7 @@ describe('studio-notes', () => {
     expect(asked.some((prompt) => prompt.includes('This is part 1 of 8 of the video, from 0:00 to 14:55'))).toBe(true)
     expect(asked[0]).toContain('one part of a long lecture video')
     const [note] = notes.finished
-    expect(note).toMatchObject({ title: 'Lecture 4', model: 'gemini-3.5-flash-lite', promptVersion: 'studio-notes-v3' })
+    expect(note).toMatchObject({ title: 'Lecture 4', model: 'gemini-3.5-flash-lite', promptVersion: 'studio-notes-v4' })
     expect(note?.content).toContain('- **1:44:25–1:59:15:** Part 8 teaches topic 8.')
     expect(note?.content.indexOf('## Topic 1 (1:00)')).toBeLessThan(note?.content.indexOf('## Topic 8 (8:00)') ?? 0)
     expect(note?.content).toMatch(/## Key points\n\n- Fact 1\n- Fact 2\n- Fact 3\n- Fact 4\n- Fact 5\n- Fact 6\n- Fact 7\n- Fact 8$/)

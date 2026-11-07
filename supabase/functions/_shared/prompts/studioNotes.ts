@@ -8,16 +8,16 @@ import { withSource } from './source.ts'
 // the parts' notes joined in order (studioNotesPartInstructions); a mind map or revision sheet of
 // it is combined from the parts' (studioCombine*), or made from the notes already made from it
 // (studioFromNotesPrompt). The Markdown must render in both apps (src/components/Markdown.tsx: no
-// tables, no LaTeX), and a mind map must be an outline that src/features/notes/outline.ts can draw.
-// Change the version when the wording changes.
-export const STUDIO_NOTES_PROMPT_VERSION = 'studio-notes-v3'
+// tables; formulas are LaTeX drawn by KaTeX), and a mind map must be an outline that
+// src/features/notes/outline.ts can draw. Change the version when the wording changes.
+export const STUDIO_NOTES_PROMPT_VERSION = 'studio-notes-v4'
 
 const SHARED = `You make study material for a university student in India from what they give you: a lecture video, their notes, a textbook page, slides or a photo.
 
 Rules for every answer:
 - Use only what is in the material. Never invent facts, numbers, names or links; if part of it is unclear (a blurry photo, bad audio), say so in one line instead of guessing.
 - Write in simple, clear English for a student who is learning this for the first time. Keep technical terms and names exactly as the material uses them. If the material is in Hindi or Hinglish, still write in English.
-- Formulas: short and simple, the way a teacher writes them on the board, inside \`backticks\`, with real symbols and never their names: \`i_d = ε₀ · dΦ_E/dt\`, \`c = 1/√(μ₀ε₀)\`, \`E = mc²\`. Use symbols such as ε μ λ θ π ω Φ Ω Δ ∮ ∫ ∑ √ ∂ ∞ × · ± ≈ ≠ ≤ ≥ → ° ² ³ ⁻¹ ₀ ₁ ₂, and _ for other subscripts (v_max). No LaTeX, no $…$.
+- Formulas: write them in LaTeX, with real symbols and never their names. A formula inside a sentence goes between $…$, like $i_d = \\varepsilon_0 \\frac{d\\Phi_E}{dt}$, $c = \\frac{1}{\\sqrt{\\mu_0 \\varepsilon_0}}$, $E = mc^2$. A longer formula or a derivation step gets a paragraph of its own: put $$ alone on one line, the formula on the next line, and $$ alone on the line after it. Keep the LaTeX simple: \\frac, \\sqrt, ^, _, and Greek letters (\\alpha \\beta \\theta \\lambda \\mu \\pi \\omega \\Phi \\Omega \\Delta). Never put a formula in backticks or plain text.
 - Markdown without tables and without HTML. Use headings, bullet lists, numbered lists, **bold** for key terms, and \`code\` blocks for code.
 - For a video: skip greetings, sponsor messages, "like and subscribe" and anything off-topic.
 - title: a short title for what this covers (not "Notes" or "Mind map").`
@@ -29,7 +29,7 @@ const NOTES_BODY = `- Follow the material's order with "## " headings for each t
 - After a formula, say what each symbol means and its unit, when the material says so.
 - What the teacher stresses, warns about or says comes in exams: a line starting with **Remember:** or **Exam tip:**.
 - A diagram on the board or a slide: say in words what it shows.
-- Don't shorten: a long lecture gets long notes, about 700 to 1,000 words for every 10 minutes of a video. A student who missed it must be able to learn everything from them.`
+- Don't shorten: a long lecture gets long notes, at least 700 words for every 10 minutes of a video (a 15-minute part: at least 1,000 words). Every heading needs several paragraphs or bullets, not one line. A student who missed it must be able to learn everything from them.`
 
 const KIND: Record<StudioNoteKind, string> = {
   notes: `Make complete, detailed study notes (markdown):
@@ -41,9 +41,9 @@ ${NOTES_BODY}
 - Then 4 to 7 main branches as "## " headings, in the order the material teaches them.
 - Under each branch, 2 to 5 "- " points; under a point, at most 4 sub-points indented by two spaces. At most three levels below the centre.
 - Every label is a short phrase of at most 8 words (a key term, a fact or a formula), never a full sentence.
-- A formula is a point of its own, like "- \`c = 1/√(μ₀ε₀)\`". No text outside the outline.`,
+- A formula is a point of its own, like "- $c = \\frac{1}{\\sqrt{\\mu_0 \\varepsilon_0}}$". No text outside the outline.`,
   revision_sheet: `Make a one-page revision sheet for quick revision before an exam (markdown). It must fit on one printed page:
-- "## Formulas" first: every formula in the material, one bullet each, like "- **Speed of light:** \`c = 1/√(μ₀ε₀)\`: μ₀ = permeability, ε₀ = permittivity of free space". Leave this section out only if the material has no formulas.
+- "## Formulas" first: every formula in the material, one bullet each, like "- **Speed of light:** $c = \\frac{1}{\\sqrt{\\mu_0 \\varepsilon_0}}$: $\\mu_0$ = permeability, $\\varepsilon_0$ = permittivity of free space". Leave this section out only if the material has no formulas.
 - "## Must know": definitions, laws, rules and key facts, one short bullet each.
 - "## Compare" (only when it helps): differences between things that are easily confused, as bullets.
 - "## Common mistakes": what students often get wrong.
