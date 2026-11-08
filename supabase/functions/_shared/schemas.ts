@@ -344,6 +344,21 @@ export type InboxResponse = z.infer<typeof InboxResponseSchema>
 export const NOTE_KINDS = ['notes', 'mind_map', 'revision_sheet'] as const
 export type StudioNoteKind = (typeof NOTE_KINDS)[number]
 
+export const MAX_YOUTUBE_SECONDS = 12 * 60 * 60
+
+const youtubeSourceSchema = z
+  .object({
+    kind: z.literal('youtube'),
+    url: z.string().max(300),
+    /** Optional time window (seconds from 0:00) so marathon 2–12h lectures can be processed in chapters. */
+    startSec: z.number().int().min(0).max(MAX_YOUTUBE_SECONDS).optional(),
+    endSec: z.number().int().min(1).max(MAX_YOUTUBE_SECONDS).optional(),
+  })
+  .refine((source) => source.startSec === undefined || source.endSec === undefined || source.endSec > source.startSec, {
+    message: 'The end time must be after the start time',
+    path: ['endSec'],
+  })
+
 export const StudioNotesRequestSchema = z.object({
   materialId: z.uuid(),
   subjectId: z.uuid(),
@@ -352,7 +367,7 @@ export const StudioNotesRequestSchema = z.object({
   title: z.string().trim().min(1).max(200),
   /** What to read: a public YouTube video's link, text (typed, or read from a PDF on the device), or a photo or scanned PDF. */
   source: z.discriminatedUnion('kind', [
-    z.object({ kind: z.literal('youtube'), url: z.string().max(300) }),
+    youtubeSourceSchema,
     z.object({ kind: z.literal('text'), text: z.string().trim().min(1).max(MAX_TEXT_LENGTH) }),
     z.object({ kind: z.literal('file'), file: SourceFileSchema }),
   ]),
@@ -368,10 +383,37 @@ export const StudioNoteAnswerSchema = z.object({
 })
 export type StudioNoteAnswer = z.infer<typeof StudioNoteAnswerSchema>
 
+/** One topic section inside a 15-minute part of a long lecture video. */
+export const StudioNotePartSectionSchema = z.object({
+  heading: z
+    .string()
+    .min(1)
+    .max(200)
+    .describe('The topic heading with its start time from the beginning of the whole video, e.g. "Displacement current (12:40)" (no leading #)'),
+  explanation: z
+    .string()
+    .min(1)
+    .max(50_000)
+    .describe('Detailed explanation in Markdown (several paragraphs and bullet lists): every definition, concept, intuition, law and diagram taught in this topic'),
+  formulasAndSteps: z
+    .string()
+    .max(30_000)
+    .describe('Every formula (in LaTeX, $...$ or $$...$$), symbol meaning and unit, step-by-step derivation, code block or worked example in this topic; empty string if none'),
+  examTip: z
+    .string()
+    .max(1_500)
+    .describe('What the teacher stresses, warns about, or says comes in exams for this topic; empty string if none'),
+})
+export type StudioNotePartSection = z.infer<typeof StudioNotePartSectionSchema>
+
 /** The notes of one part of a long lecture video; studio-notes joins the parts in order into the full notes. */
 export const StudioNotePartAnswerSchema = z.object({
   summary: z.string().min(1).max(2_000).describe('Two or three sentences: what this part teaches'),
-  markdown: z.string().min(1).max(200_000).describe("This part's detailed notes in Markdown, starting with its first ## heading"),
+  sections: z
+    .array(StudioNotePartSectionSchema)
+    .min(1)
+    .max(10)
+    .describe('3 to 6 detailed topic sections covering everything taught in this part of the video, in order'),
   keyPoints: z.array(z.string().min(1).max(500)).max(12).describe('3 to 6 short things to remember from this part'),
 })
 export type StudioNotePartAnswer = z.infer<typeof StudioNotePartAnswerSchema>

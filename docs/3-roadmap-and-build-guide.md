@@ -111,6 +111,12 @@ Built in this order (M12 comes first: attendance helps students in the middle of
   1. The app: the same sign-in and database as Ekagra; a library of subjects and materials (PDFs, photos, text and YouTube links, with drag and drop and the camera); installable. Done 2026-11-02
   2. Notes, mind maps and revision sheets from a material or a YouTube link (`studio-notes`; long ones are made in the background). Done 2026-11-02
   3. Quizzes from a note (`studio-quiz`, multiple choice); results go into Ekagra's `questions`, `quizzes`, `attempts` and `mistakes`, so its progress counts them. Done 2026-11-02
+- [x] **M18 Marathon lectures (up to 12 hours), fuller structured notes (`studio-notes-v5`) and daily-use polish, in 5 steps** (no new migration). Done 2026-11-08:
+  1. **Marathon YouTube lectures (2–12 hours) in 90-minute parts:** `MAX_YOUTUBE_SECONDS = 12 * 3600`, `videoWindows()` and optional `startSec`/`endSec` on `studio-notes`. Studio shows 90-minute chapter buttons (`Part 1 (0:00–1:30:00)`, `Part 2…`) and auto-slices the first 90 minutes when a 3–12h video is clicked without a range.
+  2. **Fuller lecture notes (`studio-notes-v5` structured sub-sections):** each 15-minute video part returns 3–6 structured `sections[]` (`heading`, `explanation`, `formulasAndSteps`, `examTip`), assembled by `joinParts()` so `gemini-3.5-flash-lite` writes full-depth notes without hitting `gemini-3.8-flash`'s free-tier RPM limit.
+  3. **Table of Contents jump bar (`NoteBody.tsx`):** notes with 3+ `##` sections show a collapsible **Contents** jump bar in both Typed and Handwritten views (excluded from the off-screen PDF export).
+  4. **Sample notes in Ekagra's Demo Mode (`SubjectNotes.tsx`):** one-tap **Load sample notes** seeds a full lecture note and mind map into `demoDb` so Demo Mode users can try Typed, Handwritten, Contents, Mind Map and PDF export without signing in.
+  5. **60-second live FocusGuard test (`/me/focus`) and "I have a few minutes" quick-win bar (`TodayPage.tsx`):** `liveTestPlan()` lets Android users verify FocusGuard for 60 seconds right after setup; `pickQuickWin()` suggests the best 10 / 20 / 30 / 45-minute action between classes (due flashcards → open mistakes → today's block → top-priority topic).
 
 Later: coding, flashcards, practice and mock tests move to Studio; Tauri `.exe`; Android share target; reminders.
 

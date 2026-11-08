@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { clockTime, embedUrl, fetchVideoDetails, isoDurationSeconds, lectureFps, videoParts } from './youtube.ts'
+import { clockTime, embedUrl, fetchVideoDetails, isoDurationSeconds, lectureFps, NOTES_PART_SECONDS, videoParts, videoWindows } from './youtube.ts'
 
 describe('how Gemini watches a lecture', () => {
   it('sees every second of a short video, and 1 frame every 5 seconds of a long one or one of unknown length', () => {
@@ -20,6 +20,30 @@ describe('how Gemini watches a lecture', () => {
       { start: 5367, end: 7155 },
     ])
     expect(videoParts(3 * 3600)).toHaveLength(6)
+  })
+
+  it('splits a chosen time window of a marathon lecture into parts, and builds 90-minute chapter windows', () => {
+    expect(videoWindows(90 * 60)).toEqual([])
+    expect(videoWindows(6 * 3600)).toEqual([
+      { start: 0, end: 5400 },
+      { start: 5400, end: 10_800 },
+      { start: 10_800, end: 16_200 },
+      { start: 16_200, end: 21_600 },
+    ])
+    // A 90-minute slice (1:30:00 to 3:00:00) of a 6-hour video in 15-minute parts:
+    expect(videoParts(6 * 3600, NOTES_PART_SECONDS, 5400, 10_800)).toEqual([
+      { start: 5400, end: 6300 },
+      { start: 6300, end: 7200 },
+      { start: 7200, end: 8100 },
+      { start: 8100, end: 9000 },
+      { start: 9000, end: 9900 },
+      { start: 9900, end: 10_800 },
+    ])
+    // Works even when total duration is unknown (no YOUTUBE_API_KEY) if endSec is given:
+    expect(videoParts(null, NOTES_PART_SECONDS, 0, 1800)).toEqual([
+      { start: 0, end: 900 },
+      { start: 900, end: 1800 },
+    ])
   })
 
   it('writes times like a video player', () => {

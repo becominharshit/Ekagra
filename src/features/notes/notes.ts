@@ -25,6 +25,45 @@ export function noteSourceLabel(source: string): string | null {
   return SOURCE_LABEL[source] ?? null
 }
 
+export interface NoteHeading {
+  id: string
+  text: string
+}
+
+/** Turns a heading's text into a clean HTML id for Table of Contents jump links. */
+export function headingSlug(text: string): string {
+  const slug = text
+    .toLowerCase()
+    .replace(/[*_`~]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  return slug ? `sec-${slug}` : 'sec-heading'
+}
+
+/** Extracts `## ` section headings from Markdown (ignoring fenced code blocks) for the Table of Contents jump bar. */
+export function extractNoteHeadings(markdown: string): NoteHeading[] {
+  const headings: NoteHeading[] = []
+  const seen = new Set<string>()
+  let inFence = false
+  for (const rawLine of markdown.split(/\r?\n/)) {
+    const line = rawLine.trim()
+    if (/^(`{3,}|~{3,})/.test(line)) {
+      inFence = !inFence
+      continue
+    }
+    if (inFence) continue
+    const match = /^##\s+(.+)$/.exec(line)
+    if (!match?.[1]) continue
+    const text = match[1].replace(/\s+#+\s*$/, '').replace(/[*_`~]/g, '').trim()
+    if (!text) continue
+    const id = headingSlug(text)
+    if (seen.has(id)) continue
+    seen.add(id)
+    headings.push({ id, text })
+  }
+  return headings
+}
+
 /** Every column but the (long) content; Ekagra Studio's lists use it too. */
 export const NOTE_SUMMARY_COLUMNS = 'id, user_id, subject_id, topic_id, material_id, kind, title, source, status, error, model, prompt_version, created_at, updated_at'
 
@@ -102,4 +141,68 @@ export function useNote(noteId: string | undefined, pollMs = 15_000) {
     ...FROM_STUDIO,
     refetchInterval: (query) => (query.state.data?.status === 'processing' ? pollMs : false),
   })
+}
+
+const SAMPLE_LECTURE_NOTE = [
+  '## Overview',
+  '- **0:00–15:00:** Relational algebra foundations and inner/outer joins.\n- **15:00–30:00:** Functional dependencies, Armstrong’s axioms, and BCNF decomposition.',
+  '## Relational Joins & Selectivity (0:00)',
+  '- An **inner join** ($R \\bowtie_{\\theta} S$) keeps only tuples from $R$ and $S$ that satisfy the join condition $\\theta$.\n- A **left outer join** keeps every tuple of $R$, padding unmatched attributes from $S$ with `NULL`.',
+  '$$|R \\bowtie S| \\le |R| \\times |S|$$',
+  '**Exam tip:** When a join attribute is a foreign key referencing a primary key with `NOT NULL`, the join size equals the child table size $|R|$.',
+  '## Functional Dependencies & Closure (12:40)',
+  '- A functional dependency $X \\to Y$ means any two tuples agreeing on attributes $X$ must also agree on $Y$.\n- To test whether $X$ is a **candidate key**, compute the attribute closure $X^+$ under the given FDs and check if $X^+$ contains all attributes of the relation.',
+  '$$\\text{Reflexivity: } Y \\subseteq X \\implies X \\to Y \\qquad \\text{Transitivity: } X \\to Y,\\, Y \\to Z \\implies X \\to Z$$',
+  '**Exam tip:** Any attribute that never appears on the right-hand side of any nontrivial FD must be part of every candidate key.',
+  '## BCNF vs 3NF Decomposition (21:15)',
+  '- A relation is in **BCNF** if for every nontrivial FD $X \\to Y$, $X$ is a superkey.\n- A relation is in **3NF** if for every nontrivial FD $X \\to Y$, either $X$ is a superkey or every attribute in $Y - X$ is a **prime attribute** (part of some candidate key).',
+  '**Exam tip:** Every binary (2-attribute) relation is automatically in BCNF.',
+  '## Key points',
+  '- Compute $X^+$ first in every normalization exam question\n- BCNF guarantees lossless-join decomposition but may not preserve all dependencies\n- 3NF always allows both lossless-join and dependency-preserving decomposition',
+].join('\n\n')
+
+const SAMPLE_MIND_MAP = [
+  '# Joins & Normalization',
+  '## Relational Joins',
+  '- Inner Join: matching rows only',
+  '- Left/Right Outer Join: keeps unmatched rows with NULL',
+  '- Natural Join: equates common columns',
+  '## Keys & Closures',
+  '- Superkey: uniquely identifies a row',
+  '- Candidate Key: minimal superkey',
+  '- Attribute Closure (X+): all columns determined by X',
+  '## Normal Forms',
+  '- 1NF: atomic values',
+  '- 2NF: no partial dependency on a candidate key',
+  '- 3NF: superkey on LHS or prime attribute on RHS',
+  '- BCNF: superkey on LHS for every nontrivial FD',
+].join('\n')
+
+/** In Demo Mode: seeds one full lecture note and one mind map under the subject so the reader, Handwritten view, and PDF export can be tried immediately. */
+export async function seedSampleNotes(source: DataSource, subjectId: string): Promise<Note[]> {
+  if (source.kind !== 'demo') return []
+  const existing = demoDb.list('notes').filter((note) => note.subject_id === subjectId && note.status === 'ready')
+  if (existing.length > 0) return existing
+  return demoDb.insert('notes', [
+    {
+      subject_id: subjectId,
+      kind: 'notes',
+      title: 'Sample: Joins, Closures & BCNF (0:00–30:00)',
+      content: SAMPLE_LECTURE_NOTE,
+      source: 'youtube',
+      status: 'ready',
+      model: 'gemini-3.5-flash-lite',
+      prompt_version: 'studio-notes-v5',
+    },
+    {
+      subject_id: subjectId,
+      kind: 'mind_map',
+      title: 'Sample: Joins & Normalization Mind Map',
+      content: SAMPLE_MIND_MAP,
+      source: 'youtube',
+      status: 'ready',
+      model: 'gemini-3.5-flash-lite',
+      prompt_version: 'studio-notes-v5',
+    },
+  ])
 }

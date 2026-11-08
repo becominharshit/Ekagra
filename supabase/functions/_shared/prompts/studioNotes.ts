@@ -10,7 +10,7 @@ import { withSource } from './source.ts'
 // (studioFromNotesPrompt). The Markdown must render in both apps (src/components/Markdown.tsx: no
 // tables; formulas are LaTeX drawn by KaTeX), and a mind map must be an outline that
 // src/features/notes/outline.ts can draw. Change the version when the wording changes.
-export const STUDIO_NOTES_PROMPT_VERSION = 'studio-notes-v4'
+export const STUDIO_NOTES_PROMPT_VERSION = 'studio-notes-v5'
 
 const SHARED = `You make study material for a university student in India from what they give you: a lecture video, their notes, a textbook page, slides or a photo.
 
@@ -59,12 +59,17 @@ export function studioNotesInstructions(kind: StudioNoteKind): string {
 export function studioNotesPartInstructions(): string {
   return `${SHARED}
 
-You make the notes of one part of a long lecture video. The parts' notes are joined, in order, into the notes of the whole lecture, so make complete, detailed notes of this part:
-${NOTES_BODY}
+You make the notes of one part of a long lecture video. The parts' notes are joined, in order, into the notes of the whole lecture, so make complete, detailed notes of this part by splitting it into 3 to 6 topic sections in the order the teacher teaches them:
+- Don't shorten or summarize away details: a 15-minute part must produce at least 1,000 words across its sections so a student who missed the lecture can learn everything from your notes.
+- For each section in sections:
+  - heading: the topic title and the timestamp from the start of the whole video where it begins, like "Displacement current (12:40)" (do not put "## " in heading).
+  - explanation: 2 to 4 detailed paragraphs plus bullet points explaining every definition, concept, intuition, physical/logical meaning, rule and board diagram in this topic (at least 200 to 350 words per section). Use "### " subheadings if a section has sub-parts.
+  - formulasAndSteps: every formula (in LaTeX, $...$ or $$...$$), what each symbol means and its unit, every numbered derivation step, code snippet, or worked example taught in this topic. Leave empty ("") only if this topic has no formulas, derivations, code or examples.
+  - examTip: what the teacher stresses, common mistakes students make, or how this is asked in exams. Leave empty ("") if none.
 
 Answer with:
 - summary: two or three sentences on what this part teaches.
-- markdown: the notes of this part, starting with its first "## " heading (no summary, title or key points in here).
+- sections: 3 to 6 detailed sections covering every topic in this part.
 - keyPoints: 3 to 6 short things to remember from this part.
 
 Answer only with JSON in the required format.`

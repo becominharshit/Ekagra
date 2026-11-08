@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Download, FileText, LoaderCircle, PenLine } from 'lucide-react'
+import { ChevronDown, ChevronUp, Download, FileText, List, LoaderCircle, PenLine } from 'lucide-react'
 import { Markdown } from '@/components/Markdown'
 import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { cn } from '@/lib/utils'
 import { exportNotePdf } from './exportNotePdf'
 import { MindMap } from './MindMap'
+import { extractNoteHeadings } from './notes'
 import { parseOutline } from './outline'
 
 // How a note is read: typed (the Markdown reader) or handwritten (the same words on ruled paper in
@@ -39,6 +40,7 @@ function Paper({ children, className }: { children: ReactNode; className?: strin
 
 export function NoteBody({ kind, title, content }: { kind: string; title: string; content: string }) {
   const [view, setView] = useState<'typed' | 'handwritten'>('typed')
+  const [tocOpen, setTocOpen] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [exportRequest, setExportRequest] = useState<{ view: 'typed' | 'handwritten'; title: string; label: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -71,11 +73,16 @@ export function NoteBody({ kind, title, content }: { kind: string; title: string
   const handwritten = view === 'handwritten'
   const type = TYPE_NAME[kind] ?? 'notes'
   const label = `${KIND_LABEL[kind] ?? 'Note'} (${view})`
+  const headings = extractNoteHeadings(content)
 
   function savePdf() {
     setExporting(true)
     setError(null)
     setExportRequest({ view, title: `${title} (${type}${handwritten ? ', handwritten' : ''})`, label })
+  }
+
+  function jumpTo(id: string) {
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
   return (
@@ -91,6 +98,13 @@ export function NoteBody({ kind, title, content }: { kind: string; title: string
             Handwritten
           </ToggleGroupItem>
         </ToggleGroup>
+        {headings.length >= 3 && (
+          <Button variant="outline" size="sm" aria-expanded={tocOpen} onClick={() => setTocOpen((open) => !open)}>
+            <List aria-hidden />
+            Contents ({headings.length})
+            {tocOpen ? <ChevronUp aria-hidden /> : <ChevronDown aria-hidden />}
+          </Button>
+        )}
         <Button variant="outline" size="sm" disabled={exporting} onClick={savePdf}>
           {exporting ? <LoaderCircle className="animate-spin" aria-hidden /> : <Download aria-hidden />}
           PDF
@@ -101,6 +115,26 @@ export function NoteBody({ kind, title, content }: { kind: string; title: string
           </span>
         )}
       </div>
+
+      {headings.length >= 3 && tocOpen && (
+        <nav aria-label="Note sections" className="max-w-3xl rounded-xl border bg-muted/40 p-3 text-sm">
+          <p className="mb-2 text-xs font-medium text-muted-foreground">Jump to a section</p>
+          <ol className="grid gap-1 sm:grid-cols-2">
+            {headings.map((heading, index) => (
+              <li key={heading.id}>
+                <button
+                  type="button"
+                  onClick={() => jumpTo(heading.id)}
+                  className="flex w-full items-baseline gap-2 rounded-md px-2 py-1 text-left hover:bg-muted"
+                >
+                  <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{index + 1}.</span>
+                  <span className="truncate">{heading.text}</span>
+                </button>
+              </li>
+            ))}
+          </ol>
+        </nav>
+      )}
 
       {handwritten ? (
         <Paper>

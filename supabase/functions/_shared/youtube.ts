@@ -56,18 +56,53 @@ export const VIDEO_PART_SECONDS = 30 * 60
  */
 export const NOTES_PART_SECONDS = 15 * 60
 
+/** Default chapter window (90 minutes = 6 × 15-min parts ≈ 248k tokens, fitting inside the 250k TPM free-tier minute). */
+export const DEFAULT_WINDOW_SECONDS = 90 * 60
+
 /** Seconds from the start of the video. */
 export interface VideoPart {
   start: number
   end: number
 }
 
-/** The parts a lecture is watched in: none (the whole video at once) up to `partSeconds` or when its length is unknown, else equal parts. */
-export function videoParts(durationSec: number | null, partSeconds = VIDEO_PART_SECONDS): VideoPart[] {
-  if (durationSec === null || durationSec <= partSeconds) return []
-  const count = Math.ceil(durationSec / partSeconds)
-  const length = Math.ceil(durationSec / count)
-  return Array.from({ length: count }, (_, index) => ({ start: index * length, end: Math.min(durationSec, (index + 1) * length) }))
+/**
+ * Preset time windows (90 minutes each by default) for a marathon lecture longer than `windowSeconds`.
+ * Returns an empty list when the video is short enough to watch in one go or its length is unknown.
+ */
+export function videoWindows(durationSec: number | null, windowSeconds = DEFAULT_WINDOW_SECONDS): VideoPart[] {
+  if (durationSec === null || durationSec <= windowSeconds) return []
+  const count = Math.ceil(durationSec / windowSeconds)
+  return Array.from({ length: count }, (_, index) => ({
+    start: index * windowSeconds,
+    end: Math.min(durationSec, (index + 1) * windowSeconds),
+  }))
+}
+
+/**
+ * The parts a lecture (or a chosen `[startSec, endSec]` window of it) is watched in:
+ * none (the whole video at once) when no sub-window is chosen and the video is up to `partSeconds`
+ * or of unknown length, else equal parts covering the window.
+ */
+export function videoParts(
+  durationSec: number | null,
+  partSeconds = VIDEO_PART_SECONDS,
+  startSec?: number | null,
+  endSec?: number | null,
+): VideoPart[] {
+  const hasWindow = (startSec !== undefined && startSec !== null) || (endSec !== undefined && endSec !== null)
+  const total = durationSec !== null && durationSec > 0 ? durationSec : null
+  const start = Math.max(0, Math.floor(startSec ?? 0))
+  const rawEnd = endSec !== undefined && endSec !== null ? Math.floor(endSec) : total
+  const end = rawEnd !== null && total !== null ? Math.min(total, rawEnd) : rawEnd
+  if (end === null || end <= start) return []
+  const span = end - start
+  if (!hasWindow && span <= partSeconds) return []
+  const count = Math.ceil(span / partSeconds)
+  const length = Math.ceil(span / count)
+  return Array.from({ length: count }, (_, index) => ({
+    start: start + index * length,
+    end: Math.min(end, start + (index + 1) * length),
+  }))
 }
 
 /** 95 → "1:35", 3723 → "1:02:03". */

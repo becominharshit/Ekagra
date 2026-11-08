@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { DataSource } from '@/lib/dataSource'
 import { demoDb } from '@/lib/demoDb'
 import { stubLocalStorage } from '@/test/memoryStorage'
-import { getNote, listNotes, listSubjectNotes, noteKindLabel, noteSourceLabel } from './notes'
+import { extractNoteHeadings, getNote, listNotes, listSubjectNotes, noteKindLabel, noteSourceLabel, seedSampleNotes } from './notes'
 
 stubLocalStorage()
 
@@ -40,6 +40,36 @@ describe('notes in Demo Mode', () => {
   it('finds nothing for an unknown or broken id', async () => {
     expect(await getNote(DEMO, crypto.randomUUID())).toBeNull()
     expect(await getNote(DEMO, 'not-a-note')).toBeNull()
+  })
+
+  it('seeds a sample lecture note and mind map once for a subject in Demo Mode', async () => {
+    const [dbms] = demoDb.insert('subjects', [{ name: 'DBMS' }])
+    if (!dbms) throw new Error('No subject')
+    const seeded = await seedSampleNotes(DEMO, dbms.id)
+    expect(seeded.map((note) => note.kind)).toEqual(['notes', 'mind_map'])
+    expect(extractNoteHeadings(seeded[0]?.content ?? '').length).toBeGreaterThanOrEqual(4)
+    const again = await seedSampleNotes(DEMO, dbms.id)
+    expect(again).toHaveLength(2)
+  })
+})
+
+describe('table of contents headings', () => {
+  it('extracts ## headings in order and ignores # titles and fenced code blocks', () => {
+    const markdown = [
+      '# Lecture Title',
+      '## Overview',
+      '```python',
+      '## comment inside code fence',
+      '```',
+      '## **Gauss’s Law** (14:20)',
+      '### Sub-bullet heading',
+      '## Key points',
+    ].join('\n')
+    expect(extractNoteHeadings(markdown)).toEqual([
+      { id: 'sec-overview', text: 'Overview' },
+      { id: 'sec-gauss-s-law-14-20', text: 'Gauss’s Law (14:20)' },
+      { id: 'sec-key-points', text: 'Key points' },
+    ])
   })
 })
 

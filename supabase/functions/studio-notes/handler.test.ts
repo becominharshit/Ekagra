@@ -87,7 +87,7 @@ describe('studio-notes', () => {
     expect(body).toEqual({ noteId: '33333333-3333-4333-8333-333333333331' })
     expect(notes.created).toEqual([{ userId: 'student-1', subjectId: SUBJECT, materialId: MATERIAL, kind: 'notes', title: 'Lecture 4', source: 'material' }])
     expect(notes.finished).toEqual([
-      { noteId: body.noteId, title: 'SQL joins', content: '## Inner join\n- Matching rows only', model: 'gemini-3.8-flash', promptVersion: 'studio-notes-v4' },
+      { noteId: body.noteId, title: 'SQL joins', content: '## Inner join\n- Matching rows only', model: 'gemini-3.8-flash', promptVersion: 'studio-notes-v5' },
     ])
     expect(usage.logged).toEqual([expect.objectContaining({ feature: 'studio-notes', model: 'gemini-3.8-flash' })])
     const prompt = JSON.stringify(model.doGenerateCalls[0]?.prompt)
@@ -114,8 +114,11 @@ describe('studio-notes', () => {
     expect(hidden.body).toMatchObject({ code: 'video_not_public' })
     expect(hidden.notes.created).toEqual([])
 
-    const long = await call(request({ kind: 'youtube', url: VIDEO }), { env, fetcher: youtube(video('public', 'PT4H5M')) })
-    expect(long.body).toMatchObject({ code: 'video_too_long', message: expect.stringContaining('4 hours') })
+    const long = await call(request({ kind: 'youtube', url: VIDEO }), {
+      env,
+      fetcher: youtube(video('public', 'PT13H5M')),
+    })
+    expect(long.body).toMatchObject({ code: 'video_too_long', message: expect.stringContaining('13 hours') })
 
     const gone = await call(request({ kind: 'youtube', url: VIDEO }), { env, fetcher: youtube({ items: [] }) })
     expect(gone.body).toMatchObject({ code: 'video_not_found' })
@@ -133,7 +136,11 @@ describe('studio-notes', () => {
   it('watches a lecture over 20 minutes at 1 frame every 5 seconds and a short one at every second (the sound always in full)', async () => {
     const env = { ...ENV, YOUTUBE_API_KEY: 'yt-key' }
     // A 25-minute video's full notes are two 12:30 parts: each is seen at 0.2 frames a second, from its own offset.
-    const part = (n: number) => ({ summary: `Part ${n} teaches topic ${n}.`, markdown: `## Topic ${n}\n- Point ${n}`, keyPoints: [`Fact ${n}`] })
+    const part = (n: number) => ({
+      summary: `Part ${n} teaches topic ${n}.`,
+      sections: [{ heading: `Topic ${n} (${n}:00)`, explanation: `- Point ${n}`, formulasAndSteps: '', examTip: '' }],
+      keyPoints: [`Fact ${n}`],
+    })
     const longer = await call(request({ kind: 'youtube', url: VIDEO }), { env, fetcher: youtube(video('public', 'PT25M')), answers: [part(1), part(2)] })
     const longerPrompts = longer.model.doGenerateCalls.map((called) => JSON.stringify(called.prompt))
     expect(longerPrompts).toHaveLength(2)
@@ -147,7 +154,11 @@ describe('studio-notes', () => {
     const env = { ...ENV, YOUTUBE_API_KEY: 'yt-key' }
     const pieces = Array.from({ length: 8 }, (_, index) => {
       const n = index + 1
-      return { summary: `Part ${n} teaches topic ${n}.`, markdown: `## Topic ${n} (${n}:00)\n- Point ${n}`, keyPoints: [`Fact ${n}`] }
+      return {
+        summary: `Part ${n} teaches topic ${n}.`,
+        sections: [{ heading: `Topic ${n} (${n}:00)`, explanation: `- Point ${n}`, formulasAndSteps: `Step ${n}`, examTip: `Watch ${n}` }],
+        keyPoints: [`Fact ${n}`],
+      }
     })
     const { notes, model, usage } = await call(request({ kind: 'youtube', url: VIDEO }), { env, fetcher: youtube(video('public', 'PT1H59M15S')), answers: pieces })
 
@@ -161,11 +172,53 @@ describe('studio-notes', () => {
     expect(asked.some((prompt) => prompt.includes('This is part 1 of 8 of the video, from 0:00 to 14:55'))).toBe(true)
     expect(asked[0]).toContain('one part of a long lecture video')
     const [note] = notes.finished
-    expect(note).toMatchObject({ title: 'Lecture 4', model: 'gemini-3.5-flash-lite', promptVersion: 'studio-notes-v4' })
+    expect(note).toMatchObject({ title: 'Lecture 4', model: 'gemini-3.5-flash-lite', promptVersion: 'studio-notes-v5' })
     expect(note?.content).toContain('- **1:44:25–1:59:15:** Part 8 teaches topic 8.')
     expect(note?.content.indexOf('## Topic 1 (1:00)')).toBeLessThan(note?.content.indexOf('## Topic 8 (8:00)') ?? 0)
+    expect(note?.content).toContain('**Exam tip:** Watch 1')
     expect(note?.content).toMatch(/## Key points\n\n- Fact 1\n- Fact 2\n- Fact 3\n- Fact 4\n- Fact 5\n- Fact 6\n- Fact 7\n- Fact 8$/)
     expect(usage.logged).toHaveLength(8)
+  })
+
+  it('watches a 90-minute window of a 6-hour marathon lecture in six 15-minute parts and adds the time range to the title', async () => {
+    const env = { ...ENV, YOUTUBE_API_KEY: 'yt-key' }
+    const pieces = Array.from({ length: 6 }, (_, index) => {
+      const n = index + 1
+      return {
+        summary: `Window part ${n}.`,
+        sections: [{ heading: `Subtopic ${n}`, explanation: `- Detail ${n}`, formulasAndSteps: '', examTip: '' }],
+        keyPoints: [`Key ${n}`],
+      }
+    })
+    const { response, notes, model } = await call(
+      request({ kind: 'youtube', url: VIDEO, startSec: 5400, endSec: 10_800 }),
+      { env, fetcher: youtube(video('public', 'PT6H')), answers: pieces },
+    )
+    expect(response.status).toBe(200)
+    expect(model.doGenerateCalls).toHaveLength(6)
+    const prompts = model.doGenerateCalls.map((item) => JSON.stringify(item.prompt))
+    expect(prompts.some((prompt) => prompt.includes('"startOffset":"5400s","endOffset":"6300s"'))).toBe(true)
+    expect(prompts.some((prompt) => prompt.includes('"startOffset":"9900s","endOffset":"10800s"'))).toBe(true)
+    expect(notes.created[0]?.title).toBe('Lecture 4 (1:30:00–3:00:00)')
+    expect(notes.finished[0]?.title).toBe('Lecture 4 (1:30:00–3:00:00)')
+    expect(notes.finished[0]?.content).toContain('- **1:30:00–1:45:00:** Window part 1.')
+
+    // Un-windowed 5-hour marathon video automatically watches Part 1 (0:00–1:30:00) and saves the 5h duration.
+    const unwindowedFiveHours = await call(request({ kind: 'youtube', url: VIDEO }), {
+      env,
+      fetcher: youtube(video('public', 'PT5H')),
+      answers: pieces,
+    })
+    expect(unwindowedFiveHours.response.status).toBe(200)
+    expect(unwindowedFiveHours.notes.described).toEqual([{ materialId: MATERIAL, title: 'SQL joins in one shot', durationSec: 18_000 }])
+    expect(unwindowedFiveHours.notes.created[0]?.title).toBe('Lecture 4 (0:00–1:30:00)')
+
+    const overTwelve = await call(request({ kind: 'youtube', url: VIDEO, startSec: 0, endSec: 3600 }), {
+      env,
+      fetcher: youtube(video('public', 'PT13H')),
+    })
+    expect(overTwelve.response.status).toBe(422)
+    expect(overTwelve.body).toMatchObject({ code: 'video_too_long', message: expect.stringContaining('12 hours') })
   })
 
   it("makes a mind map of a lecture over 30 minutes from its parts' maps, combined by one more request", async () => {
@@ -291,11 +344,19 @@ describe('studio-notes', () => {
 describe('joining the parts of a long lecture', () => {
   it("keeps every part's notes in order, drops their own titles and key points sections, and lists each key point once", () => {
     const joined = joinParts([
-      { start: 0, end: 1789, summary: 'Displacement current.\n', markdown: '# EM waves\n## Displacement current (1:48)\n- i_d', keyPoints: ['Maxwell fixed Ampere’s law', '- Speed c'] },
+      {
+        start: 0,
+        end: 1789,
+        summary: 'Displacement current.\n',
+        sections: [],
+        markdown: '# EM waves\n## Displacement current (1:48)\n- i_d',
+        keyPoints: ['Maxwell fixed Ampere’s law', '- Speed c'],
+      },
       {
         start: 1789,
         end: 3578,
         summary: 'Maxwell’s equations and the speed of light.',
+        sections: [],
         markdown: '## Maxwell’s equations (30:10)\n- Four laws\n## Key points\n- Repeated here\n## Speed of light (45:00)\n- c = 1/√(μ₀ε₀)',
         keyPoints: ['speed c', 'Four laws'],
       },
@@ -308,6 +369,34 @@ describe('joining the parts of a long lecture', () => {
         '## Maxwell’s equations (30:10)\n- Four laws\n## Speed of light (45:00)\n- c = 1/√(μ₀ε₀)',
         '## Key points',
         '- Maxwell fixed Ampere’s law\n- Speed c\n- Four laws',
+      ].join('\n\n'),
+    )
+  })
+
+  it('formats structured topic sections with explanations, formulas/steps, and exam tips', () => {
+    const joined = joinParts([
+      {
+        start: 0,
+        end: 900,
+        summary: 'Gauss law and flux.',
+        sections: [
+          {
+            heading: 'Electric flux (2:15)',
+            explanation: '- Flux measures field lines crossing a surface.',
+            formulasAndSteps: '$$\\Phi_E = \\oint \\vec{E} \\cdot d\\vec{A}$$',
+            examTip: 'Include cos(θ) when the normal is tilted.',
+          },
+        ],
+        keyPoints: ['Closed surface flux depends on enclosed charge'],
+      },
+    ])
+    expect(joined).toBe(
+      [
+        '## Overview',
+        '- **0:00–15:00:** Gauss law and flux.',
+        '## Electric flux (2:15)\n\n- Flux measures field lines crossing a surface.\n\n$$\\Phi_E = \\oint \\vec{E} \\cdot d\\vec{A}$$\n\n**Exam tip:** Include cos(θ) when the normal is tilted.',
+        '## Key points',
+        '- Closed surface flux depends on enclosed charge',
       ].join('\n\n'),
     )
   })

@@ -34,11 +34,29 @@ export interface NotesSource {
   pages: { first: number; last: number; count: number } | null
 }
 
+export interface VideoRange {
+  startSec?: number
+  endSec?: number
+}
+
 /** What Gemini reads for this material. For a PDF, from `firstPage` on, as many pages as fit. */
-export async function notesSource(source: DataSource, material: Material, firstPage = 1): Promise<NotesSource> {
+export async function notesSource(source: DataSource, material: Material, firstPage = 1, range?: VideoRange): Promise<NotesSource> {
   if (material.kind === 'youtube') {
     if (!material.source_url) throw new Error("This video's link is missing. Delete it and add the video again.")
-    return { source: { kind: 'youtube', url: material.source_url }, pages: null }
+    const startSec = range?.startSec !== undefined && range.startSec > 0 ? Math.floor(range.startSec) : undefined
+    const endSec = range?.endSec !== undefined && range.endSec > 0 ? Math.floor(range.endSec) : undefined
+    if (startSec !== undefined && endSec !== undefined && endSec <= startSec) {
+      throw new Error('The end time must be after the start time.')
+    }
+    return {
+      source: {
+        kind: 'youtube',
+        url: material.source_url,
+        ...(startSec !== undefined ? { startSec } : {}),
+        ...(endSec !== undefined ? { endSec } : {}),
+      },
+      pages: null,
+    }
   }
   if (material.kind === 'text') {
     const text = (await materialText(source, material.id)).trim()
@@ -70,6 +88,8 @@ export interface MakeNotesInput {
   kind: StudioNoteKind
   subjectId: string
   firstPage?: number
+  startSec?: number
+  endSec?: number
   program?: string | null
   year?: number | null
 }
@@ -77,7 +97,7 @@ export interface MakeNotesInput {
 /** Starts making a note and returns its id (the note says 'processing' until it's done). */
 export async function makeNotes(source: DataSource, input: MakeNotesInput): Promise<string> {
   if (source.kind === 'demo') throw new Error("Studio's AI needs you to be signed in.")
-  const { source: what } = await notesSource(source, input.material, input.firstPage)
+  const { source: what } = await notesSource(source, input.material, input.firstPage, { startSec: input.startSec, endSec: input.endSec })
   const { noteId } = await callAiFunction(
     'studio-notes',
     {

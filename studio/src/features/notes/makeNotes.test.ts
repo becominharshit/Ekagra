@@ -61,6 +61,14 @@ describe('makeNotes', () => {
     ])
   })
 
+  it('passes a chosen time range for a long YouTube lecture and refuses an end time before the start time', async () => {
+    expect(await notesSource(DEMO, material({}), 1, { startSec: 5400, endSec: 10_800 })).toEqual({
+      source: { kind: 'youtube', url: 'https://www.youtube.com/watch?v=9hE5-98ZeCg', startSec: 5400, endSec: 10_800 },
+      pages: null,
+    })
+    await expect(notesSource(DEMO, material({}), 1, { startSec: 3600, endSec: 1800 })).rejects.toThrow(/after the start time/)
+  })
+
   it('needs sign-in', async () => {
     await expect(makeNotes(DEMO, { material: material({}), kind: 'notes', subjectId: 's1' })).rejects.toThrow(/signed in/)
   })

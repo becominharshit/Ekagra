@@ -1,7 +1,9 @@
+import { isValidElement, type ReactNode } from 'react'
 import 'katex/dist/katex.min.css'
 import rehypeKatex from 'rehype-katex'
 import remarkMath from 'remark-math'
 import ReactMarkdown, { type Components } from 'react-markdown'
+import { headingSlug } from '@/features/notes/notes'
 import { cn } from '@/lib/utils'
 
 // AI answers are Markdown. react-markdown never runs HTML from the text, so an answer can't
@@ -9,8 +11,20 @@ import { cn } from '@/lib/utils'
 // Formulas are LaTeX: $…$ in a sentence, $$…$$ on its own line. A broken formula shows in red
 // instead of failing the whole note; display formulas scroll sideways on a phone.
 
+function nodeText(node: ReactNode): string {
+  if (typeof node === 'string' || typeof node === 'number') return String(node)
+  if (Array.isArray(node)) return node.map(nodeText).join('')
+  if (isValidElement<{ children?: ReactNode }>(node)) return nodeText(node.props.children)
+  return ''
+}
+
 const COMPONENTS: Components = {
   a: ({ children }) => <span className="underline decoration-dotted">{children}</span>,
+  h2: ({ children }) => (
+    <h2 id={headingSlug(nodeText(children))} className="scroll-mt-20">
+      {children}
+    </h2>
+  ),
 }
 
 export function Markdown({ children, className }: { children: string; className?: string }) {

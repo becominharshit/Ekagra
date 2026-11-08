@@ -23,6 +23,7 @@ import {
 } from '../_shared/schemas.ts'
 import {
   clockTime,
+  DEFAULT_WINDOW_SECONDS,
   fetchVideoDetails,
   lectureFps,
   NOTES_PART_SECONDS,
@@ -45,8 +46,10 @@ import {
 // its 30-minute parts' by one more request. A mind map or revision sheet of a video that already
 // has notes is made from those notes instead.
 
-/** Longer videos don't fit Gemini's context, even at low media resolution (ai.google.dev video docs). */
-export const MAX_VIDEO_SECONDS = 3 * 60 * 60
+/** Total video length Studio accepts (up to 12-hour marathon lectures, watched in windows of up to 3 hours). */
+export const MAX_VIDEO_SECONDS = 12 * 60 * 60
+/** The longest slice of a video one note can cover at once (Gemini's context + the 140s function limit). */
+export const MAX_WINDOW_SECONDS = 3 * 60 * 60
 /** Supabase's free plan stops a function after 150 seconds, background work included: this leaves time to save the result. */
 export const WORK_TIME_MS = 140_000
 /** The most of a video's notes that a mind map or revision sheet is made from (about 50,000 tokens). */
@@ -100,8 +103,9 @@ function failure(error: unknown, watchingVideo: boolean): string {
   return 'Something went wrong while saving this. Please try again.'
 }
 
-/** YouTube's view of the video, when YOUTUBE_API_KEY is set: refuses private and too long videos before anything is spent. */
-async function checkVideo(id: string, deps: StudioNotesDeps): Promise<VideoDetails | null> {
+/** YouTube's view of the video, when YOUTUBE_API_KEY is set: refuses private and >12h videos before anything is spent. */
+async function checkVideo(id: string, deps: StudioNotesDeps, startSec?: number, endSec?: number): Promise<VideoDetails | null> {
+  const hasWindow = startSec !== undefined || endSec !== undefined
   const key = deps.env.YOUTUBE_API_KEY?.trim()
   if (!key) return null
   let details: VideoDetails | null
@@ -115,9 +119,25 @@ async function checkVideo(id: string, deps: StudioNotesDeps): Promise<VideoDetai
   if (!details) throw new AiError(422, 'video_not_found', "YouTube doesn't have this video. It may have been deleted.")
   if (details.privacy !== 'public') throw new AiError(422, 'video_not_public', 'This video is private or unlisted. Studio can only make notes from public videos.')
   if (details.durationSec > MAX_VIDEO_SECONDS) {
-    throw new AiError(422, 'video_too_long', `This video is ${Math.floor(details.durationSec / 3600)} hours long. Studio can make notes from videos of up to 3 hours.`)
+    throw new AiError(422, 'video_too_long', `This video is ${Math.floor(details.durationSec / 3600)} hours long. Studio supports videos of up to 12 hours.`)
+  }
+  if (details.durationSec > 0 && hasWindow) {
+    const start = startSec ?? 0
+    const end = Math.min(details.durationSec, endSec ?? details.durationSec)
+    if (start >= details.durationSec || end <= start) {
+      throw new AiError(422, 'bad_time_range', `This video is ${clockTime(details.durationSec)} long. Choose a start time before the end of the video.`)
+    }
   }
   return details
+}
+
+/** Adds `(start–end)` to a title when only a window of the video was watched. */
+function withRangeTitle(title: string, range: VideoPart | null): string {
+  const clean = title.trim()
+  if (!range) return clean
+  const tag = `(${clockTime(range.start)}–${clockTime(range.end)})`
+  if (clean.includes(tag)) return clean
+  return `${clean} ${tag}`.slice(0, 200)
 }
 
 /** A part's notes without a "# " title or a "## Key points" section of its own (the prompt asks for neither). */
@@ -130,11 +150,33 @@ function partBody(markdown: string): string {
   return [...lines.slice(0, start), ...(after < 0 ? [] : lines.slice(after))].join('\n').trim()
 }
 
+/** Formats one structured part's sections (or legacy markdown) into clean Markdown. */
+function formatPart(part: StudioNotePartAnswer & { markdown?: string }): string {
+  if (Array.isArray(part.sections) && part.sections.length > 0) {
+    return part.sections
+      .map((sec) => {
+        const heading = sec.heading.trim().replace(/^#+\s*/, '')
+        const explanation = sec.explanation.trim()
+        const formulas = sec.formulasAndSteps.trim()
+        const tipRaw = sec.examTip.trim()
+        const tip = tipRaw
+          ? /^\*\*(remember|exam tip)/i.test(tipRaw)
+            ? tipRaw
+            : `**Exam tip:** ${tipRaw}`
+          : ''
+        return [`## ${heading}`, explanation, formulas, tip].filter(Boolean).join('\n\n')
+      })
+      .filter(Boolean)
+      .join('\n\n')
+  }
+  return part.markdown ? partBody(part.markdown) : ''
+}
+
 /**
  * The full notes of a long video from its parts: an overview (each part's times and summary), every
  * part's notes in order, then their key points (each once). Pure.
  */
-export function joinParts(parts: (VideoPart & StudioNotePartAnswer)[]): string {
+export function joinParts(parts: (VideoPart & StudioNotePartAnswer & { markdown?: string })[]): string {
   const overview = parts.map((part) => `- **${clockTime(part.start)}–${clockTime(part.end)}:** ${part.summary.trim().replace(/\s+/g, ' ')}`)
   const seen = new Set<string>()
   const keyPoints = parts
@@ -149,7 +191,7 @@ export function joinParts(parts: (VideoPart & StudioNotePartAnswer)[]): string {
   return [
     '## Overview',
     overview.join('\n'),
-    ...parts.map((part) => partBody(part.markdown)).filter(Boolean),
+    ...parts.map((part) => formatPart(part)).filter(Boolean),
     ...(keyPoints.length > 0 ? ['## Key points', keyPoints.map((point) => `- ${point}`).join('\n')] : []),
   ].join('\n\n')
 }
@@ -168,41 +210,61 @@ export function handleStudioNotes(makeDeps: () => StudioNotesDeps): (request: Re
     let videoUrl: string | null = null
     let fps: number | undefined
     let parts: VideoPart[] = []
+    let sliceRange: VideoPart | null = null
     let fromNotes: string | null = null
     if (input.source.kind === 'youtube') {
       const id = youtubeId(input.source.url)
       if (!id) throw new AiError(400, 'bad_request', "That isn't a link to a YouTube video.")
       videoUrl = watchUrl(id)
-      // A mind map or revision sheet comes from the video's notes when there are some: seconds, instead of watching it again.
-      if (input.kind !== 'notes') {
+      let { startSec, endSec } = input.source
+      let hasWindow = startSec !== undefined || endSec !== undefined
+      // A mind map or revision sheet comes from the video's notes when there are some (unless a specific time window was asked for).
+      if (input.kind !== 'notes' && !hasWindow) {
         fromNotes = await deps.store.readyNotes(input.materialId, userId).catch((error: unknown) => {
           console.error('Could not read the notes of the video:', error)
           return null
         })
       }
       if (!fromNotes) {
-        const details = await checkVideo(id, deps)
+        const details = await checkVideo(id, deps, startSec, endSec)
         if (details) await deps.store.describeVideo(input.materialId, userId, details).catch((error: unknown) => console.error('Could not describe the video:', error))
-        fps = lectureFps(details?.durationSec ?? null)
-        // Only a video whose length is known (YOUTUBE_API_KEY) can be split; a live stream reports 0.
-        // Full notes use shorter parts, so they come out longer and more detailed.
-        parts = videoParts(details?.durationSec || null, input.kind === 'notes' ? NOTES_PART_SECONDS : VIDEO_PART_SECONDS)
+        const totalSec = details?.durationSec || null
+        const requestedStart = startSec ?? 0
+        const requestedEnd = endSec ?? totalSec ?? undefined
+        // When a video or chosen range is over 3 hours (e.g. first click right after pasting a 5h video),
+        // automatically make a 90-minute part from the start time instead of failing.
+        if (requestedEnd !== undefined && requestedEnd - requestedStart > MAX_WINDOW_SECONDS) {
+          startSec = requestedStart
+          endSec = totalSec !== null ? Math.min(totalSec, requestedStart + DEFAULT_WINDOW_SECONDS) : requestedStart + DEFAULT_WINDOW_SECONDS
+          hasWindow = true
+        }
+        const windowSpan = endSec !== undefined ? endSec - (startSec ?? 0) : totalSec
+        fps = lectureFps(windowSpan)
+        parts = videoParts(totalSec, input.kind === 'notes' ? NOTES_PART_SECONDS : VIDEO_PART_SECONDS, startSec, endSec)
+        if (hasWindow && parts.length > 0) {
+          sliceRange = { start: parts[0]!.start, end: parts[parts.length - 1]!.end }
+        }
       }
     }
 
+    const initialTitle = withRangeTitle(input.title, sliceRange)
     const noteId = await deps.store.create({
       userId,
       subjectId: input.subjectId,
       materialId: input.materialId,
       kind: input.kind,
-      title: input.title,
+      title: initialTitle,
       source: videoUrl ? 'youtube' : 'material',
     })
 
     const asked = { userId, feature: 'studio-notes', deadline }
     // Anything from a video (its parts, or the notes made from it) is long, so the cheaper, quicker model reads it.
     const tier = videoUrl ? 'fast' : 'smart'
-    const noteFrom = ({ data, model }: { data: StudioNoteAnswer; model: string }) => ({ title: data.title.trim() || input.title, content: data.markdown.trim(), model })
+    const noteFrom = ({ data, model }: { data: StudioNoteAnswer; model: string }) => ({
+      title: withRangeTitle(data.title.trim() || input.title, sliceRange),
+      content: data.markdown.trim(),
+      model,
+    })
 
     /** Full notes of a long video: every part's detailed notes at the same time, joined in order. */
     const fullNotes = async (url: string) => {
@@ -218,7 +280,7 @@ export function handleStudioNotes(makeDeps: () => StudioNotesDeps): (request: Re
           return { part: { ...part, ...made.data }, model: made.model }
         }),
       )
-      return { title: input.title, content: joinParts(done.map(({ part }) => part)), model: done[0]?.model ?? config.models.fast }
+      return { title: initialTitle, content: joinParts(done.map(({ part }) => part)), model: done[0]?.model ?? config.models.fast }
     }
 
     /** A mind map or revision sheet of a long video: its parts' at the same time, then one from theirs (text only, quick). */
@@ -237,7 +299,7 @@ export function handleStudioNotes(makeDeps: () => StudioNotesDeps): (request: Re
       )
       // Right after the parts, Gemini's free tier may be over its tokens for this minute: the gateway then waits for the next one.
       return noteFrom(
-        await ai.generate({ ...asked, tier: 'fast', schema: StudioNoteAnswerSchema, instructions: studioCombineInstructions(input.kind), prompt: studioCombinePrompt(input.title, done) }),
+        await ai.generate({ ...asked, tier: 'fast', schema: StudioNoteAnswerSchema, instructions: studioCombineInstructions(input.kind), prompt: studioCombinePrompt(initialTitle, done) }),
       )
     }
 
@@ -245,7 +307,8 @@ export function handleStudioNotes(makeDeps: () => StudioNotesDeps): (request: Re
       const instructions = studioNotesInstructions(input.kind)
       if (fromNotes) return noteFrom(await ai.generate({ ...asked, tier, schema: StudioNoteAnswerSchema, instructions, prompt: studioFromNotesPrompt(input, fromNotes.slice(0, FROM_NOTES_LENGTH)) }))
       if (videoUrl && parts.length > 1) return input.kind === 'notes' ? fullNotes(videoUrl) : combined(videoUrl)
-      return noteFrom(await ai.generate({ ...asked, tier, schema: StudioNoteAnswerSchema, instructions, prompt: studioNotesPrompt(input, videoUrl, fps) }))
+      const singleClip = videoUrl && parts.length === 1 ? { ...parts[0]!, index: 0, count: 1 } : undefined
+      return noteFrom(await ai.generate({ ...asked, tier, schema: StudioNoteAnswerSchema, instructions, prompt: studioNotesPrompt(input, videoUrl, fps, singleClip) }))
     }
 
     deps.background(

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { focusRoute, guardPlan, sessionEndsAt, type GuardPlanInput } from './guardPlan'
+import { focusRoute, guardPlan, liveTestPlan, sessionEndsAt, type GuardPlanInput } from './guardPlan'
 
 const at = (time: string) => new Date(`2026-11-02T${time}:00`)
 const iso = (time: string) => at(time).toISOString()
@@ -44,6 +44,16 @@ describe('what FocusGuard blocks', () => {
     expect(sessionEndsAt(pomodoro, [], at('14:10'))).toBe(at('14:45').getTime())
     expect(sessionEndsAt(pomodoro, [{ from: iso('14:05'), to: iso('14:15') }], at('14:20'))).toBe(at('14:55').getTime())
     expect(sessionEndsAt(pomodoro, [{ from: iso('14:05'), to: null }], at('14:08'))).toBe(at('14:48').getTime()) // still paused: it keeps moving
+  })
+
+  it('builds a 60-second live test plan when at least one app is picked', () => {
+    expect(liveTestPlan([], at('14:00'))).toBeNull()
+    expect(liveTestPlan(['com.whatsapp', 'com.instagram.android', 'com.whatsapp'], at('14:00'), 60)).toEqual({
+      title: 'FocusGuard 60s test',
+      endsAt: at('14:01').getTime(),
+      blockedPackages: ['com.instagram.android', 'com.whatsapp'],
+      emergencyUnlocksLeft: 0,
+    })
   })
 })
 

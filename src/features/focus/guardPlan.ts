@@ -75,3 +75,15 @@ export function focusRoute(url: string): string | null {
   const query = params.toString()
   return query ? `/today/focus/tollbooth?${query}` : '/today/focus/tollbooth'
 }
+
+/** A short live test of FocusGuard from /me/focus: blocks the picked apps for `durationSec` seconds so the student can verify setup right away. */
+export function liveTestPlan(blockedPackages: string[], now: Date, durationSec = 60): GuardPlan | null {
+  const unique = [...new Set(blockedPackages)].sort()
+  if (unique.length === 0 || durationSec <= 0) return null
+  return {
+    title: 'FocusGuard 60s test',
+    endsAt: now.getTime() + durationSec * 1000,
+    blockedPackages: unique,
+    emergencyUnlocksLeft: 0,
+  }
+}
