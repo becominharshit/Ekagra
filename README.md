@@ -13,6 +13,8 @@ An AI mentor app for college students. It turns your syllabus, books and lecture
 | [docs/1-product-spec.md](docs/1-product-spec.md) | Every feature, screen and user flow, tagged by phase | Deciding **what** to build |
 | [docs/2-technical-design.md](docs/2-technical-design.md) | Stack, architecture, database, AI pipelines, planner, app blocker, integrations | Deciding **how** to build it |
 | [docs/3-roadmap-and-build-guide.md](docs/3-roadmap-and-build-guide.md) | **§0: the current 2-phase plan and milestone checklist**, building with AI tools, beta testing, costs, risks | Every week while building |
+| [docs/4-setup-guide.md](docs/4-setup-guide.md) | One-time setup: Supabase, Google sign-in, AI secrets, deploy, APK, Studio online | Setting up or fixing the environment |
+| [docs/5-ai-studio-project-brief.md](docs/5-ai-studio-project-brief.md) | Self-contained project brief and analysis prompt for Google AI Studio | Getting an outside product/architecture review |
 | [AGENTS.md](AGENTS.md) | Project rules that AI coding tools read automatically | Keep it in the project root |
 
 ## Key decisions
