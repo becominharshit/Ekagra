@@ -511,4 +511,52 @@ describe('studio-notes SSE streaming', () => {
     expect(notes.finished[0]?.title).toBe('Normalization')
     warnQuiet.mockRestore()
   })
+
+  it('reuses cached YouTube notes across identical video_id + kind + prompt_version without calling Gemini again', async () => {
+    const cacheMap = new Map<string, { title: string; content: string; model: string }>()
+    const attachCache = (store: NotesStore): NotesStore => ({
+      ...store,
+      async getYoutubeCache(videoId, kind, promptVersion) {
+        return cacheMap.get(`${videoId}|${kind}|${promptVersion}`) ?? null
+      },
+      async setYoutubeCache(entry) {
+        cacheMap.set(`${entry.videoId}|${entry.kind}|${entry.promptVersion}`, { title: entry.title, content: entry.content, model: entry.model })
+      },
+    })
+
+    const firstStore = memoryStore()
+    const firstModel = fakeGemini({ title: 'Joins Cached', markdown: '## Hash join\n- O(N+M)' })
+    const firstTasks: Promise<void>[] = []
+    const firstUsage = memoryUsage()
+    const firstRes = await handleStudioNotes(() => ({
+      env: ENV,
+      authenticate: async () => 'student-1',
+      usage: firstUsage,
+      store: attachCache(firstStore.store),
+      background: (task) => firstTasks.push(task),
+      model: () => firstModel,
+    }))(new Request('http://localhost/studio-notes', { method: 'POST', body: JSON.stringify(request({ kind: 'youtube', url: VIDEO })) }))
+    await Promise.all(firstTasks)
+    expect(firstRes.status).toBe(200)
+    expect(firstModel.doGenerateCalls).toHaveLength(1)
+    expect(cacheMap.size).toBe(1)
+
+    const secondStore = memoryStore()
+    const secondModel = fakeGemini({ title: 'Should Not Generate', markdown: 'Unused' })
+    const secondTasks: Promise<void>[] = []
+    const secondUsage = memoryUsage()
+    const secondRes = await handleStudioNotes(() => ({
+      env: ENV,
+      authenticate: async () => 'student-2',
+      usage: secondUsage,
+      store: attachCache(secondStore.store),
+      background: (task) => secondTasks.push(task),
+      model: () => secondModel,
+    }))(new Request('http://localhost/studio-notes', { method: 'POST', body: JSON.stringify(request({ kind: 'youtube', url: VIDEO })) }))
+    await Promise.all(secondTasks)
+    expect(secondRes.status).toBe(200)
+    expect(secondModel.doGenerateCalls).toHaveLength(0)
+    expect(secondUsage.logged).toHaveLength(0)
+    expect(secondStore.finished[0]).toMatchObject({ title: 'Joins Cached', content: '## Hash join\n- O(N+M)' })
+  })
 })

@@ -15,7 +15,7 @@ type Stage = { name: 'idle' } | { name: 'asking'; questions: StoredCheckQuestion
 const now = () => new Date()
 
 /** Under a note: test yourself with multiple-choice questions made from it. The answers count in Ekagra. */
-export function NoteQuiz({ note }: { note: Note }) {
+export function NoteQuiz({ note, videoId }: { note: Note; videoId?: string | null }) {
   const profile = useProfile()
   const saved = useNoteQuestions(note.id)
   const make = useAcademicsMutation(makeQuiz)
@@ -28,7 +28,7 @@ export function NoteQuiz({ note }: { note: Note }) {
   }
 
   function makeNew(count: number) {
-    make.mutate({ note, count, program: profile.data?.program, year: profile.data?.year }, { onSuccess: (questions) => ask(questions) })
+    make.mutate({ note, count, program: profile.data?.program, year: profile.data?.year, videoId }, { onSuccess: (questions) => ask(questions) })
   }
 
   if (stage.name === 'asking') {

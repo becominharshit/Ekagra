@@ -176,7 +176,7 @@ describe('AI gateway', () => {
       new APICallError({ message: `HTTP ${statusCode}`, url: 'https://api.anthropic.com/v1/messages', requestBodyValues: {}, statusCode, responseBody, isRetryable: false })
     const tryWith = (error: unknown) => createAiGateway({ config, usage: memoryUsage(), model: () => failing(error) }).generate(task)
 
-    await expect(tryWith(apiError(401))).rejects.toMatchObject({ status: 500, code: 'not_configured', message: expect.stringContaining('AI_API_KEY') })
+    await expect(tryWith(apiError(401))).rejects.toMatchObject({ status: 500, code: 'not_configured', message: expect.stringContaining('Cloud AI') })
     await expect(tryWith(apiError(529))).rejects.toMatchObject({ status: 503, code: 'provider_busy' })
     const spendLimit = apiError(400, '{"type":"error","error":{"type":"invalid_request_error","message":"You have reached your specified API usage limits."}}')
     await expect(tryWith(spendLimit)).rejects.toMatchObject({ status: 503, code: 'provider_busy' })
@@ -188,7 +188,39 @@ describe('AI gateway', () => {
     quiet.mockRestore()
   })
 
-  describe('says plainly why the AI refused', () => {
+  it('automatically falls back from Anthropic 400/402/429 to Gemini when GEMINI_API_KEY is configured', async () => {
+    const warnQuiet = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    for (const status of [400, 402, 429]) {
+      const usage = memoryUsage()
+      const cfg = readAiConfig({ ...TEST_SECRETS, GEMINI_API_KEY: 'gm-fallback-key' })
+      const claudeFailing = new MockLanguageModelV4({
+        doGenerate: async () => {
+          throw new APICallError({
+            message: `HTTP ${status}`,
+            url: 'https://api.anthropic.com/v1/messages',
+            requestBodyValues: {},
+            statusCode: status,
+            responseBody: '{"error":{"message":"Credit or rate issue"}}',
+            isRetryable: false,
+          })
+        },
+      })
+      const geminiSuccess = fakeModel(modelAnswer(GOOD, 2_000, 500))
+      const ai = createAiGateway({
+        config: cfg,
+        usage,
+        model: () => claudeFailing,
+        fallbackModel: () => geminiSuccess,
+      })
+
+      const res = await ai.generate(task)
+      expect(res).toEqual({ data: { title: 'SQL', minutes: 60 }, model: 'gemini-3.8-flash' })
+      expect(usage.logged[0]).toMatchObject({ model: 'gemini-3.8-flash', inputTokens: 2_000, outputTokens: 500 })
+    }
+    warnQuiet.mockRestore()
+  })
+
+  describe('says plainly why the AI refused without leaking vendor URLs', () => {
     const failing = (error: unknown) =>
       new MockLanguageModelV4({
         doGenerate: async () => {
@@ -200,27 +232,36 @@ describe('AI gateway', () => {
     const gemini = readStudioAiConfig({ GEMINI_API_KEY: 'gemini-test-key' })
     const tryWith = (error: unknown, on = config) => createAiGateway({ config: on, usage: memoryUsage(), model: () => failing(error) }).generate(task)
 
-    it('when the prepaid credit has run out: Anthropic says "credit balance", Google answers 402', async () => {
+    it('masks vendor billing URLs and credit messages behind a clean user-safe unavailability message', async () => {
       const quiet = vi.spyOn(console, 'error').mockImplementation(() => undefined)
       const anthropicCredit = apiError(400, '{"type":"error","error":{"type":"invalid_request_error","message":"Your credit balance is too low to access the Anthropic API."}}')
-      await expect(tryWith(anthropicCredit)).rejects.toMatchObject({ status: 503, code: 'provider_billing', message: expect.stringContaining('platform.claude.com') })
+      const err1 = await tryWith(anthropicCredit).catch((e: unknown) => e as Error)
+      expect(err1).toBeInstanceOf(Error)
+      if (!(err1 instanceof Error)) throw new Error('Expected Anthropic error')
+      expect(err1).toMatchObject({ status: 503, code: 'provider_billing', message: 'Cloud AI is temporarily unavailable. Please try again shortly.' })
+      expect(err1.message).not.toMatch(/platform\.claude\.com|ai\.studio|credit/i)
+
       const googleCredit = apiError(402, '{"error":{"code":402,"message":"Your prepayment credits are depleted.","status":"RESOURCE_EXHAUSTED"}}')
-      await expect(tryWith(googleCredit, gemini)).rejects.toMatchObject({ status: 503, code: 'provider_billing', message: expect.stringContaining('AI Studio') })
+      const err2 = await tryWith(googleCredit, gemini).catch((e: unknown) => e as Error)
+      expect(err2).toBeInstanceOf(Error)
+      if (!(err2 instanceof Error)) throw new Error('Expected Gemini error')
+      expect(err2).toMatchObject({ status: 503, code: 'provider_billing', message: 'Cloud AI is temporarily unavailable. Please try again shortly.' })
+      expect(err2.message).not.toMatch(/platform\.claude\.com|ai\.studio|credit/i)
       quiet.mockRestore()
     })
 
-    it("when a request is more than Gemini's free tier reads in a minute, or today's limit is reached, or the model doesn't exist", async () => {
+    it('sanitizes rate limits, daily limits, and model config errors without leaking secrets', async () => {
       const quiet = vi.spyOn(console, 'error').mockImplementation(() => undefined)
       vi.spyOn(console, 'warn').mockImplementation(() => undefined)
       const freeTier = apiError(429, '{"error":{"message":"Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_input_token_count, limit: 250000"}}')
-      await expect(tryWith(freeTier, gemini)).rejects.toMatchObject({ code: 'provider_limit', message: expect.stringContaining("Gemini's free tier") })
+      await expect(tryWith(freeTier, gemini)).rejects.toMatchObject({ code: 'provider_limit', message: expect.stringContaining('shorter section') })
       const today = apiError(429, '{"error":{"details":[{"violations":[{"quotaId":"GenerateRequestsPerDayPerProjectPerModel-FreeTier"}]}]}}')
-      await expect(tryWith(today, gemini)).rejects.toMatchObject({ code: 'provider_limit', message: expect.stringContaining("today's limit") })
+      await expect(tryWith(today, gemini)).rejects.toMatchObject({ code: 'provider_limit', message: expect.stringContaining('daily capacity limit') })
       await expect(tryWith(apiError(429, '{"error":{"message":"Resource has been exhausted."}}'), gemini)).rejects.toMatchObject({ code: 'provider_busy' })
       await expect(tryWith(apiError(404, '{"error":{"message":"models/x is not found"}}'), gemini)).rejects.toMatchObject({
         status: 500,
         code: 'not_configured',
-        message: expect.stringContaining('gemini-3.8-flash'),
+        message: expect.stringContaining('Cloud AI is temporarily unavailable'),
       })
       quiet.mockRestore()
       vi.restoreAllMocks()
@@ -230,8 +271,8 @@ describe('AI gateway', () => {
       const quiet = vi.spyOn(console, 'error').mockImplementation(() => undefined)
       vi.spyOn(console, 'warn').mockImplementation(() => undefined)
       const timeout = new DOMException('The operation was aborted due to timeout', 'TimeoutError')
-      await expect(tryWith(timeout)).rejects.toMatchObject({ status: 504, code: 'provider_timeout', message: expect.stringContaining('2 minutes') })
-      await expect(tryWith(timeout, gemini)).rejects.toMatchObject({ status: 504, code: 'provider_timeout', message: expect.stringContaining('Gemini took too long') })
+      await expect(tryWith(timeout)).rejects.toMatchObject({ status: 504, code: 'provider_timeout', message: expect.stringContaining('Cloud AI took too long') })
+      await expect(tryWith(timeout, gemini)).rejects.toMatchObject({ status: 504, code: 'provider_timeout', message: expect.stringContaining('Cloud AI took too long') })
       quiet.mockRestore()
       vi.restoreAllMocks()
     })

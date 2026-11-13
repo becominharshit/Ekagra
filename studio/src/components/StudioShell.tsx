@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { ArrowUpRight, Inbox, Library, LogOut } from 'lucide-react'
-import { Link, NavLink, Outlet, useLocation } from 'react-router'
+import { Outlet, useLocation } from 'react-router'
+import { StudioLink as Link, StudioNavLink as NavLink } from '@studio/lib/studioPath'
 import { Button } from '@/components/ui/button'
 import { useSubjects } from '@/features/academics/subjects'
 import { signOut } from '@/features/auth/auth'

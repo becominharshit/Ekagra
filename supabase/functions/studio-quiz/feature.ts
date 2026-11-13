@@ -24,7 +24,23 @@ export function shuffleOptions(question: StudioQuizQuestion, random: () => numbe
 export const quizFeature: AiFeature<StudioQuizRequest, StudioQuizResponse> = {
   feature: 'studio-quiz',
   input: StudioQuizRequestSchema,
-  async run({ input, userId, ai }) {
+  async run({ input, userId, ai, cache }) {
+    const cacheKey = input.videoId?.trim() ? `${input.videoId.trim()}:n${input.count}` : null
+    if (cacheKey && cache) {
+      const cached = await cache.get(cacheKey, 'quiz', STUDIO_QUIZ_PROMPT_VERSION).catch(() => null)
+      if (cached) {
+        try {
+          const parsed = StudioQuizAnswerSchema.safeParse(JSON.parse(cached.content))
+          if (parsed.success && parsed.data.questions.length > 0) {
+            const questions = parsed.data.questions.slice(0, input.count).map((question) => shuffleOptions(question))
+            return { questions, model: cached.model || 'cached', promptVersion: STUDIO_QUIZ_PROMPT_VERSION }
+          }
+        } catch {
+          // Invalid cached payload falls through cleanly to fresh generation.
+        }
+      }
+    }
+
     const { data, model } = await ai.generate({
       userId,
       feature: 'studio-quiz',
@@ -33,14 +49,25 @@ export const quizFeature: AiFeature<StudioQuizRequest, StudioQuizResponse> = {
       instructions: STUDIO_QUIZ_INSTRUCTIONS,
       prompt: studioQuizPrompt(input),
     })
-    const questions = data.questions.slice(0, input.count).map((question) =>
-      shuffleOptions({
-        ...question,
-        prompt: question.prompt.trim(),
-        options: question.options.map((option) => option.trim()),
-        explanation: question.explanation.trim(),
-      }),
-    )
+    const normalized = data.questions.slice(0, input.count).map((question) => ({
+      ...question,
+      prompt: question.prompt.trim(),
+      options: question.options.map((option) => option.trim()),
+      explanation: question.explanation.trim(),
+    }))
+    if (cacheKey && cache && normalized.length > 0) {
+      await cache
+        .set({
+          videoId: cacheKey,
+          kind: 'quiz',
+          promptVersion: STUDIO_QUIZ_PROMPT_VERSION,
+          title: input.title,
+          content: JSON.stringify({ questions: normalized }),
+          model,
+        })
+        .catch(() => {})
+    }
+    const questions = normalized.map((question) => shuffleOptions(question))
     return { questions, model, promptVersion: STUDIO_QUIZ_PROMPT_VERSION }
   },
 }

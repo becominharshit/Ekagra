@@ -5,11 +5,10 @@ import { AppShell } from '@/components/layout/AppShell'
 import { PageLoading } from '@/components/layout/PageLoading'
 import { RequireAuth } from '@/features/auth/RequireAuth'
 
-// Public pages: sign-in, the page Google sign-in returns to (web) and the privacy policy.
-// Everything else needs a signed-in user or Demo Mode (RequireAuth), who is sent to
-// /onboarding until it's finished. Onboarding is full screen; the other pages live inside
-// AppShell (top bar + bottom tabs). createBrowserRouter is needed for useBlocker,
-// which powers the mode-switch warning.
+// Public pages: sign-in, password reset, the OAuth callback (web), pricing, and legal policies.
+// Everything else needs a signed-in user or Demo Mode (RequireAuth), landing directly on /today
+// with an optional skippable quick-start onboarding modal for new accounts. createBrowserRouter is
+// needed for useBlocker, which powers the mode-switch warning.
 //
 // Every page is loaded only when it's opened (`lazy` + import(): code-splitting), so the app's
 // first download stays small; the router waits for a page's code before showing it. Only the
@@ -32,6 +31,10 @@ export const router = createBrowserRouter([
       {
         path: '/auth/callback',
         lazy: async () => ({ Component: (await import('@/pages/AuthCallbackPage')).AuthCallbackPage }),
+      },
+      {
+        path: '/reset-password',
+        lazy: async () => ({ Component: (await import('@/pages/ResetPasswordPage')).ResetPasswordPage }),
       },
       {
         path: '/privacy',
@@ -183,6 +186,33 @@ export const router = createBrowserRouter([
               {
                 path: 'me/friends',
                 lazy: async () => ({ Component: (await import('@/pages/FriendsPage')).FriendsPage }),
+              },
+              {
+                path: 'studio',
+                lazy: async () => ({ Component: (await import('@studio/components/EmbeddedStudioShell')).EmbeddedStudioShell }),
+                children: [
+                  {
+                    index: true,
+                    lazy: async () => ({ Component: (await import('@studio/pages/LibraryPage')).LibraryPage }),
+                  },
+                  {
+                    path: 'subjects/:subjectId',
+                    lazy: async () => ({ Component: (await import('@studio/pages/SubjectPage')).SubjectPage }),
+                  },
+                  {
+                    path: 'unfiled',
+                    lazy: async () => ({ Component: (await import('@studio/pages/SubjectPage')).UnfiledPage }),
+                  },
+                  {
+                    path: 'materials/:materialId',
+                    lazy: async () => ({ Component: (await import('@studio/pages/MaterialPage')).MaterialPage }),
+                  },
+                  {
+                    path: 'notes/:noteId',
+                    lazy: async () => ({ Component: (await import('@studio/pages/NotePage')).NotePage }),
+                  },
+                  { path: '*', element: <Navigate to="/studio" replace /> },
+                ],
               },
               { path: '*', element: <Navigate to="/today" replace /> },
             ],

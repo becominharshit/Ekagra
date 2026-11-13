@@ -3165,6 +3165,42 @@ export type Database = {
         }
         Relationships: []
       }
+      youtube_note_cache: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          kind: string
+          model: string
+          prompt_version: string
+          title: string
+          updated_at: string
+          video_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          kind: string
+          model: string
+          prompt_version: string
+          title: string
+          updated_at?: string
+          video_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          kind?: string
+          model?: string
+          prompt_version?: string
+          title?: string
+          updated_at?: string
+          video_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       hustle_earnings: {

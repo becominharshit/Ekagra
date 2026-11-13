@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { format } from 'date-fns'
 import { ExternalLink, LoaderCircle, Trash2 } from 'lucide-react'
-import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
+import { useLocation, useParams, useSearchParams } from 'react-router'
+import { useStudioNavigate } from '@studio/lib/studioHref'
 import { clockTime, watchUrl } from '@shared/youtube.ts'
 import { PageHeader } from '@/components/layout/PageHeader'
 import {
@@ -55,7 +56,7 @@ export function MaterialPage() {
 }
 
 function MaterialView({ material }: { material: Material }) {
-  const navigate = useNavigate()
+  const navigate = useStudioNavigate()
   const location = useLocation()
   const warning = (location.state as { warning?: string } | null)?.warning ?? null
   const subjects = useSubjects()

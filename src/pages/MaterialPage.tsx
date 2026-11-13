@@ -1,13 +1,11 @@
 import { format } from 'date-fns'
-import { ArrowLeft, ExternalLink, LoaderCircle } from 'lucide-react'
+import { ArrowLeft, ExternalLink, LoaderCircle, Sparkles } from 'lucide-react'
 import { Link, Navigate, useParams, useSearchParams } from 'react-router'
 import { clockTime, embedUrl, watchUrl, youtubeId } from '@shared/youtube.ts'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { useSubject } from '@/features/academics/subjects'
-import { useAuthStore } from '@/features/auth/authStore'
-import { openStudioPage } from '@/features/bridge/studio'
 import { NoteIcon } from '@/features/materials/KindIcons'
 import { materialSummary } from '@/features/materials/kinds'
 import { materialPath, useMaterialFile, useMaterialText, useStudyMaterial, type Material } from '@/features/materials/materials'
@@ -36,7 +34,6 @@ export function MaterialPage() {
 }
 
 function MaterialView({ material }: { material: Material }) {
-  const isDemo = useAuthStore((state) => state.status === 'demo')
   const subject = useSubject(material.subject_id ?? undefined)
   const notes = useNotes()
   const made = (notes.data ?? []).filter((note) => note.material_id === material.id)
@@ -51,14 +48,14 @@ function MaterialView({ material }: { material: Material }) {
         </Link>
       </Button>
       <PageHeader title={material.title} subtitle={details.filter(Boolean).join(' · ')} />
-      {!isDemo && (
-        <div className="-mt-2 mb-5">
-          <Button variant="outline" size="sm" onClick={() => void openStudioPage(`materials/${material.id}`)}>
-            <ExternalLink aria-hidden />
+      <div className="-mt-2 mb-5">
+        <Button asChild variant="outline" size="sm">
+          <Link to={`/studio/materials/${material.id}`}>
+            <Sparkles aria-hidden />
             Make notes in Studio
-          </Button>
-        </div>
-      )}
+          </Link>
+        </Button>
+      </div>
 
       {made.length > 0 && (
         <section className="mb-5 grid gap-2">

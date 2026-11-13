@@ -43,6 +43,24 @@ export class AiRequestError extends Error {
 
 type FunctionsClient = Pick<SupabaseClient, 'functions'>
 
+function invalidShapeMessage(name: EdgeFunction): string {
+  if (name === 'ai-usage') return 'Could not sync subscription limits right now.'
+  if (NOT_AI.has(name)) return 'The server sent an unexpected answer. Please try again.'
+  return "The AI's answer didn't have the right shape. Please try again."
+}
+
+function serverUnavailableMessage(name: EdgeFunction, status?: number): string {
+  if (name === 'ai-usage') return 'Could not sync subscription limits right now.'
+  if (NOT_AI.has(name)) {
+    return status !== undefined
+      ? `The ${name} service returned an error (${status}). Please try again.`
+      : `Couldn't reach the ${name} service. Please try again.`
+  }
+  return status !== undefined
+    ? `The AI server sent an error (${status}). Please try again.`
+    : 'The AI server sent an error. Please try again.'
+}
+
 /** Calls an Edge Function and checks that the answer has the expected shape. */
 export async function callAiFunction<T>(
   name: EdgeFunction,
@@ -54,7 +72,7 @@ export async function callAiFunction<T>(
   if (error) throw await toAiRequestError(error, name)
   const parsed = schema.safeParse(data)
   if (!parsed.success) {
-    throw new AiRequestError('invalid_answer', "The AI's answer didn't have the right shape. Please try again.")
+    throw new AiRequestError('invalid_answer', invalidShapeMessage(name))
   }
   return parsed.data
 }
@@ -109,20 +127,29 @@ async function responseToAiError(response: Response, name: EdgeFunction): Promis
     return new AiRequestError(body.code, body.message)
   }
   if (response.status === 401) return new AiRequestError('unauthorized', 'Please sign in again.')
-  return new AiRequestError('server_error', `The AI server sent an error (${response.status}). Please try again.`)
+  return new AiRequestError('server_error', serverUnavailableMessage(name, response.status))
 }
 
 async function toAiRequestError(error: unknown, name: EdgeFunction): Promise<AiRequestError> {
   if (error instanceof FunctionsHttpError) {
     const response: unknown = error.context
-    if (!(response instanceof Response)) return new AiRequestError('server_error', 'The AI server sent an error. Please try again.')
+    if (!(response instanceof Response)) return new AiRequestError('server_error', serverUnavailableMessage(name))
     return responseToAiError(response, name)
   }
   if (error instanceof FunctionsFetchError) {
-    return new AiRequestError('offline', "Couldn't reach the AI server. Check your internet connection and try again.")
+    if (name === 'ai-usage') return new AiRequestError('offline', 'Could not sync subscription limits right now.')
+    return new AiRequestError(
+      'offline',
+      NOT_AI.has(name)
+        ? `Couldn't reach the ${name} service. Check your internet connection and try again.`
+        : "Couldn't reach the AI server. Check your internet connection and try again.",
+    )
   }
   if (error instanceof FunctionsRelayError) {
-    return new AiRequestError('server_error', "The AI server isn't reachable right now. Please try again in a minute.")
+    return new AiRequestError('server_error', serverUnavailableMessage(name))
+  }
+  if (name === 'ai-usage') {
+    return new AiRequestError('server_error', 'Could not sync subscription limits right now.')
   }
   return new AiRequestError('server_error', error instanceof Error ? error.message : 'Something went wrong. Please try again.')
 }
@@ -240,7 +267,7 @@ export async function streamAiFunction<T, D = Record<string, unknown>>(
     const jsonBody = await response.json().catch(() => null)
     const parsed = options.schema.safeParse(jsonBody)
     if (!parsed.success) {
-      throw new AiRequestError('invalid_answer', "The AI's answer didn't have the right shape. Please try again.")
+      throw new AiRequestError('invalid_answer', invalidShapeMessage(name))
     }
     return parsed.data
   }
@@ -283,7 +310,7 @@ export async function streamAiFunction<T, D = Record<string, unknown>>(
     if (frame.event === 'done') {
       const parsed = options.schema.safeParse(frame.data)
       if (!parsed.success) {
-        streamError = new AiRequestError('invalid_answer', "The AI's answer didn't have the right shape. Please try again.")
+        streamError = new AiRequestError('invalid_answer', invalidShapeMessage(name))
       } else {
         finalData = parsed.data
       }

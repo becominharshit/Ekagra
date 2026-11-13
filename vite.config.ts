@@ -6,6 +6,7 @@ import { defineConfig } from 'vite'
 
 // https://vite.dev/config/
 export default defineConfig({
+  cacheDir: 'node_modules/.vite-ekagra',
   plugins: [react(), tailwindcss()],
   // When this copy of the app was built (UTC), e.g. "2026-11-01 14:05". Feedback reports and the Me
   // tab show it, so the founder knows which build (web deploy or APK) a bug came from.
@@ -53,7 +54,7 @@ export default defineConfig({
   test: {
     // src/** = app logic tests, studio/src/** = Ekagra Studio's, tests/** = database (migration + RLS)
     // tests, supabase/functions/** = Edge Function tests (they run in Node with a fake AI model)
-    include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'studio/src/**/*.test.ts', 'tests/**/*.test.ts', 'supabase/functions/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'studio/src/**/*.test.ts', 'studio/src/**/*.test.tsx', 'tests/**/*.test.ts', 'supabase/functions/**/*.test.ts'],
     environment: 'node',
     // Starting the in-memory Postgres for the database tests can take a few seconds.
     testTimeout: 30_000,

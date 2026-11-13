@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { AiError } from '../_shared/aiCore.ts'
+import { supabaseYoutubeCacheStore } from '../_shared/youtubeCache.ts'
 import type { NotesStore } from './handler.ts'
 
 // The notes table, through the admin client. It skips RLS, so every row is written with the signed-in
@@ -9,7 +10,10 @@ import type { NotesStore } from './handler.ts'
 const PLAIN_VIDEO_TITLE = 'YouTube video'
 
 export function supabaseNotesStore(client: SupabaseClient): NotesStore {
+  const youtubeCache = supabaseYoutubeCacheStore(client)
   return {
+    getYoutubeCache: youtubeCache.get,
+    setYoutubeCache: youtubeCache.set,
     async create(row) {
       const { data, error } = await client
         .from('notes')

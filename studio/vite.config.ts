@@ -12,6 +12,7 @@ const here = (path: string) => fileURLToPath(new URL(path, import.meta.url))
 
 export default defineConfig({
   root: here('.'),
+  cacheDir: here('../node_modules/.vite-studio'),
   envDir: here('..'),
   plugins: [
     react(),

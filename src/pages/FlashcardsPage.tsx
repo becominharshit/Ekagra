@@ -20,8 +20,10 @@ import { countLabel } from '@/features/academics/labels'
 import { useStudy } from '@/features/academics/roadmap'
 import { useAcademicsMutation } from '@/features/academics/subjects'
 import { FlashcardDialog } from '@/features/flashcards/FlashcardDialog'
+import { ImageOcclusionView } from '@/features/flashcards/ImageOcclusionView'
 import { deleteCard, todaysQueue, updateCard, useFlashcards, useReviewsToday } from '@/features/flashcards/flashcards'
 import { dueLabel, type Flashcard } from '@/features/flashcards/fsrs'
+import { occlusionPrompt, occlusionSummaryLabel, parseOcclusionFront } from '@/features/flashcards/occlusion'
 import { useProfile } from '@/features/profile/queries'
 import { readSettings } from '@/features/profile/settings'
 import { useNow } from '@/hooks/useNow'
@@ -54,7 +56,7 @@ export function FlashcardsPage() {
   const due = cards.data && reviews.data ? todaysQueue(cards.data, reviews.data, settings.learning.newCardsPerDay, now).length : 0
   const topicTitle = new Map((study.data?.topics ?? []).map((topic) => [topic.id, topic.title]))
   const words = search.trim().toLowerCase()
-  const matching = (cards.data ?? []).filter((card) => !words || `${card.front}\n${card.back}`.toLowerCase().includes(words))
+  const matching = (cards.data ?? []).filter((card) => !words || `${occlusionSummaryLabel(card.front)}\n${card.back}`.toLowerCase().includes(words))
 
   return (
     <>
@@ -121,13 +123,22 @@ export function FlashcardsPage() {
         {matching.slice(0, SHOWN_AT_ONCE).map((card) => {
           const status = dueLabel(card, now)
           const topic = card.topic_id ? topicTitle.get(card.topic_id) : undefined
+          const occlusion = parseOcclusionFront(card.front)
           return (
             <Card key={card.id} size="sm" className={card.suspended ? 'opacity-60' : undefined}>
               <CardContent className="grid gap-2">
-                <p className="line-clamp-3 font-medium whitespace-pre-wrap">{card.front}</p>
+                {occlusion ? (
+                  <div className="grid gap-2">
+                    <p className="font-medium">{occlusionPrompt(occlusion)}</p>
+                    <ImageOcclusionView occlusion={occlusion} revealed={false} compact />
+                  </div>
+                ) : (
+                  <p className="line-clamp-3 font-medium whitespace-pre-wrap">{card.front}</p>
+                )}
                 <p className="line-clamp-3 text-sm whitespace-pre-wrap text-muted-foreground">{card.back}</p>
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
                   <Badge variant={status === 'Due now' ? 'default' : 'secondary'}>{status}</Badge>
+                  {occlusion && <Badge variant="outline">Image occlusion</Badge>}
                   <span>{SOURCE_LABEL[card.source] ?? card.source}</span>
                   {topic && <span>· {topic}</span>}
                 </div>
@@ -170,7 +181,7 @@ export function FlashcardsPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete this card?</AlertDialogTitle>
             <AlertDialogDescription>
-              “{deleting?.front.slice(0, 120)}” and its review history are deleted. To stop seeing it without losing it, suspend it instead.
+              “{deleting ? occlusionSummaryLabel(deleting.front).slice(0, 120) : ''}” and its review history are deleted. To stop seeing it without losing it, suspend it instead.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

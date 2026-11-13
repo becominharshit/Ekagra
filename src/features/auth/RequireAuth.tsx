@@ -1,5 +1,5 @@
 import { LoaderCircle } from 'lucide-react'
-import { Navigate, Outlet, useLocation } from 'react-router'
+import { Navigate, Outlet } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { useProfile } from '@/features/profile/queries'
 import { SyncController } from '@/features/sync/SyncController'
@@ -7,12 +7,11 @@ import { signOut } from './auth'
 import { useAuthStore } from './authStore'
 
 /**
- * The pages inside need a signed-in user (or Demo Mode) who has finished onboarding.
- * Signed out → /sign-in. Not onboarded yet → /onboarding.
+ * The pages inside need a signed-in user (or Demo Mode).
+ * Signed out -> /sign-in. Signed-in or Demo users land straight on /today and see a skippable quick-start modal if new.
  */
 export function RequireAuth() {
   const status = useAuthStore((state) => state.status)
-  const { pathname } = useLocation()
   const profile = useProfile()
 
   if (status === 'loading') return <Loading />
@@ -22,7 +21,7 @@ export function RequireAuth() {
   if (!profile.data) {
     return (
       <SetupProblem
-        message="Your profile is missing. Run `npm run db:push` once more: the migration creates missing profiles."
+        message="Your profile could not be initialized yet. Tap Try again to finish setting it up."
         onRetry={() => void profile.refetch()}
       />
     )
@@ -30,7 +29,7 @@ export function RequireAuth() {
   return (
     <>
       <SyncController />
-      {!profile.data.onboarded_at && pathname !== '/onboarding' ? <Navigate to="/onboarding" replace /> : <Outlet />}
+      <Outlet />
     </>
   )
 }

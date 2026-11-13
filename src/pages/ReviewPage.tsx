@@ -25,6 +25,8 @@ import {
   type Grade,
   type Scheduler,
 } from '@/features/flashcards/fsrs'
+import { ImageOcclusionView } from '@/features/flashcards/ImageOcclusionView'
+import { occlusionPrompt, parseOcclusionFront } from '@/features/flashcards/occlusion'
 import { useProfile } from '@/features/profile/queries'
 import { readSettings } from '@/features/profile/settings'
 import { useNow } from '@/hooks/useNow'
@@ -123,6 +125,7 @@ function Session({ cards, reviewsToday, scheduler, newPerDay, now }: SessionProp
 
   const fresh = queue.filter((item) => isNew(item)).length
   const intervals = showingAnswer ? previewIntervals(scheduler, card.fsrs, now) : null
+  const occlusion = parseOcclusionFront(card.front)
 
   return (
     <div className="grid gap-4">
@@ -131,7 +134,14 @@ function Session({ cards, reviewsToday, scheduler, newPerDay, now }: SessionProp
       </p>
       <Card>
         <CardContent className="grid min-h-40 gap-4">
-          <Markdown className="text-base">{card.front}</Markdown>
+          {occlusion ? (
+            <div className="grid gap-3">
+              <p className="font-medium">{occlusionPrompt(occlusion)}</p>
+              <ImageOcclusionView occlusion={occlusion} revealed={showingAnswer} />
+            </div>
+          ) : (
+            <Markdown className="text-base">{card.front}</Markdown>
+          )}
           {showingAnswer && (
             <>
               <hr />

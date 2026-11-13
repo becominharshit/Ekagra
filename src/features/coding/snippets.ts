@@ -3,7 +3,7 @@ import { academicsKey } from '@/features/academics/subjects'
 import { dbError, need, useDataSource, type DataSource } from '@/lib/dataSource'
 import { demoDb } from '@/lib/demoDb'
 import type { Tables, TablesInsert, TablesUpdate } from '@/types/database'
-import { LANGUAGE_SPECS, type CodingLanguage } from './languages'
+import { LANGUAGE_SPECS, normalizeCodingLanguage, type CodingLanguage } from './languages'
 import { problemTitle, readCodeAnswer, readCodeTests, starterRef, starterRows } from './problems'
 
 // The Coding Lab's saved code (code_snippets) and its code problems (questions with type "code"),
@@ -57,22 +57,28 @@ export async function addStarterProblems(source: DataSource): Promise<number> {
 }
 
 export async function createSnippet(source: DataSource, values: TablesInsert<'code_snippets'>): Promise<Snippet> {
+  const normalizedValues: TablesInsert<'code_snippets'> = {
+    ...values,
+    language: normalizeCodingLanguage(values.language),
+  }
   if (source.kind === 'demo') {
-    const [row] = demoDb.insert('code_snippets', [values])
+    const [row] = demoDb.insert('code_snippets', [normalizedValues])
     if (!row) throw new Error('The file was not saved.')
     return row
   }
-  const { data, error } = await source.client.from('code_snippets').insert(values).select().single()
+  const { data, error } = await source.client.from('code_snippets').insert(normalizedValues).select().single()
   if (error) throw dbError(error)
   return data
 }
 
 export async function updateSnippet(source: DataSource, { id, patch }: { id: string; patch: TablesUpdate<'code_snippets'> }): Promise<void> {
+  const normalizedPatch: TablesUpdate<'code_snippets'> =
+    patch.language !== undefined ? { ...patch, language: normalizeCodingLanguage(patch.language) } : patch
   if (source.kind === 'demo') {
-    demoDb.update('code_snippets', id, patch)
+    demoDb.update('code_snippets', id, normalizedPatch)
     return
   }
-  const { error } = await source.client.from('code_snippets').update(patch).eq('id', id)
+  const { error } = await source.client.from('code_snippets').update(normalizedPatch).eq('id', id)
   if (error) throw dbError(error)
 }
 
@@ -86,11 +92,12 @@ export async function deleteSnippet(source: DataSource, id: string): Promise<voi
 }
 
 /** A new free file to try things out in the chosen language (defaults to Python). */
-export function newScratchFile(source: DataSource, language: CodingLanguage = 'python'): Promise<Snippet> {
+export function newScratchFile(source: DataSource, language: CodingLanguage | string = 'python'): Promise<Snippet> {
+  const normalized = normalizeCodingLanguage(language)
   return createSnippet(source, {
     title: 'Untitled',
-    language,
-    code: LANGUAGE_SPECS[language].defaultCode,
+    language: normalized,
+    code: LANGUAGE_SPECS[normalized].defaultCode,
   })
 }
 

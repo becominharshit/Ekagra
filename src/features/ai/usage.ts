@@ -138,7 +138,10 @@ export async function loadAiUsage(source: DataSource, now = new Date()): Promise
     listUsageRows(source, since),
     callAiFunction('ai-usage', { monthStart: monthStart.toISOString() }, AiUsageResponseSchema, source.client).then(
       (answer) => ({ answer, error: null }),
-      (error: unknown) => ({ answer: null, error: error instanceof Error ? error.message : 'The server did not answer.' }),
+      (error: unknown) => ({
+        answer: null,
+        error: error instanceof Error && error.message.trim() ? error.message : 'Could not sync subscription limits right now.',
+      }),
     ),
   ])
   const entitlement: PlanEntitlement = server.answer?.entitlement ?? DEFAULT_ENTITLEMENTS.free

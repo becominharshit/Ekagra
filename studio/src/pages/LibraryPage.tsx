@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ArrowUpRight, Inbox, LoaderCircle, Plus } from 'lucide-react'
-import { Link } from 'react-router'
+import { StudioLink as Link } from '@studio/lib/studioPath'
 import { Button } from '@/components/ui/button'
 import { countLabel } from '@/features/academics/labels'
 import { useSubjects } from '@/features/academics/subjects'
@@ -8,9 +8,11 @@ import { AddMaterialDialog } from '@studio/features/library/AddMaterialDialog'
 import { useLibrary } from '@studio/features/library/library'
 import { MaterialList } from '@studio/features/library/lists'
 import { ekagraUrl } from '@studio/lib/links'
+import { useStudioEmbedded } from '@studio/lib/studioHref'
 
 /** The library: every subject with its materials, and what was added last. */
 export function LibraryPage() {
+  const embedded = useStudioEmbedded()
   const subjects = useSubjects()
   const library = useLibrary()
   const [adding, setAdding] = useState(false)
@@ -53,12 +55,14 @@ export function LibraryPage() {
             into notes, mind maps and quizzes.
           </p>
           <div className="flex flex-wrap gap-2">
-            <Button asChild variant="outline">
-              <a href={ekagraUrl('academics')} target="ekagra" rel="noopener">
-                <ArrowUpRight aria-hidden />
-                Open Ekagra
-              </a>
-            </Button>
+            {!embedded && (
+              <Button asChild variant="outline">
+                <a href={ekagraUrl('academics')} target="ekagra" rel="noopener">
+                  <ArrowUpRight aria-hidden />
+                  Open Ekagra
+                </a>
+              </Button>
+            )}
             <Button variant="outline" onClick={() => setAdding(true)}>
               <Plus aria-hidden />
               Add something anyway

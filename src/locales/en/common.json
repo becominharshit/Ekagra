@@ -39,7 +39,20 @@
     "footerTagline": "Built for students everywhere. Your data stays yours.",
     "privacyLink": "Privacy policy and permissions",
     "termsLink": "Terms of service",
-    "signInFailed": "Sign-in failed. Please try again."
+    "signInFailed": "Sign-in failed. Please try again.",
+    "orUseEmail": "Or continue with email",
+    "emailSignInTab": "Sign in",
+    "emailSignUpTab": "Create account",
+    "emailLabel": "Email",
+    "emailPlaceholder": "you@university.edu",
+    "passwordLabel": "Password",
+    "forgotPassword": "Forgot password?",
+    "signInEmailButton": "Sign in with email",
+    "signUpEmailButton": "Create account",
+    "enterEmailFirst": "Enter your email address first so we can send your reset link.",
+    "enterEmailAndPassword": "Enter both your email and password.",
+    "resetEmailSent": "Password reset link sent to {{email}}. Check your inbox (and spam folder).",
+    "signUpCheckEmail": "Confirmation link sent to {{email}}. Open it to finish signing in."
   },
   "today": {
     "title": "Today",

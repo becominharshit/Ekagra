@@ -1,9 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { DataSource } from '@/lib/dataSource'
 import { demoDb } from '@/lib/demoDb'
 import { stubLocalStorage } from '@/test/memoryStorage'
 import { problemBody, problemTitle, readCodeAnswer, readCodeTests, STARTER_PROBLEMS } from './problems'
-import { addStarterProblems, listCodeProblems, listSnippets, newScratchFile, openProblem, updateSnippet } from './snippets'
+import { addStarterProblems, createSnippet, listCodeProblems, listSnippets, newScratchFile, openProblem, updateSnippet } from './snippets'
 
 stubLocalStorage()
 
@@ -51,9 +51,39 @@ describe('Coding Lab data (Demo Mode)', () => {
     expect(await listSnippets(DEMO)).toHaveLength(1)
   })
 
-  it('makes free files to try things out', async () => {
+  it('makes free files to try things out and normalizes js/ts/py aliases before DB writes', async () => {
     const file = await newScratchFile(DEMO)
     expect(file).toMatchObject({ title: 'Untitled', language: 'python', question_id: null })
     expect(file.code).toContain('print(')
+
+    const jsFile = await createSnippet(DEMO, { title: 'JS Alias', language: 'js' as never, code: 'console.log(1)' })
+    expect(jsFile.language).toBe('javascript')
+
+    const inserted: unknown[] = []
+    const updated: unknown[] = []
+    const supabaseClient = {
+      from: () => ({
+        insert: (payload: unknown) => {
+          inserted.push(payload)
+          return {
+            select: () => ({
+              single: async () => ({
+                data: { id: 's-1', user_id: 'u-1', title: 'TS', language: 'typescript', code: '', question_id: null, topic_id: null, last_output: null, last_run_at: null, passed: null, created_at: '', updated_at: '' },
+                error: null,
+              }),
+            }),
+          }
+        },
+        update: (payload: unknown) => {
+          updated.push(payload)
+          return { eq: vi.fn().mockResolvedValue({ error: null }) }
+        },
+      }),
+    }
+    const supaSource = { kind: 'supabase', userId: 'u-1', client: supabaseClient } as unknown as DataSource
+    await createSnippet(supaSource, { title: 'TS', language: 'ts' as never, code: 'let x: number = 1' })
+    await updateSnippet(supaSource, { id: 's-1', patch: { language: 'py' as never } })
+    expect(inserted[0]).toMatchObject({ language: 'typescript' })
+    expect(updated[0]).toMatchObject({ language: 'python' })
   })
 })

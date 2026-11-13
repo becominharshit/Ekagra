@@ -2,10 +2,11 @@ import { AiError, dayBefore, isAiConfigured, isBudgetAlertTriggered, monthStartU
 import { type PlanEntitlement, type PlanTier, type SubscriptionRecord } from '../_shared/billing.ts'
 import { handleJson, readBody, requireUser } from '../_shared/respond.ts'
 import { AiUsageRequestSchema, type AiUsageResponse } from '../_shared/schemas.ts'
+import type { UserAiUsageSummary } from '../_shared/usage.ts'
 
 // The AI usage dashboard (Me → AI usage & Pricing). Makes no AI call and isn't counted.
 // Returns the signed-in student's active tier/entitlement, daily requests, monthly token usage,
-// and aggregate spend / admin alert state.
+// and aggregate spend / admin alert state via indexed Postgres RPC aggregation.
 
 export interface BillingStateSnapshot {
   subscription: SubscriptionRecord | null
@@ -17,10 +18,15 @@ export interface UsageDeps {
   env: Record<string, string | undefined>
   /** The signed-in student's id, or null. */
   authenticate(request: Request): Promise<string | null>
-  /** What all AI requests since then cost (USD); Infinity when there are more than maxPages × 1000. */
-  spentSince(since: Date, maxPages?: number): Promise<number>
-  userRequestsSince(userId: string, since: Date): Promise<number>
-  userTokensSince(userId: string, since: Date, maxPages?: number): Promise<number>
+  /** Indexed SQL RPC summary of daily requests, monthly tokens, and app spend. */
+  getUsageSummary?(
+    userId: string,
+    windows: { daySince: Date; userMonthSince: Date; appMonthSince: Date },
+  ): Promise<UserAiUsageSummary>
+  /** Fallback aggregate hooks (for unit tests). */
+  spentSince?(since: Date, maxPages?: number): Promise<number>
+  userRequestsSince?(userId: string, since: Date): Promise<number>
+  userTokensSince?(userId: string, since: Date, maxPages?: number): Promise<number>
   loadBillingState(userId: string, now?: Date): Promise<BillingStateSnapshot>
   now?: () => Date
 }
@@ -35,67 +41,82 @@ const roundUsd = (value: number): number | null => (Number.isFinite(value) ? Mat
 export function handleUsageRequest(deps: () => UsageDeps): (request: Request) => Promise<Response> {
   return handleJson(
     async (request): Promise<AiUsageResponse> => {
-    const {
-      env,
-      authenticate,
-      spentSince,
-      userRequestsSince,
-      userTokensSince,
-      loadBillingState,
-      now = () => new Date(),
-    } = deps()
-    const userId = await requireUser(authenticate, request)
-    const input = await readBody(request, AiUsageRequestSchema)
-    const limits = readUsageLimits(env)
+      const {
+        env,
+        authenticate,
+        getUsageSummary,
+        spentSince,
+        userRequestsSince,
+        userTokensSince,
+        loadBillingState,
+        now = () => new Date(),
+      } = deps()
+      const userId = await requireUser(authenticate, request)
+      const input = await readBody(request, AiUsageRequestSchema)
+      const limits = readUsageLimits(env)
 
-    const at = now()
-    const dayAgo = dayBefore(at)
-    const asked = input?.monthStart ? new Date(input.monthStart) : null
-    const monthStart = asked && asked <= at && at.getTime() - asked.getTime() <= MAX_MONTH_MS ? asked : monthStartUtc(at)
-    const billingMonthStart = monthStartUtc(at)
+      const at = now()
+      const dayAgo = dayBefore(at)
+      const asked = input?.monthStart ? new Date(input.monthStart) : null
+      const monthStart = asked && asked <= at && at.getTime() - asked.getTime() <= MAX_MONTH_MS ? asked : monthStartUtc(at)
+      const billingMonthStart = monthStartUtc(at)
 
-    const [lastDay, month, requestsLast24h, tokensRaw, billing] = await Promise.all([
-      spentSince(dayAgo),
-      spentSince(monthStart, MONTH_PAGES),
-      userRequestsSince(userId, dayAgo),
-      userTokensSince(userId, billingMonthStart, MONTH_PAGES),
-      loadBillingState(userId, at),
-    ]).catch((error: unknown) => {
-      throw new AiError(503, 'usage_unavailable', "Couldn't load AI usage and plan entitlements right now. Please try again in a minute.", {
-        cause: error,
+      const [summary, billing] = await Promise.all([
+        getUsageSummary
+          ? getUsageSummary(userId, { daySince: dayAgo, userMonthSince: billingMonthStart, appMonthSince: monthStart })
+          : Promise.all([
+              spentSince ? spentSince(dayAgo) : 0,
+              spentSince ? spentSince(monthStart, MONTH_PAGES) : 0,
+              userRequestsSince ? userRequestsSince(userId, dayAgo) : 0,
+              userTokensSince ? userTokensSince(userId, billingMonthStart, MONTH_PAGES) : 0,
+            ]).then(([spentLast24hUsd, spentThisMonthUsd, requestsLast24h, tokensThisMonth]) => ({
+              requestsLast24h,
+              tokensThisMonth,
+              spentLast24hUsd,
+              spentThisMonthUsd,
+            })),
+        loadBillingState(userId, at),
+      ]).catch((error: unknown) => {
+        throw new AiError(503, 'usage_unavailable', 'Could not sync subscription limits right now.', {
+          cause: error,
+        })
       })
-    })
 
-    const tokensThisMonth = Number.isFinite(tokensRaw) ? Math.max(0, Math.round(tokensRaw)) : billing.entitlement.monthlyAiTokens
-    const { subscription, tier, entitlement } = billing
+      const tokensThisMonth = Number.isFinite(summary.tokensThisMonth)
+        ? Math.max(0, Math.round(summary.tokensThisMonth))
+        : billing.entitlement.monthlyAiTokens
+      const { subscription, tier, entitlement } = billing
 
-    return {
-      tier,
-      entitlement: {
-        ...entitlement,
-        codingLabLanguages: [...entitlement.codingLabLanguages],
-      },
-      user: {
-        requestsLast24h,
-        tokensThisMonth,
-      },
-      subscription: subscription
-        ? {
-            provider: subscription.provider,
-            status: subscription.status,
-            currentPeriodEnd: subscription.currentPeriodEnd,
-            cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
-          }
-        : null,
-      limits: {
-        userDailyRequests: entitlement.dailyAiRequests,
-        monthlyAiTokens: entitlement.monthlyAiTokens,
-        monthlyBudgetUsd: limits.monthlyBudgetUsd,
-      },
-      app: { spentLast24hUsd: roundUsd(lastDay), spentThisMonthUsd: roundUsd(month) },
-      budgetAlert: isBudgetAlertTriggered(month, limits.monthlyBudgetUsd),
-      aiConfigured: isAiConfigured(env),
-    }
+      return {
+        tier,
+        entitlement: {
+          ...entitlement,
+          codingLabLanguages: [...entitlement.codingLabLanguages],
+        },
+        user: {
+          requestsLast24h: summary.requestsLast24h,
+          tokensThisMonth,
+        },
+        subscription: subscription
+          ? {
+              provider: subscription.provider,
+              status: subscription.status,
+              currentPeriodEnd: subscription.currentPeriodEnd,
+              cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
+            }
+          : null,
+        limits: {
+          userDailyRequests: entitlement.dailyAiRequests,
+          monthlyAiTokens: entitlement.monthlyAiTokens,
+          monthlyBudgetUsd: limits.monthlyBudgetUsd,
+        },
+        app: {
+          spentLast24hUsd: roundUsd(summary.spentLast24hUsd),
+          spentThisMonthUsd: roundUsd(summary.spentThisMonthUsd),
+        },
+        budgetAlert: isBudgetAlertTriggered(summary.spentThisMonthUsd, limits.monthlyBudgetUsd),
+        aiConfigured: isAiConfigured(env),
+      }
     },
     () => deps().env,
   )

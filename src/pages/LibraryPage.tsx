@@ -1,6 +1,6 @@
 import { useRef, useState, type ChangeEvent } from 'react'
 import { format } from 'date-fns'
-import { ArrowLeft, ExternalLink, Library, LoaderCircle, Trash2, Upload } from 'lucide-react'
+import { ArrowLeft, Library, LoaderCircle, Sparkles, Trash2, Upload } from 'lucide-react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import { PageHeader } from '@/components/layout/PageHeader'
 import {
@@ -18,7 +18,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useAcademicsMutation, useSubjects } from '@/features/academics/subjects'
 import { useAuthStore } from '@/features/auth/authStore'
-import { openStudioPage } from '@/features/bridge/studio'
 import { MaterialIcon, NoteIcon } from '@/features/materials/KindIcons'
 import { materialSummary } from '@/features/materials/kinds'
 import { ALL_SUBJECTS, isLibraryType, LIBRARY_TYPE_LABEL, LIBRARY_TYPES, libraryItems, NO_SUBJECT, type LibraryItem, type LibraryType } from '@/features/materials/libraryItems'
@@ -81,12 +80,12 @@ export function LibraryPage() {
             {add.isPending ? 'Adding the PDF…' : 'Add a PDF'}
           </Button>
           <input ref={fileInput} type="file" accept="application/pdf" className="hidden" aria-label="PDF to add" onChange={choose} />
-          {!isDemo && (
-            <Button variant="outline" onClick={() => void openStudioPage(chosenSubject ? `subjects/${chosenSubject}` : '')}>
-              <ExternalLink aria-hidden />
+          <Button asChild variant="outline">
+            <Link to={chosenSubject ? `/studio/subjects/${chosenSubject}` : '/studio'}>
+              <Sparkles aria-hidden />
               Open Studio
-            </Button>
-          )}
+            </Link>
+          </Button>
           <Select value={subject} onValueChange={(next) => show({ subject: next })}>
             <SelectTrigger aria-label="Subject">
               <SelectValue />

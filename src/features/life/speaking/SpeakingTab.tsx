@@ -282,7 +282,7 @@ function PracticeCard({
             </Label>
           )}
           <p className="text-sm text-muted-foreground">{SCENARIO_HINT[scenario]}</p>
-          <div className="flex flex-wrap gap-2">
+          <div className="mt-3 flex flex-wrap items-center gap-2">
             <Button size="sm" variant="ghost" disabled={busy} onClick={onNextPrompt}>
               <RotateCcw aria-hidden />
               Another question
@@ -297,7 +297,7 @@ function PracticeCard({
 
         {phase === 'recording' ? (
           <div className="grid gap-2">
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="mt-3 flex flex-wrap items-center gap-2">
               <span role="status" className="flex items-center gap-2 text-sm tabular-nums">
                 <span className="size-2.5 animate-pulse rounded-full bg-destructive" aria-hidden />
                 Recording {clockLabel(elapsed)} of {clockLabel(MAX_SECONDS)}
@@ -315,7 +315,7 @@ function PracticeCard({
         ) : take ? (
           <div className="grid gap-2">
             <audio controls src={take.url} className="w-full" aria-label="Your recording" />
-            <div className="flex flex-wrap gap-2">
+            <div className="mt-3 flex flex-wrap items-center gap-2">
               <Button variant="outline" disabled={sending !== null} onClick={() => void start()}>
                 <Mic aria-hidden />
                 Record again
@@ -326,7 +326,7 @@ function PracticeCard({
             </div>
           </div>
         ) : (
-          <div className="flex flex-wrap gap-2">
+          <div className="mt-3 flex flex-wrap items-center gap-2">
             <Button disabled={phase === 'starting' || !recordable || sending !== null} onClick={() => void start()}>
               {phase === 'starting' ? <LoaderCircle className="animate-spin" aria-hidden /> : <Mic aria-hidden />}
               Start speaking
@@ -423,7 +423,7 @@ function AnswerForm({
           {problem ?? error}
         </p>
       )}
-      <div className="flex flex-wrap gap-2">
+      <div className="mt-3 flex flex-wrap items-center gap-2">
         {withAi && (
           <Button type="submit" disabled={!ready}>
             {sending === 'ai' ? <LoaderCircle className="animate-spin" aria-hidden /> : <Sparkles aria-hidden />}

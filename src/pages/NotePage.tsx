@@ -1,13 +1,11 @@
 import { format } from 'date-fns'
-import { ArrowLeft, ExternalLink, LoaderCircle } from 'lucide-react'
+import { ArrowLeft, LoaderCircle, Sparkles } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useRoadmap } from '@/features/academics/roadmap'
 import { useSubject } from '@/features/academics/subjects'
-import { useAuthStore } from '@/features/auth/authStore'
-import { openStudioPage } from '@/features/bridge/studio'
 import { MaterialIcon } from '@/features/materials/KindIcons'
 import { materialPath, useStudyMaterial } from '@/features/materials/materials'
 import { NoteBody } from '@/features/notes/NoteBody'
@@ -43,7 +41,6 @@ export function NotePage() {
 
 function NoteView({ note }: { note: Note }) {
   const navigate = useNavigate()
-  const isDemo = useAuthStore((state) => state.status === 'demo')
   const subject = useSubject(note.subject_id)
   const roadmap = useRoadmap(note.subject_id)
   // What it was made from, of any kind (a PDF, YouTube video, photo or text).
@@ -83,12 +80,12 @@ function NoteView({ note }: { note: Note }) {
             </Link>
           </Button>
         )}
-        {!isDemo && (
-          <Button variant="outline" size="sm" onClick={() => void openStudioPage(`notes/${note.id}`)}>
-            <ExternalLink aria-hidden />
+        <Button asChild variant="outline" size="sm">
+          <Link to={`/studio/notes/${note.id}`}>
+            <Sparkles aria-hidden />
             Edit in Studio
-          </Button>
-        )}
+          </Link>
+        </Button>
       </div>
 
       {note.status === 'processing' ? (

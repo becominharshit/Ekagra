@@ -42,6 +42,7 @@ import {
   type VideoDetails,
   type VideoPart,
 } from '../_shared/youtube.ts'
+import { youtubeCacheKey, type CachedYoutubeEntry } from '../_shared/youtubeCache.ts'
 
 // studio-notes (Ekagra Studio): notes, a mind map or a revision sheet from one material, made by
 // Gemini. The note is saved at once as 'processing' and its id returned; the AI then works in the
@@ -82,6 +83,9 @@ export interface NotesStore {
   describeVideo(materialId: string, userId: string, details: VideoDetails): Promise<void>
   /** The text of the newest finished notes (kind 'notes') made from this material, or null. */
   readyNotes(materialId: string, userId: string): Promise<string | null>
+  /** Shared YouTube lecture cache keyed by canonical video_id (+ optional window), kind, and prompt version. */
+  getYoutubeCache?(videoId: string, kind: StudioNoteKind, promptVersion: string): Promise<CachedYoutubeEntry | null>
+  setYoutubeCache?(entry: CachedYoutubeEntry & { videoId: string; kind: StudioNoteKind; promptVersion: string }): Promise<void>
 }
 
 export interface StudioNotesDeps {
@@ -102,7 +106,7 @@ export interface StudioNotesDeps {
 function failure(error: unknown, watchingVideo: boolean): string {
   if (error instanceof AiError) {
     if (error.code === 'provider_timeout' && watchingVideo) {
-      return 'Gemini needed too long to watch this video, so it was stopped. Please try again in a minute.'
+      return 'Cloud AI needed too long to watch this video, so it was stopped. Please try again in a minute.'
     }
     return error.message
   }
@@ -220,6 +224,7 @@ export function handleStudioNotes(makeDeps: () => StudioNotesDeps): (request: Re
         await ai.ensureQuota(userId)
 
         let videoUrl: string | null = null
+        let cacheVideoKey: string | null = null
         let fps: number | undefined
         let parts: VideoPart[] = []
         let sliceRange: VideoPart | null = null
@@ -257,6 +262,7 @@ export function handleStudioNotes(makeDeps: () => StudioNotesDeps): (request: Re
               sliceRange = { start: parts[0]!.start, end: parts[parts.length - 1]!.end }
             }
           }
+          cacheVideoKey = sliceRange ? youtubeCacheKey(id, sliceRange.start, sliceRange.end) : youtubeCacheKey(id)
         }
 
         const initialTitle = withRangeTitle(input.title, sliceRange)
@@ -339,6 +345,25 @@ export function handleStudioNotes(makeDeps: () => StudioNotesDeps): (request: Re
         }
 
         const make = async (callbacks?: MakeCallbacks) => {
+          if (cacheVideoKey && deps.store.getYoutubeCache) {
+            const cached = await deps.store.getYoutubeCache(cacheVideoKey, input.kind, STUDIO_NOTES_PROMPT_VERSION).catch(() => null)
+            if (cached) {
+              const resolved = {
+                title: withRangeTitle(cached.title.trim() || input.title, sliceRange),
+                content: cached.content,
+                citations: [] as SourceCitation[],
+                model: cached.model || config.models.fast,
+              }
+              await callbacks?.onPartial?.({
+                noteId,
+                title: resolved.title,
+                markdown: resolved.content,
+                citations: resolved.citations,
+              })
+              return resolved
+            }
+          }
+
           const instructions = studioNotesInstructions(input.kind)
           const singleTask = fromNotes
             ? {
@@ -362,12 +387,25 @@ export function handleStudioNotes(makeDeps: () => StudioNotesDeps): (request: Re
                   ),
                 }
               : null
-          if (singleTask) {
-            return noteFrom(
-              callbacks?.onPartial ? await ai.stream({ ...singleTask, onPartial: callbacks.onPartial }) : await ai.generate(singleTask),
-            )
+          const made = singleTask
+            ? noteFrom(callbacks?.onPartial ? await ai.stream({ ...singleTask, onPartial: callbacks.onPartial }) : await ai.generate(singleTask))
+            : input.kind === 'notes'
+              ? await fullNotes(videoUrl!, callbacks)
+              : await combined(videoUrl!, callbacks)
+
+          if (cacheVideoKey && deps.store.setYoutubeCache && made.content.trim()) {
+            await deps.store
+              .setYoutubeCache({
+                videoId: cacheVideoKey,
+                kind: input.kind,
+                promptVersion: STUDIO_NOTES_PROMPT_VERSION,
+                title: made.title,
+                content: made.content,
+                model: made.model,
+              })
+              .catch((error: unknown) => console.warn('Could not store YouTube note cache:', error))
           }
-          return input.kind === 'notes' ? fullNotes(videoUrl!, callbacks) : combined(videoUrl!, callbacks)
+          return made
         }
 
         const wantsSse = request.headers.get('accept')?.toLowerCase().includes('text/event-stream') ?? false

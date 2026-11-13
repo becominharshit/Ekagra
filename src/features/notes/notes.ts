@@ -30,11 +30,27 @@ export interface NoteHeading {
   text: string
 }
 
+/** Normalizes common LLM LaTeX typos before math parsing so subscripts render reliably. */
+export function sanitizeLatex(markdown: string): string {
+  return markdown
+    .replace(/\\mur\b/g, '\\mu_r')
+    .replace(/\\mu0\b/g, '\\mu_0')
+    .replace(/\\eps0\b/g, '\\varepsilon_0')
+    .replace(/\\epsilon0\b/g, '\\epsilon_0')
+    .replace(/\\varepsilon0\b/g, '\\varepsilon_0')
+}
+
+function stripMarkdownFormattingOutsideMath(text: string): string {
+  return text
+    .split(/(\$[^$]+\$)/g)
+    .map((segment) => (segment.startsWith('$') && segment.endsWith('$') ? segment : segment.replace(/[*_`~]/g, '')))
+    .join('')
+}
+
 /** Turns a heading's text into a clean HTML id for Table of Contents jump links. */
 export function headingSlug(text: string): string {
-  const slug = text
+  const slug = stripMarkdownFormattingOutsideMath(sanitizeLatex(text))
     .toLowerCase()
-    .replace(/[*_`~]/g, '')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
   return slug ? `sec-${slug}` : 'sec-heading'
@@ -45,7 +61,7 @@ export function extractNoteHeadings(markdown: string): NoteHeading[] {
   const headings: NoteHeading[] = []
   const seen = new Set<string>()
   let inFence = false
-  for (const rawLine of markdown.split(/\r?\n/)) {
+  for (const rawLine of sanitizeLatex(markdown).split(/\r?\n/)) {
     const line = rawLine.trim()
     if (/^(`{3,}|~{3,})/.test(line)) {
       inFence = !inFence
@@ -54,7 +70,7 @@ export function extractNoteHeadings(markdown: string): NoteHeading[] {
     if (inFence) continue
     const match = /^##\s+(.+)$/.exec(line)
     if (!match?.[1]) continue
-    const text = match[1].replace(/\s+#+\s*$/, '').replace(/[*_`~]/g, '').trim()
+    const text = stripMarkdownFormattingOutsideMath(match[1].replace(/\s+#+\s*$/, '')).trim()
     if (!text) continue
     const id = headingSlug(text)
     if (seen.has(id)) continue

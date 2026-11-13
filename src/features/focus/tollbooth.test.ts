@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { SAMPLE_OCCLUSION_IMAGE_URL, SAMPLE_OCCLUSION_MASKS, encodeOcclusionFront } from '@/features/flashcards/occlusion'
 import { isRight } from '@/features/lessons/quiz'
 import type { DataSource } from '@/lib/dataSource'
 import { demoDb } from '@/lib/demoDb'
@@ -150,6 +151,37 @@ describe('picking Tollbooth questions', () => {
     expect(sqlPrompt.origin).toBe('coding')
     expect(sqlPrompt.prompt).toContain('SQL')
     expect(tollboothMistake({ question: sqlPrompt, given: '' })).toMatchObject({ question_id: null, flashcard_id: null })
+  })
+
+  it('builds Image Occlusion Tollbooth challenges and ranks due occlusion cards first', () => {
+    const now = new Date('2026-11-02T10:00:00.000Z')
+    const occCard = {
+      id: 'occ-1',
+      front: encodeOcclusionFront({
+        version: 1,
+        prompt: 'Identify the hidden layer',
+        imageUrl: SAMPLE_OCCLUSION_IMAGE_URL,
+        activeMaskIndex: 1,
+        masks: SAMPLE_OCCLUSION_MASKS,
+      }),
+      back: 'API Gateway',
+      topic_id: 'dbms-topic',
+      suspended: false,
+      due_at: '2026-11-01T08:00:00.000Z',
+      fsrs: { state: 2, lapses: 3, stability: 0.7, difficulty: 7 },
+    }
+    const poolWithOcclusion: TollboothPool = {
+      ...POOL,
+      cards: [occCard, ...POOL.cards],
+    }
+    const picked = pickQuestions(poolWithOcclusion, 'dbms', 11, 3, now)
+    const occQ = picked.find((q) => q.id === 'occ-1')
+    expect(occQ).toBeDefined()
+    expect(occQ?.origin).toBe('flashcard')
+    expect(occQ?.prompt).toContain('Identify the hidden layer (Region 2 of 3)')
+    expect(occQ?.occlusion?.activeMaskIndex).toBe(1)
+    if (occQ?.type !== 'mcq') throw new Error('expected mcq')
+    expect(occQ.options[occQ.correct]).toBe('API Gateway')
   })
 })
 

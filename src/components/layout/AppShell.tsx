@@ -15,6 +15,7 @@ import { ReviewReminder } from '@/features/review/ReviewNudges'
 import { SocialSync } from '@/features/social/SocialSync'
 import { SyncStatusBanner } from '@/features/sync/SyncController'
 import { CaptureSheet } from '@/features/tasks/CaptureSheet'
+import { QuickStartOnboardingModal } from '@/pages/OnboardingPage'
 import { BottomTabBar } from './BottomTabBar'
 import { SideNav } from './SideNav'
 import { TopBar } from './TopBar'
@@ -56,8 +57,8 @@ export function AppShell() {
       <div className="flex min-h-0 flex-1">
         <SideNav />
         <main id="main-content" tabIndex={-1} ref={mainRef} className="min-w-0 flex-1 overflow-y-auto focus:outline-none">
-          {/* Extra space at the bottom so the floating + button never covers the last item. */}
-          <div className="mx-auto w-full max-w-2xl px-4 pt-5 pb-24 lg:max-w-4xl lg:px-8">
+          {/* Extra space at the bottom so the floating + button never covers the last item or bottom cards. */}
+          <div className="mx-auto w-full max-w-2xl px-4 pt-5 pb-24 lg:max-w-4xl lg:px-8 lg:pb-20">
             <Outlet />
           </div>
         </main>
@@ -70,6 +71,7 @@ export function AppShell() {
       <InboxDropTarget />
       <FeedbackSheet />
       <UpgradeModal />
+      <QuickStartOnboardingModal />
       <ModeSwitchGuard />
     </div>
   )

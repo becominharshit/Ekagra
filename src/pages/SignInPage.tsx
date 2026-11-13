@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react'
-import { CalendarDays, FlaskConical, LoaderCircle, NotebookPen, Target, TrendingUp } from 'lucide-react'
+import { useEffect, useState, type FormEvent } from 'react'
+import { CalendarDays, FlaskConical, LoaderCircle, Mail, NotebookPen, Target, TrendingUp } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link, Navigate } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { clearAccountNotice, readAccountNotice } from '@/features/account/notice'
-import { signInWithGoogle } from '@/features/auth/auth'
+import { requestPasswordReset, signInWithEmail, signInWithGoogle, signUpWithEmail } from '@/features/auth/auth'
 import { useAuthStore } from '@/features/auth/authStore'
 import { PublicTollboothPreview } from '@/features/focus/PublicTollboothPreview'
 import { isSupabaseConfigured } from '@/lib/supabase'
@@ -33,14 +35,20 @@ export function HomeGate() {
   return <SignInPage />
 }
 
-/** The first screen: what Ekagra is, and sign-in (Google) or Demo Mode. */
+/** The first screen: what Ekagra is, and 1-click Google, email/password, or Demo Mode. */
 export function SignInPage() {
   const { t } = useTranslation('common')
   const status = useAuthStore((state) => state.status)
   const storeError = useAuthStore((state) => state.error)
   const startDemo = useAuthStore((state) => state.startDemo)
   const [busy, setBusy] = useState(false)
+  const [emailBusy, setEmailBusy] = useState(false)
+  const [resetBusy, setResetBusy] = useState(false)
+  const [emailMode, setEmailMode] = useState<'signIn' | 'signUp'>('signIn')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [statusMessage, setStatusMessage] = useState<string | null>(null)
   // E.g. "Your account and all its data were deleted." (shown once).
   const [notice] = useState(readAccountNotice)
   useEffect(() => clearAccountNotice(), [])
@@ -50,6 +58,7 @@ export function SignInPage() {
   async function continueWithGoogle() {
     setBusy(true)
     setError(null)
+    setStatusMessage(null)
     try {
       await signInWithGoogle()
     } catch (caught) {
@@ -59,12 +68,59 @@ export function SignInPage() {
     }
   }
 
+  async function submitEmailAuth(event: FormEvent) {
+    event.preventDefault()
+    const cleanEmail = email.trim()
+    if (!cleanEmail || !password) {
+      setError(t('signIn.enterEmailAndPassword'))
+      return
+    }
+    setEmailBusy(true)
+    setError(null)
+    setStatusMessage(null)
+    try {
+      if (emailMode === 'signIn') {
+        await signInWithEmail(cleanEmail, password)
+      } else {
+        const result = await signUpWithEmail(cleanEmail, password)
+        if (result.needsConfirmation) {
+          setStatusMessage(t('signIn.signUpCheckEmail', { email: cleanEmail }))
+        }
+      }
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : t('signIn.signInFailed'))
+    } finally {
+      setEmailBusy(false)
+    }
+  }
+
+  async function handleForgotPassword() {
+    const cleanEmail = email.trim()
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      setError(t('signIn.enterEmailFirst'))
+      setStatusMessage(null)
+      return
+    }
+    setResetBusy(true)
+    setError(null)
+    setStatusMessage(null)
+    try {
+      await requestPasswordReset(cleanEmail)
+      setStatusMessage(t('signIn.resetEmailSent', { email: cleanEmail }))
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : t('signIn.signInFailed'))
+    } finally {
+      setResetBusy(false)
+    }
+  }
+
+  const anyBusy = busy || emailBusy || resetBusy
   const googleButton = (
     <Button
       key="google"
       size="lg"
       variant={isSupabaseConfigured ? 'default' : 'outline'}
-      disabled={!isSupabaseConfigured || busy}
+      disabled={!isSupabaseConfigured || anyBusy}
       onClick={() => void continueWithGoogle()}
     >
       {busy ? <LoaderCircle className="animate-spin" aria-hidden /> : <GoogleLogo />}
@@ -154,8 +210,97 @@ export function SignInPage() {
                   {notice}
                 </p>
               )}
+              {statusMessage && (
+                <p role="status" className="rounded-lg bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300">
+                  {statusMessage}
+                </p>
+              )}
               {/* Without Supabase, Demo Mode is the main button. */}
               {isSupabaseConfigured ? [googleButton, demoButton] : [demoButton, googleButton]}
+
+              <div className="relative my-1 flex items-center">
+                <span className="w-full border-t border-border/70" />
+                <span className="shrink-0 bg-card px-2 text-xs text-muted-foreground">{t('signIn.orUseEmail')}</span>
+                <span className="w-full border-t border-border/70" />
+              </div>
+
+              <form onSubmit={(e) => void submitEmailAuth(e)} className="grid gap-2.5" noValidate>
+                <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1" role="tablist" aria-label="Email authentication mode">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={emailMode === 'signIn'}
+                    onClick={() => {
+                      setEmailMode('signIn')
+                      setError(null)
+                    }}
+                    className={`rounded-md px-2 py-1 text-xs font-medium transition ${
+                      emailMode === 'signIn' ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {t('signIn.emailSignInTab')}
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={emailMode === 'signUp'}
+                    onClick={() => {
+                      setEmailMode('signUp')
+                      setError(null)
+                    }}
+                    className={`rounded-md px-2 py-1 text-xs font-medium transition ${
+                      emailMode === 'signUp' ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {t('signIn.emailSignUpTab')}
+                  </button>
+                </div>
+
+                <div className="grid gap-1">
+                  <Label htmlFor="signin-email" className="text-xs font-medium">
+                    {t('signIn.emailLabel')}
+                  </Label>
+                  <Input
+                    id="signin-email"
+                    type="email"
+                    autoComplete="email"
+                    placeholder={t('signIn.emailPlaceholder')}
+                    value={email}
+                    disabled={!isSupabaseConfigured || anyBusy}
+                    onChange={(e) => setEmail(e.target.value)}
+                  />
+                </div>
+
+                <div className="grid gap-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <Label htmlFor="signin-password" className="text-xs font-medium">
+                      {t('signIn.passwordLabel')}
+                    </Label>
+                    <button
+                      type="button"
+                      disabled={!isSupabaseConfigured || anyBusy}
+                      onClick={() => void handleForgotPassword()}
+                      className="text-xs font-medium text-primary underline-offset-3 hover:underline disabled:pointer-events-none disabled:opacity-50"
+                    >
+                      {resetBusy ? 'Sending…' : t('signIn.forgotPassword')}
+                    </button>
+                  </div>
+                  <Input
+                    id="signin-password"
+                    type="password"
+                    autoComplete={emailMode === 'signIn' ? 'current-password' : 'new-password'}
+                    value={password}
+                    disabled={!isSupabaseConfigured || anyBusy}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+                </div>
+
+                <Button type="submit" variant="secondary" disabled={!isSupabaseConfigured || anyBusy}>
+                  {emailBusy ? <LoaderCircle className="animate-spin" aria-hidden /> : <Mail className="size-4" aria-hidden />}
+                  {emailMode === 'signIn' ? t('signIn.signInEmailButton') : t('signIn.signUpEmailButton')}
+                </Button>
+              </form>
+
               <p className="text-sm text-muted-foreground">
                 {isSupabaseConfigured
                   ? t('signIn.demoConfiguredHint')

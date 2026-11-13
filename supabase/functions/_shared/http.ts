@@ -3,6 +3,7 @@ import type { z } from 'zod'
 import { createAiGateway, type AiGateway, type UsageStore } from './ai.ts'
 import { readAiConfig } from './aiCore.ts'
 import { handleJson, readBody, requireUser } from './respond.ts'
+import type { YoutubeCacheStore } from './youtubeCache.ts'
 
 // The HTTP part of every AI function: the shared request handling (respond.ts: CORS, POST only,
 // errors as { code, message } JSON), the sign-in check, the request body, then the AI gateway.
@@ -13,7 +14,7 @@ export interface AiFeature<I, O> {
   feature: string
   /** The shape of the request body. */
   input: z.ZodType<I>
-  run(context: { input: I; userId: string; ai: AiGateway }): Promise<O>
+  run(context: { input: I; userId: string; ai: AiGateway; cache?: YoutubeCacheStore }): Promise<O>
 }
 
 /** What a request needs from the outside world. Production builds these from Supabase; tests pass fakes. */
@@ -22,6 +23,7 @@ export interface ServerDeps {
   /** The signed-in student's id, or null when the request has no valid sign-in. */
   authenticate(request: Request): Promise<string | null>
   usage: UsageStore
+  cache?: YoutubeCacheStore
   model?: (modelId: string) => LanguageModel
 }
 

@@ -71,7 +71,7 @@ export const USER_TABLES = [
 export type UserTable = (typeof USER_TABLES)[number]
 
 /** Global/system tables that do not hold per-user rows (kept outside USER_TABLES). */
-export const GLOBAL_SYSTEM_TABLES = ['plan_entitlements', 'webhook_events'] as const
+export const GLOBAL_SYSTEM_TABLES = ['plan_entitlements', 'webhook_events', 'youtube_note_cache'] as const
 
 /**
  * "Wipe my data" keeps these: AI usage counts the daily AI limit, and subscriptions keep active

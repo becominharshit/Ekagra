@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { BriefResponseSchema, type BriefRequest } from '@shared/schemas.ts'
 import { countLabel, minutesLabel } from '@/features/academics/labels'
 import { useSubjects, type Subject } from '@/features/academics/subjects'
-import { callAiFunction } from '@/features/ai/aiClient'
+import { AiRequestError, callAiFunction } from '@/features/ai/aiClient'
 import { guardOn, useCheckIns, type CheckIn } from '@/features/checkins/checkins'
 import { todaysQueue, useFlashcards, useReviewsToday } from '@/features/flashcards/flashcards'
 import { dueMistakes } from '@/features/mistakes/ladder'
@@ -152,6 +152,8 @@ function tipLine({ burnoutGuard, minimumDay, lastCheckIn, reviews, blocks }: Bri
   return `Today: Study ${minutesLabel(minutes.study)} · Hustle ${minutesLabel(minutes.hustle)} · Life ${minutesLabel(minutes.life)}.`
 }
 
+const UNAVAILABLE_BRIEF_CODES = new Set(['provider_billing', 'not_configured', 'provider_busy', 'provider_error', 'provider_timeout', 'offline'])
+
 /** Writes a brief: the AI when signed in (the device's brief if the AI isn't available), the device in Demo Mode. */
 export async function writeBrief(source: DataSource, input: BriefRequest, date: LocalDate): Promise<Brief> {
   if (source.kind === 'demo') return { date, lines: deviceBrief(input), by: 'device', aiError: null }
@@ -159,7 +161,13 @@ export async function writeBrief(source: DataSource, input: BriefRequest, date: 
     const answer = await callAiFunction('ai-brief', input, BriefResponseSchema)
     return { date, lines: answer.lines, by: 'ai', aiError: null }
   } catch (error) {
-    return { date, lines: deviceBrief(input), by: 'device', aiError: error instanceof Error ? error.message : 'The AI is not available.' }
+    const aiError =
+      error instanceof AiRequestError && UNAVAILABLE_BRIEF_CODES.has(error.code)
+        ? 'Cloud AI is temporarily unavailable. Showing your offline plan brief instead.'
+        : error instanceof Error && error.message.trim()
+          ? error.message
+          : 'Cloud AI is temporarily unavailable. Showing your offline plan brief instead.'
+    return { date, lines: deviceBrief(input), by: 'device', aiError }
   }
 }
 

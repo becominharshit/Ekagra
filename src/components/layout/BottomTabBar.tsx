@@ -2,10 +2,10 @@ import { NavLink } from 'react-router'
 import { cn } from '@/lib/utils'
 import { TABS } from './tabs'
 
-/** The main menu on phones and narrow windows (wide screens get the side menu instead). */
+/** The main menu on phones (< 768px); tablets and wider screens get the side rail/menu instead. */
 export function BottomTabBar() {
   return (
-    <nav aria-label="Main" className="pb-safe border-t bg-background lg:hidden">
+    <nav aria-label="Main" className="pb-safe border-t bg-background md:hidden">
       <ul className="mx-auto grid h-16 w-full max-w-2xl grid-cols-5">
         {TABS.map(({ to, label, icon: Icon, activeClass }) => (
           <li key={to}>

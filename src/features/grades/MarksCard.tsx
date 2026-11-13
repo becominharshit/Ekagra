@@ -98,20 +98,31 @@ function AddMarkForm({ subjectId, onDone }: { subjectId: string; onDone: () => v
 
   return (
     <form className="grid gap-2 rounded-lg border p-3" onSubmit={submit}>
-      <Input aria-label="Test or assignment" placeholder="e.g. Internal 1" maxLength={80} value={assessment} onChange={(event) => setAssessment(event.target.value)} />
-      <div className="grid grid-cols-3 gap-2">
-        <Label className="grid gap-1 font-normal">
-          <span className="text-xs text-muted-foreground">Marks</span>
-          <Input type="number" inputMode="decimal" min={0} step="0.5" value={obtained} onChange={(event) => setObtained(event.target.value)} />
+      <div>
+        <Label htmlFor="mark-assessment" className="mb-1 block text-xs font-medium">
+          Test or assignment
         </Label>
-        <Label className="grid gap-1 font-normal">
-          <span className="text-xs text-muted-foreground">Out of</span>
-          <Input type="number" inputMode="decimal" min={1} step="0.5" value={maxMarks} onChange={(event) => setMaxMarks(event.target.value)} />
-        </Label>
-        <Label className="grid gap-1 font-normal">
-          <span className="text-xs text-muted-foreground">Date</span>
-          <Input type="date" value={date} onChange={(event) => setDate(event.target.value)} />
-        </Label>
+        <Input id="mark-assessment" aria-label="Test or assignment" placeholder="e.g. Internal 1" maxLength={80} value={assessment} onChange={(event) => setAssessment(event.target.value)} />
+      </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div>
+          <Label htmlFor="mark-obtained" className="mb-1 block text-xs font-medium">
+            Marks
+          </Label>
+          <Input id="mark-obtained" type="number" inputMode="decimal" min={0} step="0.5" value={obtained} onChange={(event) => setObtained(event.target.value)} />
+        </div>
+        <div>
+          <Label htmlFor="mark-max" className="mb-1 block text-xs font-medium">
+            Out of
+          </Label>
+          <Input id="mark-max" type="number" inputMode="decimal" min={1} step="0.5" value={maxMarks} onChange={(event) => setMaxMarks(event.target.value)} />
+        </div>
+        <div>
+          <Label htmlFor="mark-date" className="mb-1 block text-xs font-medium">
+            Date
+          </Label>
+          <Input id="mark-date" type="date" value={date} onChange={(event) => setDate(event.target.value)} />
+        </div>
       </div>
       {(problem ?? add.error) && (
         <p role="alert" className="text-destructive">

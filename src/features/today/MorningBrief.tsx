@@ -13,7 +13,11 @@ export function MorningBrief() {
   let footer: string | null = null
   if (brief?.by === 'ai') footer = 'Written by the AI · kept for today'
   else if (brief && isDemo) footer = 'Made on your device (Demo Mode) · kept for today'
-  else if (brief) footer = `Made on your device: ${brief.aiError ?? 'the AI is not available.'} Tap refresh to try the AI again.`
+  else if (brief) {
+    footer = brief.aiError?.startsWith('Cloud AI is temporarily unavailable')
+      ? `${brief.aiError} Tap refresh to try again.`
+      : `Made on your device: ${brief.aiError ?? 'Cloud AI is temporarily unavailable.'} Tap refresh to try the AI again.`
+  }
 
   return (
     <Card size="sm">

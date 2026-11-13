@@ -19,7 +19,8 @@
     /* "@/..." = "src/...", "@shared/..." = what the app shares with the Edge Functions */
     "paths": {
       "@/*": ["./src/*"],
-      "@shared/*": ["./supabase/functions/_shared/*"]
+      "@shared/*": ["./supabase/functions/_shared/*"],
+      "@studio/*": ["./studio/src/*"]
     },
 
     /* Linting */

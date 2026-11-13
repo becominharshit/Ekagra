@@ -455,6 +455,7 @@ export const StudioQuizRequestSchema = z.object({
   count: z.number().int().min(3).max(15),
   program: z.string().max(120).nullable().optional(),
   year: z.number().int().min(1).max(8).nullable().optional(),
+  videoId: z.string().trim().min(1).max(64).nullable().optional(),
 })
 export type StudioQuizRequest = z.infer<typeof StudioQuizRequestSchema>
 
@@ -866,49 +867,78 @@ export const AiUsageRequestSchema = z
   .optional()
 export type AiUsageRequest = z.infer<typeof AiUsageRequestSchema>
 
+const DEFAULT_ENTITLEMENT_SNAPSHOT = {
+  planTier: 'free' as const,
+  dailyAiRequests: DEFAULT_AI_LIMITS.userDailyRequests,
+  monthlyAiTokens: 250_000,
+  maxStudioSources: 5,
+  codingLabLanguages: ['python'],
+  offlineSyncEnabled: false,
+  priorityTier: 'standard' as const,
+}
+
 export const PlanEntitlementSchema = z.object({
-  planTier: PlanTierSchema,
-  dailyAiRequests: z.number().int().positive(),
-  monthlyAiTokens: z.number().int().positive(),
-  maxStudioSources: z.number().int().positive(),
-  codingLabLanguages: z.array(z.string()),
-  offlineSyncEnabled: z.boolean(),
-  priorityTier: z.enum(['standard', 'priority']),
+  planTier: PlanTierSchema.catch('free').default('free'),
+  dailyAiRequests: z.coerce.number().int().positive().catch(DEFAULT_ENTITLEMENT_SNAPSHOT.dailyAiRequests).default(DEFAULT_ENTITLEMENT_SNAPSHOT.dailyAiRequests),
+  monthlyAiTokens: z.coerce.number().int().positive().catch(DEFAULT_ENTITLEMENT_SNAPSHOT.monthlyAiTokens).default(DEFAULT_ENTITLEMENT_SNAPSHOT.monthlyAiTokens),
+  maxStudioSources: z.coerce.number().int().positive().catch(DEFAULT_ENTITLEMENT_SNAPSHOT.maxStudioSources).default(DEFAULT_ENTITLEMENT_SNAPSHOT.maxStudioSources),
+  codingLabLanguages: z.array(z.string()).catch(['python']).default(['python']),
+  offlineSyncEnabled: z.boolean().catch(false).default(false),
+  priorityTier: z.enum(['standard', 'priority']).catch('standard').default('standard'),
 })
 
 export const AiUsageResponseSchema = z.object({
-  tier: PlanTierSchema,
-  entitlement: PlanEntitlementSchema,
-  user: z.object({
-    requestsLast24h: z.number().int().min(0),
-    tokensThisMonth: z.number().int().min(0),
-  }),
+  tier: PlanTierSchema.catch('free').default('free'),
+  entitlement: PlanEntitlementSchema.catch(DEFAULT_ENTITLEMENT_SNAPSHOT).default(DEFAULT_ENTITLEMENT_SNAPSHOT),
+  user: z
+    .object({
+      requestsLast24h: z.coerce.number().int().min(0).catch(0).default(0),
+      tokensThisMonth: z.coerce.number().int().min(0).catch(0).default(0),
+    })
+    .catch({ requestsLast24h: 0, tokensThisMonth: 0 })
+    .default({ requestsLast24h: 0, tokensThisMonth: 0 }),
   subscription: z
     .object({
-      provider: BillingProviderSchema,
-      status: SubscriptionStatusSchema,
-      currentPeriodEnd: z.string().nullable(),
-      cancelAtPeriodEnd: z.boolean(),
+      provider: BillingProviderSchema.catch('stripe').default('stripe'),
+      status: SubscriptionStatusSchema.catch('active').default('active'),
+      currentPeriodEnd: z.string().nullable().catch(null).default(null),
+      cancelAtPeriodEnd: z.boolean().catch(false).default(false),
     })
-    .nullable(),
-  limits: z.object({
-    /** Active student's AI requests allowed in any 24 hours. */
-    userDailyRequests: z.number().int().positive(),
-    /** Active student's monthly AI token allowance. */
-    monthlyAiTokens: z.number().int().positive(),
-    /** Admin circuit-breaker alert threshold per month (USD); does not lock out users. */
-    monthlyBudgetUsd: z.number().positive(),
-  }),
-  app: z.object({
-    /** What all students' AI requests cost in the last 24 hours (USD). Null: too many to add up. */
-    spentLast24hUsd: z.number().min(0).nullable(),
-    /** The same since monthStart. */
-    spentThisMonthUsd: z.number().min(0).nullable(),
-  }),
+    .nullable()
+    .catch(null)
+    .default(null),
+  limits: z
+    .object({
+      /** Active student's AI requests allowed in any 24 hours. */
+      userDailyRequests: z.coerce.number().int().positive().catch(DEFAULT_AI_LIMITS.userDailyRequests).default(DEFAULT_AI_LIMITS.userDailyRequests),
+      /** Active student's monthly AI token allowance. */
+      monthlyAiTokens: z.coerce.number().int().positive().catch(DEFAULT_ENTITLEMENT_SNAPSHOT.monthlyAiTokens).default(DEFAULT_ENTITLEMENT_SNAPSHOT.monthlyAiTokens),
+      /** Admin circuit-breaker alert threshold per month (USD); does not lock out users. */
+      monthlyBudgetUsd: z.coerce.number().positive().catch(DEFAULT_AI_LIMITS.monthlyBudgetUsd).default(DEFAULT_AI_LIMITS.monthlyBudgetUsd),
+    })
+    .catch({
+      userDailyRequests: DEFAULT_AI_LIMITS.userDailyRequests,
+      monthlyAiTokens: DEFAULT_ENTITLEMENT_SNAPSHOT.monthlyAiTokens,
+      monthlyBudgetUsd: DEFAULT_AI_LIMITS.monthlyBudgetUsd,
+    })
+    .default({
+      userDailyRequests: DEFAULT_AI_LIMITS.userDailyRequests,
+      monthlyAiTokens: DEFAULT_ENTITLEMENT_SNAPSHOT.monthlyAiTokens,
+      monthlyBudgetUsd: DEFAULT_AI_LIMITS.monthlyBudgetUsd,
+    }),
+  app: z
+    .object({
+      /** What all students' AI requests cost in the last 24 hours (USD). Null: too many to add up. */
+      spentLast24hUsd: z.coerce.number().min(0).nullable().catch(null).default(null),
+      /** The same since monthStart. */
+      spentThisMonthUsd: z.coerce.number().min(0).nullable().catch(null).default(null),
+    })
+    .catch({ spentLast24hUsd: null, spentThisMonthUsd: null })
+    .default({ spentLast24hUsd: null, spentThisMonthUsd: null }),
   /** True when aggregate spend has crossed the admin alert threshold (triggers admin alert, never user lockout). */
-  budgetAlert: z.boolean(),
+  budgetAlert: z.boolean().catch(false).default(false),
   /** False while the AI secrets (key, models, prices) aren't set on the server. */
-  aiConfigured: z.boolean(),
+  aiConfigured: z.boolean().catch(false).default(false),
 })
 export type AiUsageResponse = z.infer<typeof AiUsageResponseSchema>
 

@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { FileText, ListChecks, LoaderCircle, Network, type LucideIcon } from 'lucide-react'
-import { useNavigate } from 'react-router'
 import type { SourceCitation, StudioNoteKind } from '@shared/schemas.ts'
 import { clockTime, DEFAULT_WINDOW_SECONDS, videoWindows, type VideoPart } from '@shared/youtube.ts'
 import { CitationChips } from '@/components/CitationChips'
@@ -13,6 +12,7 @@ import { useProfile } from '@/features/profile/queries'
 import type { DataSource } from '@/lib/dataSource'
 import type { Material } from '@studio/features/library/library'
 import { NoteList } from '@studio/features/library/lists'
+import { useStudioNavigate } from '@studio/lib/studioHref'
 import { makeNotesStream, type MakeNotesInput } from './makeNotes'
 import { useStudioNotes } from './studioNotes'
 
@@ -40,7 +40,7 @@ const UNKNOWN_DURATION_WINDOWS: VideoPart[] = [
 
 /** On a material's page: make notes, a mind map or a revision sheet from it, and what was made before. */
 export function MakeFromMaterial({ material }: { material: Material }) {
-  const navigate = useNavigate()
+  const navigate = useStudioNavigate()
   const profile = useProfile()
   const [streamPreview, setStreamPreview] = useState<{
     stageLabel: string

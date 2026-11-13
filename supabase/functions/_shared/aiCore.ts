@@ -34,8 +34,16 @@ export interface Price {
 export const REASONING_LEVELS = ['none', 'low', 'medium', 'high'] as const
 export type Reasoning = (typeof REASONING_LEVELS)[number]
 
-/** Ekagra's functions use Claude (Anthropic); Ekagra Studio's use Gemini (Google), which can watch YouTube videos. */
+/** Ekagra's functions use Claude (Anthropic) with optional Gemini fallback, or Google Gemini directly. */
 export type AiProvider = 'anthropic' | 'google'
+
+export interface AiFallbackConfig {
+  provider: 'google'
+  apiKey: string
+  models: Record<Tier, string>
+  prices: Record<Tier, Price>
+  reasoning: Record<Tier, Reasoning>
+}
 
 export interface AiConfig {
   provider: AiProvider
@@ -46,6 +54,7 @@ export interface AiConfig {
   monthlyBudgetUsd: number
   userDailyRequests: number
   adminAlertWebhookUrl?: string
+  fallback?: AiFallbackConfig
 }
 
 /** The Claude models used when AI_MODEL_SMART and AI_MODEL_FAST aren't set (docs/4-setup-guide.md, step 6). */
@@ -54,9 +63,8 @@ export const DEFAULT_MODELS: Record<Tier, string> = { smart: 'claude-sonnet-5-5'
 export const DEFAULT_REASONING: Record<Tier, Reasoning> = { smart: 'low', fast: 'none' }
 
 /**
- * Ekagra Studio's Gemini models when STUDIO_AI_MODEL_SMART and STUDIO_AI_MODEL_FAST aren't set.
- * Fast (cheap per token) reads YouTube videos, which are long: about 100 tokens a second. Smart
- * makes notes from PDFs, photos and text.
+ * Ekagra Studio & Gemini fallback models when STUDIO_AI_MODEL_SMART and STUDIO_AI_MODEL_FAST aren't set.
+ * Supports Gemini 3.8 Flash / Gemini 4 Hydrogen and Gemini 3.5 Flash-Lite.
  */
 export const STUDIO_DEFAULT_MODELS: Record<Tier, string> = { smart: 'gemini-3.8-flash', fast: 'gemini-3.5-flash-lite' }
 /** Gemini 3 models always think a little: 'none' isn't one of their levels (the provider would leave the model's own, higher default). */
@@ -67,8 +75,8 @@ export const STUDIO_DEFAULT_REASONING: Record<Tier, Reasoning> = { smart: 'low',
  * those secrets. Claude: platform.claude.com/docs/en/about-claude/pricing; Gemini:
  * ai.google.dev/gemini-api/docs/pricing (November 2026; one price for text, images, video and
  * audio). Where Google has announced a higher price, that one is used, so the budget is never
- * under-counted: Gemini 3.8 and 3.6 Flash cost $0.75 / $3.75 until 31 December 2026, Gemini 4
- * Argon $2 / $10 until 30 November 2026.
+ * under-counted: Gemini 3.8 / 4 Hydrogen and 3.6 Flash cost $0.75 / $3.75 until 31 December 2026,
+ * Gemini 4 Argon $2 / $10 until 30 November 2026.
  */
 export const KNOWN_PRICES: Readonly<Record<string, Price>> = {
   'claude-haiku-5-5': { input: 0.1, output: 0.5, longPrompt: { inputTokens: 100_000, input: 0.5, output: 2.5 } },
@@ -77,6 +85,7 @@ export const KNOWN_PRICES: Readonly<Record<string, Price>> = {
   'claude-sonnet-4-6': { input: 3, output: 15 },
   'claude-haiku-4-5': { input: 1, output: 5 },
   'gemini-3.8-flash': { input: 1.5, output: 7.5 },
+  'gemini-4-hydrogen': { input: 1.5, output: 7.5 },
   'gemini-3.6-flash': { input: 1.5, output: 7.5 },
   'gemini-3.5-flash-lite': { input: 0.3, output: 2.5 },
   'gemini-4-argon': { input: 4, output: 20 },
@@ -103,7 +112,7 @@ const limitsSchema = z.object({
   ADMIN_ALERT_WEBHOOK_URL: optionalText,
 })
 
-const secretsSchema = limitsSchema
+const anthropicSecretsSchema = limitsSchema
   .extend({
     AI_PROVIDER: z.preprocess(blankToMissing, z.literal('anthropic').default('anthropic')),
     AI_API_KEY: text,
@@ -115,9 +124,97 @@ const secretsSchema = limitsSchema
     AI_PRICE_FAST_OUTPUT: price,
     AI_REASONING_SMART: reasoning(DEFAULT_REASONING.smart),
     AI_REASONING_FAST: reasoning(DEFAULT_REASONING.fast),
+    GEMINI_API_KEY: optionalText,
+    STUDIO_AI_API_KEY: optionalText,
+    STUDIO_AI_MODEL_SMART: optionalText,
+    STUDIO_AI_MODEL_FAST: optionalText,
+    STUDIO_AI_PRICE_SMART_INPUT: price,
+    STUDIO_AI_PRICE_SMART_OUTPUT: price,
+    STUDIO_AI_PRICE_FAST_INPUT: price,
+    STUDIO_AI_PRICE_FAST_OUTPUT: price,
+    STUDIO_AI_REASONING_SMART: reasoning(STUDIO_DEFAULT_REASONING.smart),
+    STUDIO_AI_REASONING_FAST: reasoning(STUDIO_DEFAULT_REASONING.fast),
   })
   .transform((secrets, context) => {
-    // A known model brings its prices; prices set as secrets (both of a tier) replace them.
+    const priceOf = (tier: 'SMART' | 'FAST', model: string, input: number | undefined, output: number | undefined): Price => {
+      const known = knownPrice(model)
+      if (input === undefined && output === undefined && known) return known
+      if (input === undefined) context.addIssue({ code: 'custom', path: [`AI_PRICE_${tier}_INPUT`], message: `Needed for ${model}` })
+      if (output === undefined) context.addIssue({ code: 'custom', path: [`AI_PRICE_${tier}_OUTPUT`], message: `Needed for ${model}` })
+      return { input: input ?? 0, output: output ?? 0 }
+    }
+    const geminiKey = secrets.STUDIO_AI_API_KEY ?? secrets.GEMINI_API_KEY
+    const fallbackSmartModel =
+      secrets.STUDIO_AI_MODEL_SMART?.trim().startsWith('gemini-')
+        ? secrets.STUDIO_AI_MODEL_SMART.trim()
+        : STUDIO_DEFAULT_MODELS.smart
+    const fallbackFastModel =
+      secrets.STUDIO_AI_MODEL_FAST?.trim().startsWith('gemini-')
+        ? secrets.STUDIO_AI_MODEL_FAST.trim()
+        : STUDIO_DEFAULT_MODELS.fast
+    const fallbackPriceOf = (model: string, input: number | undefined, output: number | undefined, defaultKey: string): Price => {
+      if (input !== undefined && output !== undefined) return { input, output }
+      return knownPrice(model) ?? KNOWN_PRICES[defaultKey] ?? { input: 1.5, output: 7.5 }
+    }
+    const fallback: AiFallbackConfig | undefined = geminiKey
+      ? {
+          provider: 'google',
+          apiKey: geminiKey,
+          models: { smart: fallbackSmartModel, fast: fallbackFastModel },
+          prices: {
+            smart: fallbackPriceOf(fallbackSmartModel, secrets.STUDIO_AI_PRICE_SMART_INPUT, secrets.STUDIO_AI_PRICE_SMART_OUTPUT, 'gemini-3.8-flash'),
+            fast: fallbackPriceOf(fallbackFastModel, secrets.STUDIO_AI_PRICE_FAST_INPUT, secrets.STUDIO_AI_PRICE_FAST_OUTPUT, 'gemini-3.5-flash-lite'),
+          },
+          reasoning: { smart: secrets.STUDIO_AI_REASONING_SMART, fast: secrets.STUDIO_AI_REASONING_FAST },
+        }
+      : undefined
+    return {
+      ...secrets,
+      prices: {
+        smart: priceOf('SMART', secrets.AI_MODEL_SMART, secrets.AI_PRICE_SMART_INPUT, secrets.AI_PRICE_SMART_OUTPUT),
+        fast: priceOf('FAST', secrets.AI_MODEL_FAST, secrets.AI_PRICE_FAST_INPUT, secrets.AI_PRICE_FAST_OUTPUT),
+      },
+      fallback,
+    }
+  })
+
+/** Only Gemini models cleanly validated. */
+const geminiModel = (fallback: string) => z.preprocess(blankToMissing, z.string().trim().startsWith('gemini-').default(fallback))
+
+const googlePrimarySecretsSchema = limitsSchema
+  .extend({
+    AI_PROVIDER: z.preprocess(blankToMissing, z.literal('google').optional()),
+    AI_API_KEY: optionalText,
+    GEMINI_API_KEY: optionalText,
+    STUDIO_AI_API_KEY: optionalText,
+    AI_MODEL_SMART: optionalText,
+    AI_MODEL_FAST: optionalText,
+    STUDIO_AI_MODEL_SMART: optionalText,
+    STUDIO_AI_MODEL_FAST: optionalText,
+    AI_PRICE_SMART_INPUT: price,
+    AI_PRICE_SMART_OUTPUT: price,
+    AI_PRICE_FAST_INPUT: price,
+    AI_PRICE_FAST_OUTPUT: price,
+    STUDIO_AI_PRICE_SMART_INPUT: price,
+    STUDIO_AI_PRICE_SMART_OUTPUT: price,
+    STUDIO_AI_PRICE_FAST_INPUT: price,
+    STUDIO_AI_PRICE_FAST_OUTPUT: price,
+    AI_REASONING_SMART: reasoning(STUDIO_DEFAULT_REASONING.smart),
+    AI_REASONING_FAST: reasoning(STUDIO_DEFAULT_REASONING.fast),
+  })
+  .transform((secrets, context) => {
+    const apiKey = secrets.GEMINI_API_KEY ?? secrets.STUDIO_AI_API_KEY ?? secrets.AI_API_KEY
+    if (!apiKey) context.addIssue({ code: 'custom', path: ['GEMINI_API_KEY'], message: 'Needed for Gemini AI' })
+    const rawSmart = secrets.AI_MODEL_SMART ?? secrets.STUDIO_AI_MODEL_SMART ?? STUDIO_DEFAULT_MODELS.smart
+    const rawFast = secrets.AI_MODEL_FAST ?? secrets.STUDIO_AI_MODEL_FAST ?? STUDIO_DEFAULT_MODELS.fast
+    if (!rawSmart.trim().startsWith('gemini-')) {
+      context.addIssue({ code: 'custom', path: ['AI_MODEL_SMART'], message: 'Expected a Gemini model (gemini-*)' })
+    }
+    if (!rawFast.trim().startsWith('gemini-')) {
+      context.addIssue({ code: 'custom', path: ['AI_MODEL_FAST'], message: 'Expected a Gemini model (gemini-*)' })
+    }
+    const smartModel = rawSmart.trim()
+    const fastModel = rawFast.trim()
     const priceOf = (tier: 'SMART' | 'FAST', model: string, input: number | undefined, output: number | undefined): Price => {
       const known = knownPrice(model)
       if (input === undefined && output === undefined && known) return known
@@ -127,10 +224,13 @@ const secretsSchema = limitsSchema
     }
     return {
       ...secrets,
+      apiKey: apiKey ?? '',
+      models: { smart: smartModel, fast: fastModel },
       prices: {
-        smart: priceOf('SMART', secrets.AI_MODEL_SMART, secrets.AI_PRICE_SMART_INPUT, secrets.AI_PRICE_SMART_OUTPUT),
-        fast: priceOf('FAST', secrets.AI_MODEL_FAST, secrets.AI_PRICE_FAST_INPUT, secrets.AI_PRICE_FAST_OUTPUT),
+        smart: priceOf('SMART', smartModel, secrets.AI_PRICE_SMART_INPUT ?? secrets.STUDIO_AI_PRICE_SMART_INPUT, secrets.AI_PRICE_SMART_OUTPUT ?? secrets.STUDIO_AI_PRICE_SMART_OUTPUT),
+        fast: priceOf('FAST', fastModel, secrets.AI_PRICE_FAST_INPUT ?? secrets.STUDIO_AI_PRICE_FAST_INPUT, secrets.AI_PRICE_FAST_OUTPUT ?? secrets.STUDIO_AI_PRICE_FAST_OUTPUT),
       },
+      reasoning: { smart: secrets.AI_REASONING_SMART, fast: secrets.AI_REASONING_FAST },
     }
   })
 
@@ -144,9 +244,38 @@ function notConfigured(error: z.ZodError): AiError {
   )
 }
 
-/** Reads the AI secrets. If any are missing or wrong, one error names all of them. */
+function shouldUseGooglePrimary(env: Record<string, string | undefined>): boolean {
+  const explicit = typeof env.AI_PROVIDER === 'string' ? env.AI_PROVIDER.trim().toLowerCase() : ''
+  if (explicit === 'google') return true
+  if (explicit === 'anthropic') return false
+  const hasAnthropicKey = typeof env.AI_API_KEY === 'string' && env.AI_API_KEY.trim() !== ''
+  const hasGeminiKey =
+    (typeof env.GEMINI_API_KEY === 'string' && env.GEMINI_API_KEY.trim() !== '') ||
+    (typeof env.STUDIO_AI_API_KEY === 'string' && env.STUDIO_AI_API_KEY.trim() !== '')
+  const explicitGeminiModels =
+    (typeof env.AI_MODEL_SMART === 'string' && env.AI_MODEL_SMART.trim().startsWith('gemini-')) ||
+    (typeof env.AI_MODEL_FAST === 'string' && env.AI_MODEL_FAST.trim().startsWith('gemini-'))
+  return (!hasAnthropicKey && hasGeminiKey) || (hasGeminiKey && explicitGeminiModels)
+}
+
+/** Reads the AI secrets. Supports Anthropic (with optional Gemini fallback) or Google Gemini directly. */
 export function readAiConfig(env: Record<string, string | undefined>): AiConfig {
-  const parsed = secretsSchema.safeParse(env)
+  if (shouldUseGooglePrimary(env)) {
+    const parsed = googlePrimarySecretsSchema.safeParse(env)
+    if (!parsed.success) throw notConfigured(parsed.error)
+    const secrets = parsed.data
+    return {
+      provider: 'google',
+      apiKey: secrets.apiKey,
+      models: secrets.models,
+      prices: secrets.prices,
+      reasoning: secrets.reasoning,
+      monthlyBudgetUsd: secrets.AI_MONTHLY_BUDGET_USD,
+      userDailyRequests: secrets.AI_USER_DAILY_REQUESTS,
+      ...(secrets.ADMIN_ALERT_WEBHOOK_URL ? { adminAlertWebhookUrl: secrets.ADMIN_ALERT_WEBHOOK_URL } : {}),
+    }
+  }
+  const parsed = anthropicSecretsSchema.safeParse(env)
   if (!parsed.success) throw notConfigured(parsed.error)
   const secrets = parsed.data
   return {
@@ -158,13 +287,11 @@ export function readAiConfig(env: Record<string, string | undefined>): AiConfig 
     monthlyBudgetUsd: secrets.AI_MONTHLY_BUDGET_USD,
     userDailyRequests: secrets.AI_USER_DAILY_REQUESTS,
     ...(secrets.ADMIN_ALERT_WEBHOOK_URL ? { adminAlertWebhookUrl: secrets.ADMIN_ALERT_WEBHOOK_URL } : {}),
+    ...(secrets.fallback ? { fallback: secrets.fallback } : {}),
   }
 }
 
 export type UsageLimits = Pick<AiConfig, 'monthlyBudgetUsd' | 'userDailyRequests' | 'adminAlertWebhookUrl'>
-
-/** Only Gemini models for Studio, like only Claude models for Ekagra. */
-const geminiModel = (fallback: string) => z.preprocess(blankToMissing, z.string().trim().startsWith('gemini-').default(fallback))
 
 const studioSecretsSchema = limitsSchema
   .extend({
@@ -233,7 +360,72 @@ export function readUsageLimits(env: Record<string, string | undefined>): UsageL
 
 /** Whether every AI secret is set (and right). */
 export function isAiConfigured(env: Record<string, string | undefined>): boolean {
-  return secretsSchema.safeParse(env).success
+  try {
+    readAiConfig(env)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** Returns true when a failed Anthropic HTTP status should seamlessly fall back to Gemini. */
+export function isAnthropicFallbackStatus(status: number | undefined): boolean {
+  return status === 400 || status === 402 || status === 429
+}
+
+/**
+ * Maps upstream LLM HTTP failures to user-safe errors.
+ * Never exposes Anthropic/Google billing URLs, vendor error strings, or secret names to the client.
+ */
+export function sanitizeAiProviderError(params: {
+  provider: AiProvider
+  status: number | undefined
+  detail: string
+  timedOut: boolean
+  cause?: unknown
+}): AiError {
+  const { provider, status, detail, timedOut, cause } = params
+  if (timedOut) {
+    return new AiError(504, 'provider_timeout', 'Cloud AI took too long to answer. Please try again in a minute.', { cause })
+  }
+  if (provider === 'google') {
+    if ((status === 400 || status === 401 || status === 403) && /api[ _]?key/i.test(detail)) {
+      return new AiError(500, 'not_configured', 'Cloud AI is temporarily unavailable. Please try again shortly.', { cause })
+    }
+    if (status === 402 || (status === 400 && /credit|billing|quota/i.test(detail))) {
+      return new AiError(503, 'provider_billing', 'Cloud AI is temporarily unavailable. Please try again shortly.', { cause })
+    }
+    if (status === 404) {
+      return new AiError(500, 'not_configured', 'Cloud AI is temporarily unavailable due to a model configuration update.', { cause })
+    }
+    if (status === 429) {
+      if (/PerDay/i.test(detail)) {
+        return new AiError(503, 'provider_limit', 'Cloud AI has reached its daily capacity limit. Please try again later.', { cause })
+      }
+      if (/input_token/i.test(detail)) {
+        return new AiError(503, 'provider_limit', 'This request is larger than Cloud AI can read at once. Please try a shorter section.', { cause })
+      }
+      return new AiError(503, 'provider_busy', 'Cloud AI is temporarily busy. Please try again in a minute.', { cause })
+    }
+    if (status === 500 || status === 503 || status === 504) {
+      return new AiError(503, 'provider_busy', 'Cloud AI is very busy right now. Please try again in a few minutes.', { cause })
+    }
+    if (status === 400 || status === 403) {
+      return new AiError(422, 'unreadable_input', 'Could not read this source. A YouTube video must be public.', { cause })
+    }
+    return new AiError(502, 'provider_error', 'Cloud AI did not answer. Please try again in a minute.', { cause })
+  }
+
+  if (status === 401 || status === 403) {
+    return new AiError(500, 'not_configured', 'Cloud AI is temporarily unavailable. Please try again shortly.', { cause })
+  }
+  if (status === 402 || (status === 400 && /credit|balance|billing/i.test(detail))) {
+    return new AiError(503, 'provider_billing', 'Cloud AI is temporarily unavailable. Please try again shortly.', { cause })
+  }
+  if (status === 429 || status === 529 || (status === 400 && /usage limits/i.test(detail))) {
+    return new AiError(503, 'provider_busy', 'Cloud AI is temporarily busy. Please try again later.', { cause })
+  }
+  return new AiError(502, 'provider_error', 'Cloud AI did not answer. Please try again in a minute.', { cause })
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000

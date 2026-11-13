@@ -1,8 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '@/features/auth/authStore'
+import { defaultCurrencyForLocale } from '@/lib/currency'
 import { dbError, type DataSource } from '@/lib/dataSource'
 import { deviceFiles } from '@/lib/deviceFiles'
-import { requireSupabase } from '@/lib/supabase'
+import { requireSupabase, supabase } from '@/lib/supabase'
+import { browserTimezone } from '@/lib/timezone'
 import type { Tables, TablesInsert, TablesUpdate } from '@/types/database'
 import { clearDemoData, demoProfileRepo } from './localStore'
 import { mergeSettings, type SettingsPatch } from './settings'
@@ -22,13 +24,46 @@ export interface ProfileRepo {
   replaceRoutine(rows: RoutineInsert[]): Promise<void>
 }
 
+export async function ensureProfile(
+  userId: string,
+  meta?: { fullName?: string | null; avatarUrl?: string | null; email?: string | null },
+): Promise<ProfileRow | null> {
+  if (!supabase) return null
+  const existing = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle()
+  if (existing.error) throw dbError(existing.error)
+  if (existing.data) return existing.data
+
+  const fallbackName = meta?.fullName?.trim() || meta?.email?.split('@')[0]?.trim() || 'Student'
+  const { error: insertError } = await supabase.from('profiles').upsert(
+    {
+      id: userId,
+      full_name: fallbackName,
+      avatar_url: meta?.avatarUrl ?? null,
+      timezone: browserTimezone(),
+      currency: defaultCurrencyForLocale(),
+    },
+    { onConflict: 'id', ignoreDuplicates: true },
+  )
+  if (insertError) throw dbError(insertError)
+
+  const created = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle()
+  if (created.error) throw dbError(created.error)
+  return created.data
+}
+
 function supabaseRepo(userId: string): ProfileRepo {
   const client = requireSupabase()
   return {
     async getProfile() {
       const { data, error } = await client.from('profiles').select('*').eq('id', userId).maybeSingle()
       if (error) throw dbError(error)
-      return data
+      if (data) return data
+      const authUser = useAuthStore.getState().user
+      return ensureProfile(userId, {
+        fullName: authUser?.name,
+        avatarUrl: authUser?.avatarUrl,
+        email: authUser?.email,
+      })
     },
     async saveProfile(patch) {
       const { error } = await client.from('profiles').update(patch).eq('id', userId)
@@ -113,6 +148,28 @@ export function useSaveOnboarding() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['profile', owner] })
       await queryClient.invalidateQueries({ queryKey: ['routine', owner] })
+    },
+  })
+}
+
+/** Skips full setup while initializing locale defaults + onboarded timestamp so Today's planner runs immediately. */
+export function useSkipOnboarding() {
+  const { repo, owner } = useRepo()
+  const authName = useAuthStore((state) => state.user?.name ?? null)
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (current?: ProfileRow | null) => {
+      if (!repo) throw new Error('Please sign in again.')
+      const fallbackName = current?.full_name?.trim() || authName?.trim() || 'Student'
+      await repo.saveProfile({
+        full_name: fallbackName,
+        timezone: current?.timezone || browserTimezone(),
+        currency: current?.currency || defaultCurrencyForLocale(),
+        onboarded_at: current?.onboarded_at ?? new Date().toISOString(),
+      })
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['profile', owner] })
     },
   })
 }

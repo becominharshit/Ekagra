@@ -1,6 +1,7 @@
 import { FunctionsHttpError } from '@supabase/supabase-js'
 import { describe, expect, it, vi } from 'vitest'
 import { DEFAULT_ENTITLEMENTS } from '@shared/billing.ts'
+import { AiUsageResponseSchema } from '@shared/schemas.ts'
 import type { DataSource } from '@/lib/dataSource'
 import { AI_FUNCTIONS, formatUsd, loadAiUsage, summarizeUsage, type UsageRow } from './usage'
 
@@ -133,5 +134,22 @@ describe('loadAiUsage', () => {
       aiConfigured: null,
       serverError: expect.stringContaining("The ai-usage function isn't on the server yet"),
     })
+  })
+
+  it('absorbs minor response variations in AiUsageResponseSchema without throwing', () => {
+    const parsed = AiUsageResponseSchema.parse({
+      tier: 'pro',
+      entitlement: { dailyAiRequests: '250', codingLabLanguages: ['python', 'typescript'] },
+      user: { requestsLast24h: '7', tokensThisMonth: '1234' },
+      subscription: { provider: 'stripe', status: 'unexpected_status' },
+      limits: { userDailyRequests: '250', monthlyAiTokens: 5000000, monthlyBudgetUsd: '100' },
+      app: { spentLast24hUsd: '0.15' },
+    })
+    expect(parsed.tier).toBe('pro')
+    expect(parsed.user).toEqual({ requestsLast24h: 7, tokensThisMonth: 1234 })
+    expect(parsed.subscription).toMatchObject({ provider: 'stripe', status: 'active', cancelAtPeriodEnd: false })
+    expect(parsed.app).toEqual({ spentLast24hUsd: 0.15, spentThisMonthUsd: null })
+    expect(parsed.budgetAlert).toBe(false)
+    expect(parsed.aiConfigured).toBe(false)
   })
 })

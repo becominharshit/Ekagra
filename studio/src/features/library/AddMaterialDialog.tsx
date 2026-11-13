@@ -33,14 +33,25 @@ function AddFlow({ initialSubject, onDone }: { initialSubject: string | null; on
   const [title, setTitle] = useState('')
   const [text, setText] = useState('')
   const [over, setOver] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const camera = useRef<HTMLInputElement>(null)
   const subjectId = subject === NONE ? null : subject
 
+  function switchTab(next: How) {
+    setError(null)
+    add.reset()
+    setHow(next)
+  }
+
   function save(input: Parameters<typeof addMaterial>[1]) {
+    setError(null)
     add.mutate(input, {
       onSuccess: ({ material, warning }) => {
         onDone()
         navigate(`/materials/${material.id}`, { state: warning ? { warning } : null })
+      },
+      onError: (caught) => {
+        setError(caught instanceof Error ? caught.message : 'Could not add material.')
       },
     })
   }
@@ -82,7 +93,16 @@ function AddFlow({ initialSubject, onDone }: { initialSubject: string | null; on
         </Select>
       </div>
 
-      <ToggleGroup type="single" variant="outline" value={how} onValueChange={(next) => next && setHow(next === 'youtube' || next === 'text' ? next : 'file')} aria-label="What to add">
+      <ToggleGroup
+        type="single"
+        variant="outline"
+        value={how}
+        onValueChange={(next) => {
+          if (!next) return
+          switchTab(next === 'youtube' || next === 'text' ? next : 'file')
+        }}
+        aria-label="What to add"
+      >
         <ToggleGroupItem value="file">
           <FileUp aria-hidden />
           File or photo
@@ -127,7 +147,16 @@ function AddFlow({ initialSubject, onDone }: { initialSubject: string | null; on
         <div className="grid gap-3">
           <div className="grid gap-2">
             <Label htmlFor="add-link">Link to the video</Label>
-            <Input id="add-link" inputMode="url" placeholder="https://www.youtube.com/watch?v=…" value={link} onChange={(event) => setLink(event.target.value)} />
+            <Input
+              id="add-link"
+              inputMode="url"
+              placeholder="https://www.youtube.com/watch?v=…"
+              value={link}
+              onChange={(event) => {
+                setError(null)
+                setLink(event.target.value)
+              }}
+            />
             <p className="text-xs text-muted-foreground">Public videos only. Studio makes notes from the video itself; you never paste a transcript.</p>
           </div>
           <div className="grid gap-2">
@@ -150,9 +179,9 @@ function AddFlow({ initialSubject, onDone }: { initialSubject: string | null; on
         </div>
       )}
 
-      {add.error && (
+      {(error ?? add.error?.message) && (
         <p role="alert" className="text-sm text-destructive">
-          {add.error.message}
+          {error ?? add.error?.message}
         </p>
       )}
 

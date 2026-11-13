@@ -2,6 +2,7 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
+@source "../studio/src";
 
 /* Kalam (SIL Open Font License, src/assets/fonts/Kalam-OFL.txt): the handwritten note view. */
 @font-face {
@@ -158,6 +159,7 @@
     --color-mode-hustle: var(--mode-hustle);
     --color-mode-life: var(--mode-life);
     --color-mode-free: var(--mode-free);
+    --color-studio: var(--studio);
 }
 
 :root {
@@ -165,6 +167,7 @@
     --mode-hustle: oklch(0.666 0.179 58.318);  /* amber */
     --mode-life: oklch(0.596 0.145 163.225);   /* green */
     --mode-free: oklch(0.556 0 0);             /* grey */
+    --studio: oklch(0.541 0.281 293.009);
 }
 
 .dark {
@@ -172,6 +175,7 @@
     --mode-hustle: oklch(0.828 0.189 84.429);
     --mode-life: oklch(0.765 0.177 163.223);
     --mode-free: oklch(0.708 0 0);
+    --studio: oklch(0.702 0.183 293.541);
 }
 
 /* Safe-area padding keeps content clear of the phone's notch (top)

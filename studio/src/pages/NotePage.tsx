@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { format } from 'date-fns'
 import { LoaderCircle, Pencil, RotateCcw, Trash2 } from 'lucide-react'
-import { useNavigate, useParams } from 'react-router'
+import { useParams } from 'react-router'
+import { useStudioNavigate } from '@studio/lib/studioHref'
 import type { StudioNoteKind } from '@shared/schemas.ts'
+import { youtubeId } from '@shared/youtube.ts'
 import { Markdown } from '@/components/Markdown'
 import { PageHeader } from '@/components/layout/PageHeader'
 import {
@@ -71,7 +73,7 @@ export function NotePage() {
 }
 
 function NoteView({ note }: { note: Note }) {
-  const navigate = useNavigate()
+  const navigate = useStudioNavigate()
   const subject = useSubject(note.subject_id)
   const library = useLibrary()
   const profile = useProfile()
@@ -160,7 +162,9 @@ function NoteView({ note }: { note: Note }) {
               }
             />
           )}
-          {note.status === 'ready' && note.content.trim() !== '' && <NoteQuiz note={note} />}
+          {note.status === 'ready' && note.content.trim() !== '' && (
+            <NoteQuiz note={note} videoId={material?.kind === 'youtube' ? youtubeId(material.source_url ?? '') : null} />
+          )}
         </>
       )}
 

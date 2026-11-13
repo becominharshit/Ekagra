@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { useAcademicsMutation, useSubjects } from '@/features/academics/subjects'
+import { ImageOcclusionView } from '@/features/flashcards/ImageOcclusionView'
 import { givenText, isRight, rightAnswerText } from '@/features/lessons/quiz'
 import { noteMistake } from '@/features/mistakes/mistakes'
 import { useBlocks } from '@/features/planner/planBlocks'
@@ -187,6 +188,7 @@ export function TollboothFlow({ appPackage, appLabel }: { appPackage: string | n
             <div className="h-full rounded-full bg-primary transition-[width] duration-1000 ease-linear" style={{ width: `${(left / SECONDS_PER_QUESTION) * 100}%` }} />
           </div>
           <CardTitle className="pt-2 text-lg leading-snug">{question.prompt}</CardTitle>
+          {question.occlusion && <ImageOcclusionView occlusion={question.occlusion} revealed={false} compact className="mt-2" />}
         </CardHeader>
         <CardContent>
           {question.type === 'mcq' ? (

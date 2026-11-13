@@ -17,14 +17,17 @@ import {
   checkQuota,
   costUsd,
   dayBefore,
+  isAnthropicFallbackStatus,
   isBudgetAlertTriggered,
   monthStartUtc,
+  sanitizeAiProviderError,
   sanitizePromptInput,
   transientRetryDelayMs,
   type AiConfig,
   type Tier,
 } from './aiCore.ts'
 import { DEFAULT_ENTITLEMENTS, type PlanEntitlement } from './billing.ts'
+import { geminiModels } from './gemini.ts'
 
 // The one door every AI call goes through (AGENTS.md):
 //   1. Per-tier quota from subscriptions + plan_entitlements (daily requests + monthly tokens).
@@ -97,11 +100,10 @@ export interface BudgetAlertEvent {
 export interface AiGatewayOptions {
   config: AiConfig
   usage: UsageStore
-  /**
-   * Turns a model name into a model. Tests pass a fake. Without it, Claude models are made for the
-   * 'anthropic' provider; Studio's functions pass Gemini's (_shared/gemini.ts), so only they bundle it.
-   */
+  /** Turns a model name into a model. Tests pass a fake. */
   model?: (modelId: string) => LanguageModel
+  /** Optional fallback model factory (used in tests; in production uses Gemini when configured). */
+  fallbackModel?: (modelId: string) => LanguageModel
   now?: () => Date
   /** Waits before Gemini is asked again; tests pass one that doesn't really wait. */
   sleep?: (ms: number) => Promise<void>
@@ -128,10 +130,6 @@ export const MAX_OUTPUT_TOKENS = 32_000
 function claudeModels(apiKey: string): (modelId: string) => LanguageModel {
   const anthropic = createAnthropic({ apiKey })
   return (modelId) => anthropic(modelId)
-}
-
-function noModels(): LanguageModel {
-  throw new AiError(500, 'not_configured', 'This AI function has no models set up (pass them to createAiGateway).')
 }
 
 /** The request was stopped because it took too long (AbortSignal.timeout). */
@@ -204,89 +202,25 @@ function recoverGemini(
   return null
 }
 
-/** A failed call as an error the student can act on. Only the status and the provider's message are logged, never the prompt. */
+/** Maps provider failures to user-safe errors. Logs raw status/detail only server-side, never vendor billing URLs to clients. */
 function providerError(error: unknown, modelId: string, provider: AiConfig['provider']): AiError {
-  // The AI SDK tries Claude's busy and rate-limited calls again by itself, then wraps the last error.
   const last = RetryError.isInstance(error) ? error.lastError : error
-  if (isTimeout(last)) {
-    console.error(`AI request to ${modelId} took too long and was stopped`)
-    const message =
-      provider === 'google'
-        ? 'Gemini took too long to answer, so it was stopped. Please try again in a minute.'
-        : `The AI took more than ${TIMEOUT_MS / 60_000} minutes, so it was stopped. Please try again.`
-    return new AiError(504, 'provider_timeout', message, { cause: error })
+  const timedOut = isTimeout(last)
+  if (timedOut) {
+    console.error(`AI request to ${modelId} (${provider}) timed out`)
+    return sanitizeAiProviderError({ provider, status: undefined, detail: '', timedOut: true, cause: error })
   }
   const status = APICallError.isInstance(last) ? last.statusCode : undefined
   const detail = APICallError.isInstance(last) ? (last.responseBody ?? last.message) : last instanceof Error ? last.message : String(last)
   console.error(`AI request to ${modelId} failed${status ? ` (${status})` : ''}: ${detail.slice(0, 500)}`)
-  if (provider === 'google') {
-    // Google answers a wrong key with 400 API_KEY_INVALID, and an unusable one with 403.
-    if ((status === 400 || status === 401 || status === 403) && /api[ _]?key/i.test(detail)) {
-      return new AiError(500, 'not_configured', 'Google refused the Gemini key. Check the GEMINI_API_KEY secret (docs/4-setup-guide.md, step 6).', { cause: error })
-    }
-    // 402: the project pays in advance (prepay billing) and its credit is used up.
-    if (status === 402) {
-      return new AiError(
-        503,
-        'provider_billing',
-        "Gemini's prepaid credit has run out, so Google refused the request. Add credit in Google AI Studio (ai.studio/projects → Billing), or use a Gemini key from a free-tier project (docs/4-setup-guide.md, \"Ekagra Studio's AI\").",
-        { cause: error },
-      )
-    }
-    if (status === 404) {
-      return new AiError(500, 'not_configured', `Gemini has no model called "${modelId}". Check STUDIO_AI_MODEL_SMART and STUDIO_AI_MODEL_FAST (docs/4-setup-guide.md).`, { cause: error })
-    }
-    if (status === 429) {
-      const freeTier = /free_?tier/i.test(detail)
-      const plan = freeTier ? "Gemini's free tier" : 'your Gemini plan'
-      if (/PerDay/i.test(detail)) {
-        return new AiError(
-          503,
-          'provider_limit',
-          `${freeTier ? "Gemini's free tier" : 'Your Gemini plan'} has reached today's limit. It starts again at midnight US Pacific time, in the early afternoon in India.`,
-          { cause: error },
-        )
-      }
-      // Over the tokens-a-minute limit even after waiting for the next minute (recoverGemini).
-      if (/input_token/i.test(detail)) {
-        return new AiError(503, 'provider_limit', `This is more than ${plan} reads in one minute. Please try again in a minute${freeTier ? ', or use a Gemini key with billing' : ''}.`, {
-          cause: error,
-        })
-      }
-      return new AiError(503, 'provider_busy', `This is more requests than ${plan} takes in one minute. Please try again in a minute.`, { cause: error })
-    }
-    // 503: "This model is currently experiencing high demand", even after asking again and on the other model.
-    if (status === 500 || status === 503 || status === 504) {
-      return new AiError(503, 'provider_busy', 'Gemini is very busy right now (Google reports high demand). Please try again in a few minutes.', { cause: error })
-    }
-    // Something Gemini can't use, e.g. a private or unlisted YouTube video.
-    if (status === 400 || status === 403) {
-      return new AiError(422, 'unreadable_input', "Gemini couldn't read this. A YouTube video must be public.", { cause: error })
-    }
-    return new AiError(502, 'provider_error', 'The AI service did not answer. Please try again in a minute.', { cause: error })
-  }
-  if (status === 401 || status === 403) {
-    return new AiError(500, 'not_configured', 'Anthropic refused the AI key. Check the AI_API_KEY secret (docs/4-setup-guide.md, step 6).', { cause: error })
-  }
-  // 400 "Your credit balance is too low to access the Anthropic API": the prepaid credit is used up.
-  if (status === 402 || (status === 400 && /credit balance/i.test(detail))) {
-    return new AiError(503, 'provider_billing', "Anthropic's credit has run out, so Claude refused the request. Add credit at platform.claude.com → Billing (docs/4-setup-guide.md, step 6).", {
-      cause: error,
-    })
-  }
-  // 429: a rate limit or the plan's monthly cap; 529: overloaded; 400 "…reached your specified API usage limits": the spend limit set in the Console.
-  if (status === 429 || status === 529 || (status === 400 && /usage limits/i.test(detail))) {
-    return new AiError(503, 'provider_busy', 'The AI service is busy or has reached its spending limit. Please try again later.', { cause: error })
-  }
-  return new AiError(502, 'provider_error', 'The AI service did not answer. Please try again in a minute.', { cause: error })
+  return sanitizeAiProviderError({ provider, status, detail, timedOut: false, cause: error })
 }
 
 export function createAiGateway(options: AiGatewayOptions): AiGateway {
   const { config, usage, onBudgetAlert } = options
   const now = options.now ?? (() => new Date())
   const sleep = options.sleep ?? realSleep
-  const modelFor = options.model ?? (config.provider === 'anthropic' ? claudeModels(config.apiKey) : noModels)
-  const gemini = config.provider === 'google'
+  const primaryModelFor = options.model ?? (config.provider === 'google' ? geminiModels(config.apiKey) : claudeModels(config.apiKey))
   let lastAlertMonthKey: string | null = null
 
   async function resolveUserEntitlement(userId: string, at: Date): Promise<PlanEntitlement> {
@@ -346,7 +280,10 @@ export function createAiGateway(options: AiGatewayOptions): AiGateway {
   async function runGatewayTask<T>(
     task: AiTask<T>,
     invoke: (args: {
+      model: LanguageModel
       modelId: string
+      isGemini: boolean
+      reasoning: AiConfig['reasoning'][Tier]
       instructions: string
       safePrompt: typeof task.prompt
       tier: Tier
@@ -360,8 +297,12 @@ export function createAiGateway(options: AiGatewayOptions): AiGateway {
     await ensureQuota(task.userId)
 
     const end = Math.min(now().getTime() + TIMEOUT_MS, task.deadline?.getTime() ?? Number.POSITIVE_INFINITY)
-    // Gemini: the Fast model can take over a Smart task (once) when the Smart one is busy.
-    const fastCanTakeOver = gemini && task.tier === 'smart' && config.models.fast !== config.models.smart
+    let activeProvider: AiConfig['provider'] = config.provider
+    let activeModels = config.models
+    let activePrices = config.prices
+    let activeReasoning = config.reasoning
+    let activeModelFor = primaryModelFor
+    let fallbackUsed = false
     let tier = task.tier
     const spent = { input: 0, output: 0, costUsd: 0 }
     // Each try is priced on its own (a long prompt can cost more per token, and the Fast model less).
@@ -369,7 +310,7 @@ export function createAiGateway(options: AiGatewayOptions): AiGateway {
       const tokens = { input: used?.inputTokens ?? 0, output: used?.outputTokens ?? 0 }
       spent.input += tokens.input
       spent.output += tokens.output
-      spent.costUsd += costUsd(tokens, config.prices[tier])
+      spent.costUsd += costUsd(tokens, activePrices[tier])
     }
     // Logging and admin alerts must never break a student request.
     const log = async () => {
@@ -377,7 +318,7 @@ export function createAiGateway(options: AiGatewayOptions): AiGateway {
       const entry: UsageEntry = {
         userId: task.userId,
         feature: task.feature,
-        model: config.models[tier],
+        model: activeModels[tier],
         inputTokens: spent.input,
         outputTokens: spent.output,
         costUsd: Math.round(spent.costUsd * 1_000_000) / 1_000_000,
@@ -389,13 +330,18 @@ export function createAiGateway(options: AiGatewayOptions): AiGateway {
     let wrongShapes = 0
     const tried = { waited: false, transientAttempts: 0 }
     for (;;) {
-      const modelId = config.models[tier]
+      const isGemini = activeProvider === 'google'
+      const fastCanTakeOver = isGemini && task.tier === 'smart' && activeModels.fast !== activeModels.smart
+      const modelId = activeModels[tier]
       const handOverPossible = fastCanTakeOver && tier === 'smart'
       const left = end - now().getTime()
       try {
         if (left <= 0) throw new DOMException('No time left for this request', 'TimeoutError')
         const outcome = await invoke({
+          model: activeModelFor(modelId),
           modelId,
+          isGemini,
+          reasoning: activeReasoning[tier],
           instructions: wrongShapes === 0 ? baseInstructions : `${baseInstructions}\n\n${RETRY_INSTRUCTION}`,
           safePrompt,
           tier,
@@ -417,12 +363,31 @@ export function createAiGateway(options: AiGatewayOptions): AiGateway {
           await log()
           throw error
         }
-        if (gemini) {
+        const last = RetryError.isInstance(error) ? error.lastError : error
+        const status = APICallError.isInstance(last) ? last.statusCode : undefined
+
+        // Seamless Anthropic -> Gemini fallback when Anthropic returns 400 / 402 / 429 and Gemini is configured.
+        if (activeProvider === 'anthropic' && !fallbackUsed && config.fallback && isAnthropicFallbackStatus(status)) {
+          const fb = config.fallback
+          const fbFactory = options.fallbackModel ?? geminiModels(fb.apiKey)
+          console.warn(`Primary AI provider returned ${status}; falling back to Gemini (${fb.models[tier]})`)
+          activeProvider = fb.provider
+          activeModels = fb.models
+          activePrices = fb.prices
+          activeReasoning = fb.reasoning
+          activeModelFor = fbFactory
+          fallbackUsed = true
+          tried.waited = false
+          tried.transientAttempts = 0
+          continue
+        }
+
+        if (isGemini) {
           const refusal = geminiRefusal(error)
           const next = recoverGemini(refusal, { canHandOver: handOverPossible, ...tried }, end - now().getTime())
           if (next) {
             const why = refusal.timedOut ? "didn't answer in time" : `refused (${refusal.status ?? 'no status'}${refusal.perMinute ? ', per-minute limit' : ''})`
-            console.warn(`Gemini ${modelId} ${why}: ${next.action === 'hand_over' ? `asking ${config.models.fast} instead` : `asking again in ${Math.round(next.ms / 1000)} s`}`)
+            console.warn(`Gemini ${modelId} ${why}: ${next.action === 'hand_over' ? `asking ${activeModels.fast} instead` : `asking again in ${Math.round(next.ms / 1000)} s`}`)
             if (next.action === 'hand_over') {
               tier = 'fast'
             } else {
@@ -433,7 +398,6 @@ export function createAiGateway(options: AiGatewayOptions): AiGateway {
             continue
           }
         } else {
-          const last = RetryError.isInstance(error) ? error.lastError : error
           if (APICallError.isInstance(last) && last.isRetryable) {
             const delayMs = transientRetryDelayMs(last.statusCode, last.responseBody ?? last.message, tried.transientAttempts)
             if (delayMs !== null && end - now().getTime() - delayMs >= MIN_ANSWER_MS) {
@@ -444,7 +408,7 @@ export function createAiGateway(options: AiGatewayOptions): AiGateway {
           }
         }
         await log()
-        throw providerError(error, modelId, config.provider)
+        throw providerError(error, modelId, activeProvider)
       }
     }
   }
@@ -452,34 +416,34 @@ export function createAiGateway(options: AiGatewayOptions): AiGateway {
   return {
     ensureQuota,
     generate<T>(task: AiTask<T>): Promise<AiResult<T>> {
-      return runGatewayTask(task, async ({ modelId, instructions, safePrompt, tier, abortSignal }) => {
+      return runGatewayTask(task, async ({ model, isGemini, reasoning, instructions, safePrompt, abortSignal }) => {
         const result = await generateText({
-          model: modelFor(modelId),
+          model,
           instructions,
           prompt: safePrompt,
           output: Output.object({ schema: task.schema }),
-          reasoning: config.reasoning[tier],
+          reasoning,
           maxOutputTokens: MAX_OUTPUT_TOKENS,
           // Gemini's refusals are handled below (Google says how long to wait); Claude's by the AI SDK.
-          ...(gemini ? { maxRetries: 0 } : {}),
+          ...(isGemini ? { maxRetries: 0 } : {}),
           abortSignal,
         })
         return { data: result.output, usage: result.usage }
       })
     },
     stream<T>(task: AiStreamTask<T>): Promise<AiResult<T>> {
-      return runGatewayTask(task, async ({ modelId, instructions, safePrompt, tier, abortSignal }) => {
+      return runGatewayTask(task, async ({ model, modelId, isGemini, reasoning, instructions, safePrompt, abortSignal }) => {
         let streamErr: unknown
         let emittedPartial = false
         try {
           const result = streamText({
-            model: modelFor(modelId),
+            model,
             instructions,
             prompt: safePrompt,
             output: Output.object({ schema: task.schema }),
-            reasoning: config.reasoning[tier],
+            reasoning,
             maxOutputTokens: MAX_OUTPUT_TOKENS,
-            ...(gemini ? { maxRetries: 0 } : {}),
+            ...(isGemini ? { maxRetries: 0 } : {}),
             abortSignal,
             onError({ error }) {
               streamErr = error
@@ -496,7 +460,7 @@ export function createAiGateway(options: AiGatewayOptions): AiGateway {
         } catch (error) {
           if (streamErr !== undefined && !emittedPartial) throw streamErr
           if (emittedPartial && !(error instanceof AiError) && !NoObjectGeneratedError.isInstance(error)) {
-            throw providerError(streamErr ?? error, modelId, config.provider)
+            throw providerError(streamErr ?? error, modelId, isGemini ? 'google' : 'anthropic')
           }
           throw error
         }

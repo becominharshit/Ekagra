@@ -47,15 +47,24 @@ export interface MakeQuizInput {
   count: number
   program?: string | null
   year?: number | null
+  videoId?: string | null
 }
 
 /** New questions from the note (Gemini), saved, and returned ready to ask. */
-export async function makeQuiz(source: DataSource, { note, count, program, year }: MakeQuizInput): Promise<StoredCheckQuestion[]> {
+export async function makeQuiz(source: DataSource, { note, count, program, year, videoId }: MakeQuizInput): Promise<StoredCheckQuestion[]> {
   if (source.kind === 'demo') throw new Error("Studio's AI needs you to be signed in.")
   if (!note.content.trim()) throw new Error('This note is empty: there is nothing to ask about.')
   const answer = await callAiFunction(
     'studio-quiz',
-    { noteId: note.id, title: note.title.slice(0, 200), text: note.content.slice(0, QUIZ_TEXT_LENGTH), count, program: program ?? null, year: year ?? null },
+    {
+      noteId: note.id,
+      title: note.title.slice(0, 200),
+      text: note.content.slice(0, QUIZ_TEXT_LENGTH),
+      count,
+      program: program ?? null,
+      year: year ?? null,
+      ...(videoId ? { videoId } : {}),
+    },
     StudioQuizResponseSchema,
   )
   const rows: TablesInsert<'questions'>[] = answer.questions.map((question) => ({

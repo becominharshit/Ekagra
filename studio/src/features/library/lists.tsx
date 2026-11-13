@@ -1,12 +1,12 @@
 import type { ReactNode } from 'react'
 import { format } from 'date-fns'
 import { LoaderCircle } from 'lucide-react'
-import { Link } from 'react-router'
 import { countLabel } from '@/features/academics/labels'
 import { noteIcon } from '@/features/materials/kinds'
 import { noteKindLabel, noteSourceLabel, type NoteSummary } from '@/features/notes/notes'
 import { cn } from '@/lib/utils'
 import { stillMaking } from '@studio/features/notes/studioNotes'
+import { StudioLink } from '@studio/lib/studioPath'
 import { kindIcon, kindLabel } from './kinds'
 import type { Material } from './library'
 
@@ -26,13 +26,13 @@ export function MaterialList({ materials, subjectName }: { materials: Material[]
         ].filter(Boolean)
         return (
           <li key={material.id}>
-            <Link to={`/materials/${material.id}`} className={rowClass}>
+            <StudioLink to={`/materials/${material.id}`} className={rowClass}>
               <Icon className="size-4 shrink-0 text-studio" aria-hidden />
               <span className="grid min-w-0 flex-1 gap-0.5">
                 <span className="truncate text-sm font-medium">{material.title}</span>
                 <span className="text-xs text-muted-foreground">{details.join(' · ')}</span>
               </span>
-            </Link>
+            </StudioLink>
           </li>
         )
       })}
@@ -56,13 +56,13 @@ export function NoteList({ notes }: { notes: NoteSummary[] }) {
         ].filter(Boolean)
         return (
           <li key={note.id}>
-            <Link to={`/notes/${note.id}`} className={rowClass}>
+            <StudioLink to={`/notes/${note.id}`} className={rowClass}>
               <Icon className={cn('size-4 shrink-0 text-studio', making && 'animate-spin', broken && 'text-destructive')} aria-hidden />
               <span className="grid min-w-0 flex-1 gap-0.5">
                 <span className="truncate text-sm font-medium">{note.title}</span>
                 <span className={cn('text-xs text-muted-foreground', broken && 'text-destructive')}>{details.join(' · ')}</span>
               </span>
-            </Link>
+            </StudioLink>
           </li>
         )
       })}

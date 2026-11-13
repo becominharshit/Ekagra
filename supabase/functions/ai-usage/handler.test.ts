@@ -101,6 +101,26 @@ describe('ai-usage', () => {
     }
   })
 
+  it('uses the single-query getUsageSummary RPC fast path when provided', async () => {
+    const getUsageSummary = vi.fn(async () => ({
+      requestsLast24h: 3,
+      tokensThisMonth: 18_000,
+      spentLast24hUsd: 0.02,
+      spentThisMonthUsd: 0.45,
+    }))
+    const { make } = deps({ getUsageSummary })
+    const res = await handleUsageRequest(make)(post({}))
+    expect(res.status).toBe(200)
+    const body = AiUsageResponseSchema.parse(await res.json())
+    expect(body.user).toEqual({ requestsLast24h: 3, tokensThisMonth: 18_000 })
+    expect(body.app).toEqual({ spentLast24hUsd: 0.02, spentThisMonthUsd: 0.45 })
+    expect(getUsageSummary).toHaveBeenCalledWith('student-1', {
+      daySince: new Date('2026-11-19T10:00:00.000Z'),
+      userMonthSince: new Date('2026-11-01T00:00:00.000Z'),
+      appMonthSince: new Date('2026-11-01T00:00:00.000Z'),
+    })
+  })
+
   it('says "too many to add up" as null instead of Infinity', async () => {
     const { make } = deps({ spentSince: async () => Number.POSITIVE_INFINITY })
     const body = AiUsageResponseSchema.parse(await (await handleUsageRequest(make)(post({}))).json())

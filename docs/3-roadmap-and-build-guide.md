@@ -125,8 +125,13 @@ Built in this order (M12 comes first: attendance helps students in the middle of
   5. **SSE Streaming & Citation Grounding:** token-by-token SSE streaming + retries on `ai-tutor` and `studio-notes` with clickable PDF page / timestamp citations.
   6. **FSRS Mistakes, Extension & Social Safety:** `ts-fsrs` scheduling for `mistakes` (`013_mistakes_fsrs.sql`), upgraded Academic Tollbooth with FSRS weakness scoring + code debug prompts, Chromium MV3 `declarativeNetRequest` extension (`extension/`), Play-safe FocusGuard disclosures (no AccessibilityService claims), and peer blocking/abuse reporting (`014_social_safety.sql`).
   7. **Launch Surface & Compliance:** SEO metadata + `robots.txt` + `sitemap.xml`, public `/terms` page, interactive zero-login `PublicTollboothPreview`, GDPR `ConsentBanner`, and server-side `account-export` Edge Function.
+- [x] **M20 P0/P1 Local Testing Fixes, Auth Polish, Responsive UI & Unified Studio Upgrade (Phases 1–4)** (`015_usage_rpc_and_cache.sql`). Done 2026-11-14:
+  1. **P0 Fixes & Model Resilience:** Lenient `AiUsageResponseSchema` parsing with indexed PostgreSQL `get_user_ai_usage_summary` RPC (`015_usage_rpc_and_cache.sql`), Coding Lab JS/TS/Py language alias normalization before `code_snippets` writes, KaTeX CSS + `\mur` typo normalization + `<Markdown inline>` TOC headings, sanitized provider errors (zero leaked billing URLs), and automatic Anthropic → Gemini (`AI_MODEL_FAST`/`AI_MODEL_SMART`) failover.
+  2. **Seamless Google Auth & Password Reset:** 1-click Google OAuth directly to `/today`, skippable `QuickStartOnboardingModal` replacing the blocking onboarding gate, `"Forgot password?"` on `/sign-in`, and `/reset-password` update flow.
+  3. **Mobile (`390×844`) & Tablet (`768×1024`) Polish:** Tab-switch validation clearing in Studio `AddMaterialDialog`, single-column mobile form stacking in `MarksCard` and `CodingLabPage`, safe-area/header spacing across Studio & main pages.
+  4. **Unified Studio, YouTube Cache & Competitive Features:** Studio mounted lazily inside `AppShell` at `/studio/*` (standalone `npm run build:studio` preserved), `youtube_note_cache` (`015_usage_rpc_and_cache.sql`) shared across `studio-notes` and `studio-quiz`, 1-click `STARTER_PACKS` (`CS Undergrad`, `STEM / Pre-Med`, `Competitive Exams`, `Indie Builder`), `ts-fsrs` + Tollbooth Image Occlusion flashcards, and offline-capable 2-Host Audio Summary player on notes.
 
-Later: coding, flashcards, practice and mock tests move to Studio; Tauri `.exe`; Android share target; reminders.
+Later: Tauri `.exe`; Android share target; reminders.
 
 The 12-week plan in §3 and the phases in §1 and §4 are kept for reference only.
 

@@ -12,60 +12,77 @@ import {
 } from './billing.ts'
 
 // AI usage and entitlement helpers backed by ai_usage, subscriptions, and plan_entitlements.
-// Uses the admin (service_role) client so quota accounting and tier lookup stay authoritative.
+// Uses the admin (service_role) client and the indexed get_user_ai_usage_summary SQL RPC so
+// quota accounting and tier lookup stay authoritative without scanning raw ai_usage rows.
 
-const PAGE_SIZE = 1000
-const MAX_PAGES = 10
+export interface UserAiUsageSummary {
+  requestsLast24h: number
+  tokensThisMonth: number
+  spentLast24hUsd: number
+  spentThisMonthUsd: number
+}
+
+interface RawUsageSummaryRow {
+  requests_last_24h: number | string | null
+  tokens_this_month: number | string | null
+  spent_last_24h_usd: number | string | null
+  spent_this_month_usd: number | string | null
+}
+
+export async function getUserAiUsageSummary(
+  admin: SupabaseClient,
+  params: {
+    userId: string | null
+    daySince: Date
+    userMonthSince: Date
+    appMonthSince: Date
+  },
+): Promise<UserAiUsageSummary> {
+  const { data, error } = await admin.rpc('get_user_ai_usage_summary', {
+    p_user_id: params.userId,
+    p_day_since: params.daySince.toISOString(),
+    p_user_month_since: params.userMonthSince.toISOString(),
+    p_app_month_since: params.appMonthSince.toISOString(),
+  })
+  if (error) throw error
+  const row = (Array.isArray(data) ? data[0] : data) as RawUsageSummaryRow | null | undefined
+  return {
+    requestsLast24h: Math.max(0, Math.round(Number(row?.requests_last_24h ?? 0) || 0)),
+    tokensThisMonth: Math.max(0, Math.round(Number(row?.tokens_this_month ?? 0) || 0)),
+    spentLast24hUsd: Math.max(0, Number(row?.spent_last_24h_usd ?? 0) || 0),
+    spentThisMonthUsd: Math.max(0, Number(row?.spent_this_month_usd ?? 0) || 0),
+  }
+}
 
 export async function requestsSince(admin: SupabaseClient, userId: string, since: Date): Promise<number> {
-  const { count, error } = await admin
-    .from('ai_usage')
-    .select('id', { count: 'exact', head: true })
-    .eq('user_id', userId)
-    .gte('created_at', since.toISOString())
-  if (error) throw error
-  return count ?? 0
+  const summary = await getUserAiUsageSummary(admin, {
+    userId,
+    daySince: since,
+    userMonthSince: since,
+    appMonthSince: since,
+  })
+  return summary.requestsLast24h
 }
 
-export async function tokensSince(admin: SupabaseClient, userId: string, since: Date, maxPages = MAX_PAGES): Promise<number> {
-  let total = 0
-  for (let page = 0; page < maxPages; page++) {
-    const from = page * PAGE_SIZE
-    const { data, error } = await admin
-      .from('ai_usage')
-      .select('input_tokens, output_tokens')
-      .eq('user_id', userId)
-      .gte('created_at', since.toISOString())
-      .order('created_at')
-      .range(from, from + PAGE_SIZE - 1)
-    if (error) throw error
-    const rows = (data ?? []) as { input_tokens: number | string; output_tokens: number | string }[]
-    total += rows.reduce((sum, row) => sum + Number(row.input_tokens ?? 0) + Number(row.output_tokens ?? 0), 0)
-    if (rows.length < PAGE_SIZE) return total
-  }
-  return Number.POSITIVE_INFINITY
+export async function tokensSince(admin: SupabaseClient, userId: string, since: Date): Promise<number> {
+  const summary = await getUserAiUsageSummary(admin, {
+    userId,
+    daySince: since,
+    userMonthSince: since,
+    appMonthSince: since,
+  })
+  return summary.tokensThisMonth
 }
 
-/**
- * What every student's AI requests since `since` cost (USD).
- * More than `maxPages` pages returns Infinity (exceeded admin reporting window).
- */
-export async function spendSince(admin: SupabaseClient, since: Date, maxPages = MAX_PAGES): Promise<number> {
-  let total = 0
-  for (let page = 0; page < maxPages; page++) {
-    const from = page * PAGE_SIZE
-    const { data, error } = await admin
-      .from('ai_usage')
-      .select('cost_usd')
-      .gte('created_at', since.toISOString())
-      .order('created_at')
-      .range(from, from + PAGE_SIZE - 1)
-    if (error) throw error
-    const rows = (data ?? []) as { cost_usd: number | string }[]
-    total += rows.reduce((sum, row) => sum + Number(row.cost_usd), 0)
-    if (rows.length < PAGE_SIZE) return total
-  }
-  return Number.POSITIVE_INFINITY
+/** What every student's AI requests since `since` cost (USD) via indexed Postgres SUM(). */
+export async function spendSince(admin: SupabaseClient, since: Date): Promise<number> {
+  const summary = await getUserAiUsageSummary(admin, {
+    userId: null,
+    daySince: since,
+    userMonthSince: since,
+    appMonthSince: since,
+  })
+  return summary.spentThisMonthUsd
 }
 
 interface RawSubscriptionRow {

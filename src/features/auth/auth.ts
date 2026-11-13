@@ -1,6 +1,7 @@
 import { App } from '@capacitor/app'
 import { Browser } from '@capacitor/browser'
 import { Capacitor } from '@capacitor/core'
+import { ensureProfile } from '@/features/profile/queries'
 import { queryClient } from '@/lib/queryClient'
 import { requireSupabase, supabase } from '@/lib/supabase'
 import { useAuthStore } from './authStore'
@@ -19,6 +20,18 @@ export const NATIVE_REDIRECT_URL = 'ekagra://auth/callback'
 export function webRedirectUrl(): string {
   return `${window.location.origin}/auth/callback`
 }
+
+/** The password reset page. */
+export function resetPasswordRedirectUrl(): string {
+  return `${window.location.origin}/reset-password`
+}
+
+export type AuthCallbackOutcome =
+  | { status: 'signed_in' }
+  | { status: 'missing' }
+  | { status: 'error'; message: string }
+
+const inflightPkceExchanges = new Map<string, Promise<AuthCallbackOutcome>>()
 
 let started = false
 
@@ -61,6 +74,118 @@ export async function signInWithGoogle(): Promise<void> {
   if (error) throw error
 }
 
+export async function signInWithEmail(email: string, password: string): Promise<void> {
+  const client = requireSupabase()
+  useAuthStore.getState().setError(null)
+  const { data, error } = await client.auth.signInWithPassword({ email: email.trim(), password })
+  if (error) throw error
+  if (data.session) {
+    useAuthStore.getState().setSession(data.session)
+    const appUser = useAuthStore.getState().user
+    await ensureProfile(data.session.user.id, {
+      fullName: appUser?.name,
+      avatarUrl: appUser?.avatarUrl,
+      email: appUser?.email,
+    }).catch(() => undefined)
+  }
+}
+
+export async function signUpWithEmail(email: string, password: string): Promise<{ needsConfirmation: boolean }> {
+  const client = requireSupabase()
+  useAuthStore.getState().setError(null)
+  const { data, error } = await client.auth.signUp({
+    email: email.trim(),
+    password,
+    options: { emailRedirectTo: webRedirectUrl() },
+  })
+  if (error) throw error
+  if (data.session) {
+    useAuthStore.getState().setSession(data.session)
+    const appUser = useAuthStore.getState().user
+    await ensureProfile(data.session.user.id, {
+      fullName: appUser?.name,
+      avatarUrl: appUser?.avatarUrl,
+      email: appUser?.email,
+    }).catch(() => undefined)
+    return { needsConfirmation: false }
+  }
+  return { needsConfirmation: true }
+}
+
+export async function requestPasswordReset(email: string): Promise<void> {
+  const client = requireSupabase()
+  const { error } = await client.auth.resetPasswordForEmail(email.trim(), {
+    redirectTo: resetPasswordRedirectUrl(),
+  })
+  if (error) throw error
+}
+
+export async function updateUserPassword(password: string): Promise<void> {
+  const client = requireSupabase()
+  const { data, error } = await client.auth.updateUser({ password })
+  if (error) throw error
+  if (data.user) {
+    const { data: sessionData } = await client.auth.getSession()
+    if (sessionData.session) {
+      useAuthStore.getState().setSession(sessionData.session)
+    }
+    const appUser = useAuthStore.getState().user
+    await ensureProfile(data.user.id, {
+      fullName: appUser?.name,
+      avatarUrl: appUser?.avatarUrl,
+      email: data.user.email ?? appUser?.email,
+    }).catch(() => undefined)
+  }
+}
+
+/** Completes web OAuth/recovery PKCE code exchange once and initializes any missing profile row. */
+export async function completeWebAuthCallback(searchParams: URLSearchParams): Promise<AuthCallbackOutcome> {
+  const hashParams = new URLSearchParams(typeof window !== 'undefined' && window.location.hash.startsWith('#') ? window.location.hash.slice(1) : '')
+  const errorText =
+    searchParams.get('error_description') ??
+    searchParams.get('error') ??
+    hashParams.get('error_description') ??
+    hashParams.get('error')
+  if (errorText) return { status: 'error', message: errorText }
+
+  const client = requireSupabase()
+  const code = searchParams.get('code')
+
+  const resolve = async (): Promise<AuthCallbackOutcome> => {
+    const current = await client.auth.getSession()
+    let session = current.data.session
+    if (!session && code) {
+      const exchanged = await client.auth.exchangeCodeForSession(code)
+      if (exchanged.error) {
+        const retry = await client.auth.getSession()
+        session = retry.data.session
+        if (!session) return { status: 'error', message: exchanged.error.message }
+      } else {
+        session = exchanged.data.session
+      }
+    }
+    if (!session) return { status: 'missing' }
+    useAuthStore.getState().setSession(session)
+    const appUser = useAuthStore.getState().user
+    await ensureProfile(session.user.id, {
+      fullName: appUser?.name,
+      avatarUrl: appUser?.avatarUrl,
+      email: appUser?.email,
+    }).catch(() => undefined)
+    return { status: 'signed_in' }
+  }
+
+  if (!code) return resolve()
+  let pending = inflightPkceExchanges.get(code)
+  if (!pending) {
+    pending = resolve().finally(() => {
+      inflightPkceExchanges.delete(code)
+    })
+    inflightPkceExchanges.set(code, pending)
+  }
+  return pending
+}
+
 /** Reads the Android return link: a one-time code to swap for a session, or an error.
  *  Returns null for links that aren't ours. */
 export function readAuthCallback(url: string): { code: string } | { error: string } | null {
@@ -84,9 +209,21 @@ async function finishNativeSignIn(url: string): Promise<void> {
     useAuthStore.getState().setError(result.error)
     return
   }
-  const { error } = await requireSupabase().auth.exchangeCodeForSession(result.code)
-  // On success, onAuthStateChange reports the new session and the app moves on to Today.
-  if (error) useAuthStore.getState().setError(error.message)
+  const { data, error } = await requireSupabase().auth.exchangeCodeForSession(result.code)
+  // On success, onAuthStateChange reports the new session and initializes profile before moving to Today.
+  if (error) {
+    useAuthStore.getState().setError(error.message)
+    return
+  }
+  if (data.session) {
+    useAuthStore.getState().setSession(data.session)
+    const appUser = useAuthStore.getState().user
+    await ensureProfile(data.session.user.id, {
+      fullName: appUser?.name,
+      avatarUrl: appUser?.avatarUrl,
+      email: appUser?.email,
+    }).catch(() => undefined)
+  }
 }
 
 export async function signOut(): Promise<void> {

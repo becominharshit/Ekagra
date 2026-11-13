@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { academicsKey } from '@/features/academics/subjects'
 import { CARD_STATE } from '@/features/flashcards/fsrs'
+import { occlusionPrompt, parseOcclusionFront, type OcclusionPayload } from '@/features/flashcards/occlusion'
 import { givenText, readCheckQuestion, rightAnswerText, type StoredCheckQuestion } from '@/features/lessons/quiz'
 import { mistakeFsrsStats, mistakeWeaknessScore, type Mistake } from '@/features/mistakes/ladder'
 import { dbError, need, useDataSource, type DataSource } from '@/lib/dataSource'
@@ -37,6 +38,8 @@ export type TollboothQuestion = Exclude<StoredCheckQuestion, { type: 'short' }> 
   /** Where the prompt came from: saved question, FSRS card, open mistake, coding debug challenge, or mental maths. */
   origin: 'question' | 'flashcard' | 'mistake' | 'coding' | 'builtin'
   topicId: string | null
+  /** Optional Image Occlusion payload rendered cleanly above the choices without leaking JSON markers. */
+  occlusion?: OcclusionPayload
 }
 
 export interface TollboothAnswer {
@@ -180,7 +183,9 @@ export function cardWeaknessScore(card: Pick<Card, 'fsrs' | 'due_at'>, now: Date
 /** A flashcard as a 4-choice question: its own answer and 3 other cards' answers. Null when it can't be one. */
 export function cardQuestion(card: Pick<Card, 'id' | 'front' | 'back' | 'topic_id'>, answers: string[], random: () => number): TollboothQuestion | null {
   const right = card.back.trim()
-  if (!card.front.trim() || !right || right.length > MAX_CHOICE_LENGTH) return null
+  const occlusion = parseOcclusionFront(card.front)
+  const promptText = occlusion ? occlusionPrompt(occlusion) : card.front.trim()
+  if (!promptText || !right || right.length > MAX_CHOICE_LENGTH) return null
   const seen = new Set([right.toLowerCase()])
   const wrong: string[] = []
   for (let tries = 0; tries < 40 && wrong.length < 3 && answers.length > 0; tries++) {
@@ -191,7 +196,18 @@ export function cardQuestion(card: Pick<Card, 'id' | 'front' | 'back' | 'topic_i
   }
   if (wrong.length < 3) return null
   const options = shuffle([right, ...wrong], random)
-  return { origin: 'flashcard', id: card.id, topicId: card.topic_id, type: 'mcq', prompt: card.front.trim(), options, correct: options.indexOf(right), explanation: '', difficulty: null }
+  return {
+    origin: 'flashcard',
+    id: card.id,
+    topicId: card.topic_id,
+    type: 'mcq',
+    prompt: promptText,
+    options,
+    correct: options.indexOf(right),
+    explanation: '',
+    difficulty: null,
+    ...(occlusion ? { occlusion } : {}),
+  }
 }
 
 /** An open mistake converted to a 4-choice question when its correct approach is concise enough to scan. */

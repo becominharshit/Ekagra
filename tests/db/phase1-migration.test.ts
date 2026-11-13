@@ -69,6 +69,7 @@ beforeAll(async () => {
   await db.exec(readSql('../../supabase/migrations/012_coding_languages.sql'))
   await db.exec(readSql('../../supabase/migrations/013_mistakes_fsrs.sql'))
   await db.exec(readSql('../../supabase/migrations/014_social_safety.sql'))
+  await db.exec(readSql('../../supabase/migrations/015_usage_rpc_and_cache.sql'))
 
   // Two people sign up. The sign-up trigger creates their profiles.
   await db.exec(`
@@ -984,6 +985,116 @@ describe('Phase 6 Social Safety migration (014_social_safety.sql)', () => {
     // Users cannot self-resolve moderation status (no UPDATE RLS policy for authenticated).
     const res = await as(BOB, (tx) => tx.query(`update public.abuse_reports set status = 'resolved' where reported_user_id = $1`, [DAN]))
     expect(res.affectedRows ?? 0).toBe(0)
+  })
+})
+
+describe('Indexed AI usage summary RPC (015_usage_rpc_and_cache.sql)', () => {
+  it('computes per-user and global AI usage via SQL SUM/COUNT only for service_role', async () => {
+    const daySince = new Date('2026-11-19T12:00:00.000Z').toISOString()
+    const monthSince = new Date('2026-11-01T00:00:00.000Z').toISOString()
+
+    // Direct calls by anon or authenticated users must be denied.
+    await expect(
+      as(BOB, (tx) =>
+        tx.query(`select * from public.get_user_ai_usage_summary($1, $2, $3, $3)`, [ALICE, daySince, monthSince]),
+      ),
+    ).rejects.toThrow(/permission denied/)
+    await expect(
+      as(null, (tx) =>
+        tx.query(`select * from public.get_user_ai_usage_summary($1, $2, $3, $3)`, [ALICE, daySince, monthSince]),
+      ),
+    ).rejects.toThrow(/permission denied/)
+
+    // service_role aggregates indexed sums/counts accurately.
+    await db.transaction(async (tx) => {
+      await tx.exec('set local role service_role')
+      await tx.query(
+        `insert into public.ai_usage (user_id, feature, model, input_tokens, output_tokens, cost_usd, created_at)
+         values
+           ($1, 'brief', 'gemini-3.5-flash-lite', 1200, 300, 0.002500, '2026-11-20T10:00:00.000Z'),
+           ($1, 'tutor', 'gemini-3.8-flash', 2000, 500, 0.010000, '2026-11-05T10:00:00.000Z'),
+           ($2, 'syllabus', 'claude-sonnet-5-5', 3000, 1000, 0.025000, '2026-11-20T11:00:00.000Z')`,
+        [BOB, DAN],
+      )
+
+      const { rows } = await tx.query<{
+        requests_last_24h: string | number
+        tokens_this_month: string | number
+        spent_last_24h_usd: string | number
+        spent_this_month_usd: string | number
+      }>(`select * from public.get_user_ai_usage_summary($1, $2, $3, $3)`, [BOB, daySince, monthSince])
+
+      expect(Number(rows[0]?.requests_last_24h)).toBe(1)
+      expect(Number(rows[0]?.tokens_this_month)).toBe(4000)
+      expect(Number(rows[0]?.spent_last_24h_usd)).toBeGreaterThanOrEqual(0.0275)
+      expect(Number(rows[0]?.spent_this_month_usd)).toBeGreaterThanOrEqual(0.0375)
+    })
+
+    // Cleanup synthetic rows for BOB/DAN so later account-delete tests start clean on DAN.
+    await db.transaction(async (tx) => {
+      await tx.exec('set local role service_role')
+      await tx.query(`delete from public.ai_usage where user_id in ($1, $2)`, [BOB, DAN])
+    })
+  })
+
+  it('allows an authenticated user to initialize only their own missing profile row', async () => {
+    const tempUserId = '55555555-5555-4555-8555-555555555555'
+    await db.query(`insert into auth.users (id, email) values ($1, 'temp-profile@example.com')`, [tempUserId])
+    // Remove the trigger-created profile to simulate a missing profile during auth callback recovery.
+    await db.transaction(async (tx) => {
+      await tx.exec('set local role service_role')
+      await tx.query(`delete from public.profiles where id = $1`, [tempUserId])
+    })
+
+    // Bob cannot insert a profile for another user, and signed-out callers cannot insert at all.
+    await expect(
+      as(BOB, (tx) => tx.query(`insert into public.profiles (id, full_name) values ($1, 'Spoofed')`, [tempUserId])),
+    ).rejects.toThrow(/row-level security/)
+    await expect(
+      as(null, (tx) => tx.query(`insert into public.profiles (id, full_name) values ($1, 'Anon')`, [tempUserId])),
+    ).rejects.toThrow(/permission denied/)
+
+    // The owning user can initialize their own profile cleanly.
+    await as(tempUserId, (tx) =>
+      tx.query(`insert into public.profiles (id, full_name) values ($1, 'Recovered User')`, [tempUserId]),
+    )
+    const rows = await as(tempUserId, async (tx) => (await tx.query<{ full_name: string }>('select full_name from public.profiles')).rows)
+    expect(rows).toEqual([{ full_name: 'Recovered User' }])
+
+    await db.query('delete from auth.users where id = $1', [tempUserId])
+  })
+
+  it('stores and protects shared YouTube lecture caches via service_role only (youtube_note_cache)', async () => {
+    await db.transaction(async (tx) => {
+      await tx.query('set local role service_role')
+      await tx.query(
+        `insert into public.youtube_note_cache (video_id, kind, prompt_version, title, content, model)
+         values ($1, $2, $3, $4, $5, $6)`,
+        ['9hE5-98ZeCg', 'notes', 'studio-notes-v6', 'SQL joins', '## Joins\nCached content', 'gemini-3.8-flash'],
+      )
+      await tx.query('reset role')
+    })
+
+    // Authenticated and anon visitors cannot read or write the shared cache directly.
+    await expect(
+      as(ALICE, (tx) => tx.query(`select * from public.youtube_note_cache where video_id = $1`, ['9hE5-98ZeCg'])),
+    ).rejects.toThrow(/permission denied/)
+    await expect(
+      as(null, (tx) => tx.query(`select * from public.youtube_note_cache where video_id = $1`, ['9hE5-98ZeCg'])),
+    ).rejects.toThrow(/permission denied/)
+
+    // Unique key (video_id, kind, prompt_version) prevents duplicate cache entries.
+    await expect(
+      db.transaction(async (tx) => {
+        await tx.query('set local role service_role')
+        await tx.query(
+          `insert into public.youtube_note_cache (video_id, kind, prompt_version, title, content, model)
+           values ($1, $2, $3, $4, $5, $6)`,
+          ['9hE5-98ZeCg', 'notes', 'studio-notes-v6', 'Dup', 'Dup', 'gemini-3.8-flash'],
+        )
+        await tx.query('reset role')
+      }),
+    ).rejects.toThrow(/duplicate key|unique/)
   })
 })
 

@@ -5,9 +5,13 @@ import { runSql } from './sql'
 import { stripTypeScript } from './tsStrip'
 
 describe('normalizeCodingLanguage', () => {
-  it('normalizes valid languages and falls back to python', () => {
+  it('normalizes valid languages, short aliases (js/ts/py), and falls back to python', () => {
     expect(normalizeCodingLanguage('javascript')).toBe('javascript')
+    expect(normalizeCodingLanguage('js')).toBe('javascript')
+    expect(normalizeCodingLanguage(' JS ')).toBe('javascript')
     expect(normalizeCodingLanguage('typescript')).toBe('typescript')
+    expect(normalizeCodingLanguage('ts')).toBe('typescript')
+    expect(normalizeCodingLanguage('py')).toBe('python')
     expect(normalizeCodingLanguage('sql')).toBe('sql')
     expect(normalizeCodingLanguage('python')).toBe('python')
     expect(normalizeCodingLanguage(null)).toBe('python')

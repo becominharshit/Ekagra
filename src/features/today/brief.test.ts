@@ -170,6 +170,14 @@ describe('writing and keeping the brief', () => {
     vi.mocked(callAiFunction).mockRejectedValueOnce(new AiRequestError('quota_exceeded', "You've used today's AI limit."))
     expect(await writeBrief(SIGNED_IN, input, TODAY)).toEqual({ date: TODAY, lines: deviceBrief(input), by: 'device', aiError: "You've used today's AI limit." })
 
+    vi.mocked(callAiFunction).mockRejectedValueOnce(new AiRequestError('provider_billing', 'Cloud AI is temporarily unavailable.'))
+    expect(await writeBrief(SIGNED_IN, input, TODAY)).toEqual({
+      date: TODAY,
+      lines: deviceBrief(input),
+      by: 'device',
+      aiError: 'Cloud AI is temporarily unavailable. Showing your offline plan brief instead.',
+    })
+
     expect(await writeBrief({ kind: 'demo' }, input, TODAY)).toMatchObject({ by: 'device', aiError: null })
   })
 

@@ -62,12 +62,14 @@ describe('table of contents headings', () => {
       '## comment inside code fence',
       '```',
       '## **Gauss’s Law** (14:20)',
+      '## Permeability $\\mu_r$ and $\\mur$',
       '### Sub-bullet heading',
       '## Key points',
     ].join('\n')
     expect(extractNoteHeadings(markdown)).toEqual([
       { id: 'sec-overview', text: 'Overview' },
       { id: 'sec-gauss-s-law-14-20', text: 'Gauss’s Law (14:20)' },
+      { id: 'sec-permeability-mu-r-and-mu-r', text: 'Permeability $\\mu_r$ and $\\mu_r$' },
       { id: 'sec-key-points', text: 'Key points' },
     ])
   })

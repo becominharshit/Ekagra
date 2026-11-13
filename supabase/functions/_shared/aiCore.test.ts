@@ -5,6 +5,7 @@ import {
   costUsd,
   dayBefore,
   isAiConfigured,
+  isAnthropicFallbackStatus,
   isBudgetAlertTriggered,
   KNOWN_PRICES,
   moderatePromptText,
@@ -13,6 +14,7 @@ import {
   readStudioAiConfig,
   readUsageLimits,
   redactPii,
+  sanitizeAiProviderError,
   sanitizePromptInput,
   transientRetryDelayMs,
   wrapUntrustedPrompt,
@@ -82,9 +84,41 @@ describe('readAiConfig', () => {
     expect(() => readAiConfig({ AI_API_KEY: 'k', AI_MODEL_SMART: 'claude-next-model', AI_PRICE_SMART_INPUT: '1' })).toThrow(/AI_PRICE_SMART_OUTPUT/)
   })
 
-  it('only uses Anthropic (Claude)', () => {
+  it('supports Anthropic (Claude) with optional Gemini fallback, and Google Gemini directly', () => {
     expect(readAiConfig({ ...TEST_SECRETS, AI_PROVIDER: 'anthropic' }).provider).toBe('anthropic')
-    expect(() => readAiConfig({ ...TEST_SECRETS, AI_PROVIDER: 'google' })).toThrow(/AI_PROVIDER/)
+    const withFallback = readAiConfig({ ...TEST_SECRETS, GEMINI_API_KEY: 'gem-1' })
+    expect(withFallback.fallback).toMatchObject({
+      provider: 'google',
+      apiKey: 'gem-1',
+      models: { smart: 'gemini-3.8-flash', fast: 'gemini-3.5-flash-lite' },
+    })
+
+    const googleCfg = readAiConfig({
+      AI_PROVIDER: 'google',
+      GEMINI_API_KEY: 'gem-2',
+      AI_MODEL_SMART: 'gemini-4-hydrogen',
+      AI_MODEL_FAST: 'gemini-3.5-flash-lite',
+    })
+    expect(googleCfg.provider).toBe('google')
+    expect(googleCfg.models).toEqual({ smart: 'gemini-4-hydrogen', fast: 'gemini-3.5-flash-lite' })
+    expect(googleCfg.prices.smart).toEqual(KNOWN_PRICES['gemini-4-hydrogen'])
+  })
+
+  it('triggers Anthropic fallback on 400/402/429 and sanitizes vendor billing URLs from client errors', () => {
+    expect(isAnthropicFallbackStatus(400)).toBe(true)
+    expect(isAnthropicFallbackStatus(402)).toBe(true)
+    expect(isAnthropicFallbackStatus(429)).toBe(true)
+    expect(isAnthropicFallbackStatus(500)).toBe(false)
+
+    const err = sanitizeAiProviderError({
+      provider: 'anthropic',
+      status: 400,
+      detail: 'Your credit balance is too low to access the Anthropic API. Go to platform.claude.com',
+      timedOut: false,
+    })
+    expect(err.code).toBe('provider_billing')
+    expect(err.message).toBe('Cloud AI is temporarily unavailable. Please try again shortly.')
+    expect(err.message).not.toMatch(/platform\.claude|ai\.studio|credit balance|prepaid/i)
   })
 })
 

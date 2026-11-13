@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { ServerDeps } from '../_shared/http.ts'
 import { handleStudioAiRequest } from '../_shared/studioHttp.ts'
 import { fakeModel, memoryUsage, modelAnswer } from '../_shared/testing.ts'
+import type { YoutubeCacheStore } from '../_shared/youtubeCache.ts'
 import { quizFeature, shuffleOptions } from './feature.ts'
 
 const REQUEST = { noteId: '33333333-3333-4333-8333-333333333333', title: 'SQL joins', text: '## Inner join\n- Only matching rows', count: 3, program: 'BTech CSE', year: 1 }
@@ -12,6 +13,18 @@ const question = (prompt: string, correctOption = 0) => ({
   explanation: ' An inner join keeps rows that match in both tables. ',
   difficulty: 2,
 })
+
+function memoryCache(): YoutubeCacheStore {
+  const map = new Map<string, { title: string; content: string; model: string }>()
+  return {
+    async get(videoId, kind, promptVersion) {
+      return map.get(`${videoId}|${kind}|${promptVersion}`) ?? null
+    },
+    async set(entry) {
+      map.set(`${entry.videoId}|${entry.kind}|${entry.promptVersion}`, { title: entry.title, content: entry.content, model: entry.model })
+    },
+  }
+}
 
 async function call(body: unknown, ...answers: unknown[]) {
   const model = fakeModel(...answers.map((answer) => modelAnswer(JSON.stringify(answer))))
@@ -58,6 +71,26 @@ describe('studio-quiz', () => {
     const long = `## Topic\n${'- A detailed point about the lecture.\n'.repeat(3_000)}`
     expect(long.length).toBeGreaterThan(100_000)
     expect((await call({ ...REQUEST, text: long }, { questions: [question('Q')] })).response.status).toBe(200)
+  })
+
+  it('reuses cached YouTube quiz questions without calling the LLM a second time', async () => {
+    const cache = memoryCache()
+    const firstModel = fakeModel(modelAnswer(JSON.stringify({ questions: [question('Q1'), question('Q2'), question('Q3')] })))
+    const usage = memoryUsage()
+    const firstDeps = (): ServerDeps => ({ env: { GEMINI_API_KEY: 'gemini-test-key' }, authenticate: async () => 'student-1', usage, cache, model: () => firstModel })
+    const body = { ...REQUEST, videoId: '9hE5-98ZeCg' }
+    const first = await handleStudioAiRequest(quizFeature, firstDeps)(new Request('http://localhost/studio-quiz', { method: 'POST', body: JSON.stringify(body) }))
+    expect(first.status).toBe(200)
+    expect(firstModel.doGenerateCalls).toHaveLength(1)
+
+    const secondModel = fakeModel(modelAnswer(JSON.stringify({ questions: [question('Should not run')] })))
+    const secondDeps = (): ServerDeps => ({ env: { GEMINI_API_KEY: 'gemini-test-key' }, authenticate: async () => 'student-2', usage, cache, model: () => secondModel })
+    const second = await handleStudioAiRequest(quizFeature, secondDeps)(new Request('http://localhost/studio-quiz', { method: 'POST', body: JSON.stringify(body) }))
+    expect(second.status).toBe(200)
+    expect(secondModel.doGenerateCalls).toHaveLength(0)
+    const parsed = await second.json()
+    expect(parsed.questions).toHaveLength(3)
+    expect(parsed.questions[0].prompt).toBe('Q1')
   })
 })
 

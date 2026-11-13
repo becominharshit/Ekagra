@@ -26,6 +26,14 @@ describe('callAiFunction', () => {
     await expect(callAiFunction('ai-syllabus', {}, schema, fake)).rejects.toMatchObject({ code: 'invalid_answer' })
   })
 
+  it('uses "Could not sync subscription limits right now." instead of LLM shape errors for ai-usage', async () => {
+    const fake = client({ data: null, error: null })
+    await expect(callAiFunction('ai-usage', {}, schema, fake)).rejects.toMatchObject({
+      code: 'invalid_answer',
+      message: 'Could not sync subscription limits right now.',
+    })
+  })
+
   it("shows the server's own message, e.g. when the daily limit is reached", async () => {
     const fake = client({ data: null, error: httpError(429, { code: 'daily_limit', message: 'You used your 150 AI requests.' }) })
     await expect(callAiFunction('ai-syllabus', {}, schema, fake)).rejects.toMatchObject({

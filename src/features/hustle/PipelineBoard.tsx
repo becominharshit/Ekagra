@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ExternalLink, LoaderCircle, Plus } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronLeft, ChevronRight, ExternalLink, LoaderCircle, Plus } from 'lucide-react'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -33,6 +33,8 @@ export function PipelineBoard({ hustle }: { hustle: Hustle }) {
   const logPayment = useHustleMutation(saveTransaction)
   const [editing, setEditing] = useState<EditingItem | null>(null)
   const [paying, setPaying] = useState<HustleItem | null>(null)
+  const [activeStage, setActiveStage] = useState(0)
+  const scrollerRef = useRef<HTMLDivElement>(null)
   const offerPayment = (card: HustleItem, stage: string) => {
     if (shouldOfferPayment(card, stage, money.data ?? [])) setPaying(card)
   }
@@ -40,6 +42,25 @@ export function PipelineBoard({ hustle }: { hustle: Hustle }) {
   const stages = hustle.pipeline_stages
   // A move that is still being saved already shows.
   const columns = boardColumns(stages, applyMoves(items.data ?? [], move.isPending ? move.variables : []))
+
+  function scrollToStage(index: number) {
+    const clamped = Math.max(0, Math.min(stages.length - 1, index))
+    setActiveStage(clamped)
+    const scroller = scrollerRef.current
+    const target = scroller?.children.item(clamped) as HTMLElement | null
+    if (target && scroller) {
+      scroller.scrollTo({ left: target.offsetLeft - 16, behavior: 'smooth' })
+    }
+  }
+
+  function handleScroll() {
+    const scroller = scrollerRef.current
+    if (!scroller || stages.length <= 1) return
+    const first = scroller.children.item(0) as HTMLElement | null
+    const step = (first?.offsetWidth ?? 256) + 12
+    const idx = Math.max(0, Math.min(stages.length - 1, Math.round(scroller.scrollLeft / Math.max(1, step))))
+    setActiveStage(idx)
+  }
 
   if (items.isPending) {
     return (
@@ -64,8 +85,57 @@ export function PipelineBoard({ hustle }: { hustle: Hustle }) {
           {(items.error ?? move.error)?.message}
         </p>
       )}
+      {stages.length > 1 && (
+        <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground md:hidden" aria-label="Kanban stage scroll controls">
+          <div className="flex items-center gap-1 overflow-x-auto py-0.5">
+            {stages.map((stage, index) => (
+              <button
+                key={stage}
+                type="button"
+                aria-label={`Jump to ${stage}`}
+                aria-current={activeStage === index ? 'true' : undefined}
+                onClick={() => scrollToStage(index)}
+                className={`rounded-full px-2 py-0.5 whitespace-nowrap transition ${
+                  activeStage === index ? 'bg-primary font-medium text-primary-foreground' : 'bg-muted hover:text-foreground'
+                }`}
+              >
+                {stage}
+              </button>
+            ))}
+          </div>
+          <div className="flex shrink-0 items-center gap-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              aria-label="Previous stage column"
+              disabled={activeStage <= 0}
+              onClick={() => scrollToStage(activeStage - 1)}
+            >
+              <ChevronLeft className="size-3.5" aria-hidden />
+            </Button>
+            <span className="tabular-nums">
+              {activeStage + 1}/{stages.length}
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              aria-label="Next stage column"
+              disabled={activeStage >= stages.length - 1}
+              onClick={() => scrollToStage(activeStage + 1)}
+            >
+              <ChevronRight className="size-3.5" aria-hidden />
+            </Button>
+          </div>
+        </div>
+      )}
       {/* Columns scroll sideways; each one snaps into place on a phone. */}
-      <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 lg:-mx-8 lg:px-8">
+      <div
+        ref={scrollerRef}
+        onScroll={handleScroll}
+        className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 lg:-mx-8 lg:px-8"
+      >
         {stages.map((stage, stageIndex) => {
           const cards = columns.get(stage) ?? []
           const total = cards.reduce((sum, card) => sum + (card.amount === null ? 0 : Number(card.amount)), 0)

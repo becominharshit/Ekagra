@@ -53,7 +53,22 @@ export const LANGUAGE_SPECS: Record<CodingLanguage, LanguageSpec> = {
   },
 }
 
+const CODING_LANGUAGE_ALIASES: Record<string, CodingLanguage> = {
+  py: 'python',
+  python: 'python',
+  python3: 'python',
+  js: 'javascript',
+  javascript: 'javascript',
+  node: 'javascript',
+  ts: 'typescript',
+  typescript: 'typescript',
+  sql: 'sql',
+  postgres: 'sql',
+  postgresql: 'sql',
+  sqlite: 'sql',
+}
+
 export function normalizeCodingLanguage(raw: string | null | undefined): CodingLanguage {
-  if (raw === 'javascript' || raw === 'typescript' || raw === 'sql') return raw
-  return 'python'
+  const key = typeof raw === 'string' ? raw.trim().toLowerCase() : ''
+  return CODING_LANGUAGE_ALIASES[key] ?? 'python'
 }

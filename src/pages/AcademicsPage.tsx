@@ -1,14 +1,16 @@
 import { useState } from 'react'
-import { BookOpen, CalendarCheck, ChevronRight, Code2, FileUp, FlaskConical, GraduationCap, Library, LoaderCircle, Plus, TrendingUp } from 'lucide-react'
+import { BookOpen, CalendarCheck, ChevronRight, Code2, FileUp, FlaskConical, GraduationCap, Library, LoaderCircle, Plus, Sparkles, TrendingUp } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate } from 'react-router'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { countLabel, examLabel, minutesLabel } from '@/features/academics/labels'
 import { useStudy } from '@/features/academics/roadmap'
 import { addSampleSubjects } from '@/features/academics/sampleSubjects'
+import { StarterPackPicker } from '@/features/academics/StarterPackPicker'
 import { SubjectDialog } from '@/features/academics/SubjectDialog'
 import { useAcademicsMutation, useSubjects } from '@/features/academics/subjects'
 import { priorityLabels } from '@/features/academics/topicTree'
@@ -30,6 +32,7 @@ export function AcademicsPage() {
   const study = useStudy()
   const mocks = useLatestMocks()
   const [adding, setAdding] = useState(false)
+  const [packsOpen, setPacksOpen] = useState(false)
   const showInbox = useInboxStore((state) => state.show)
   const now = useNow(60_000)
   const timeZone = useTimezone()
@@ -48,6 +51,10 @@ export function AcademicsPage() {
             <Plus aria-hidden />
             {t('actions.addSubject')}
           </Button>
+          <Button variant="outline" onClick={() => setPacksOpen(true)}>
+            <Sparkles aria-hidden />
+            Starter packs
+          </Button>
           <Button variant="outline" onClick={() => showInbox()}>
             <FileUp aria-hidden />
             {t('actions.addFile')}
@@ -56,6 +63,12 @@ export function AcademicsPage() {
             <Link to="/academics/library">
               <Library aria-hidden />
               {t('actions.library')}
+            </Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link to="/studio">
+              <Sparkles aria-hidden />
+              Studio
             </Link>
           </Button>
           <Button asChild variant="outline">
@@ -107,6 +120,10 @@ export function AcademicsPage() {
               </CardTitle>
               <CardDescription>{t('empty.description')}</CardDescription>
             </CardHeader>
+            <CardContent className="grid gap-2">
+              <p className="text-xs font-medium text-muted-foreground">Or start with a 1-click goal pack:</p>
+              <StarterPackPicker compact />
+            </CardContent>
             {isDemo && (
               <CardContent className="grid gap-2">
                 <Button variant="outline" disabled={samples.isPending} onClick={() => samples.mutate()}>
@@ -161,6 +178,17 @@ export function AcademicsPage() {
       </div>
 
       <SubjectDialog open={adding} onOpenChange={setAdding} onSaved={(subject) => navigate(`/academics/subjects/${subject.id}`)} />
+      <Dialog open={packsOpen} onOpenChange={setPacksOpen}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>1-click starter packs</DialogTitle>
+            <DialogDescription>
+              Add subjects, unit roadmaps, starter flashcards, and tasks for your track. Works in Demo Mode and cloud sync.
+            </DialogDescription>
+          </DialogHeader>
+          <StarterPackPicker onApplied={() => setPacksOpen(false)} />
+        </DialogContent>
+      </Dialog>
     </>
   )
 }

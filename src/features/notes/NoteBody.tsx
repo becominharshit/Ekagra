@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { ChevronDown, ChevronUp, Download, FileText, List, LoaderCircle, PenLine } from 'lucide-react'
+import { ChevronDown, ChevronUp, Download, FileText, Headphones, List, LoaderCircle, PenLine } from 'lucide-react'
 import { CitationChips } from '@/components/CitationChips'
 import { Markdown } from '@/components/Markdown'
 import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { cn } from '@/lib/utils'
+import { AudioSummaryPlayer } from './AudioSummaryPlayer'
 import { extractCitations } from './citations'
 import { exportNotePdf } from './exportNotePdf'
 import { MindMap } from './MindMap'
@@ -55,6 +56,7 @@ export function NoteBody({
 }) {
   const [view, setView] = useState<'typed' | 'handwritten'>('typed')
   const [tocOpen, setTocOpen] = useState(false)
+  const [audioOpen, setAudioOpen] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [exportRequest, setExportRequest] = useState<{ view: 'typed' | 'handwritten'; title: string; label: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -124,12 +126,18 @@ export function NoteBody({
           {exporting ? <LoaderCircle className="animate-spin" aria-hidden /> : <Download aria-hidden />}
           PDF
         </Button>
+        <Button variant={audioOpen ? 'secondary' : 'outline'} size="sm" aria-expanded={audioOpen} onClick={() => setAudioOpen((open) => !open)}>
+          <Headphones aria-hidden />
+          {audioOpen ? 'Hide Audio Summary' : 'Generate 2-Host Audio Summary'}
+        </Button>
         {error && (
           <span role="alert" className="text-xs text-destructive">
             {error}
           </span>
         )}
       </div>
+
+      {audioOpen && <AudioSummaryPlayer title={title} content={content} />}
 
       <CitationChips citations={citations} onCitePage={onCitePage} onCiteTimestamp={onCiteTimestamp} />
 
@@ -145,7 +153,9 @@ export function NoteBody({
                   className="flex w-full items-baseline gap-2 rounded-md px-2 py-1 text-left hover:bg-muted"
                 >
                   <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{index + 1}.</span>
-                  <span className="truncate">{heading.text}</span>
+                  <span className="min-w-0 truncate">
+                    <Markdown inline>{heading.text}</Markdown>
+                  </span>
                 </button>
               </li>
             ))}
