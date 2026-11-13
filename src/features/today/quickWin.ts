@@ -36,7 +36,7 @@ export function pickQuickWin(minutes: QuickWinMinutes, { dueCards, dueMistakes, 
   if (minutes <= 25 && dueMistakes > 0) {
     return {
       title: `Clear ${dueMistakes} open ${dueMistakes === 1 ? 'mistake' : 'mistakes'}`,
-      detail: 'Step up the 3-step remediation ladder while you have a short break.',
+      detail: 'Review due mistakes with adaptive FSRS spaced repetition while you have a short break.',
       actionLabel: 'Open mistakes',
       to: '/academics/mistakes',
     }

@@ -1,6 +1,7 @@
 import { countLabel, minutesLabel } from '@/features/academics/labels'
 import { METRIC_LABEL, METRICS, metricValueLabel } from '@/features/metrics/metrics'
 import type { Area } from '@/features/planner/types'
+import { formatCurrency } from '@/lib/currency'
 import type { WeekStats } from './weekStats'
 
 const AREAS: { area: Area; label: string }[] = [
@@ -11,13 +12,7 @@ const AREAS: { area: Area; label: string }[] = [
 
 const percent = (share: number | null) => (share === null ? '–' : `${Math.round(share * 100)}%`)
 
-function money(amount: number, currency: string): string {
-  try {
-    return new Intl.NumberFormat('en-IN', { style: 'currency', currency, maximumFractionDigits: 0 }).format(amount)
-  } catch {
-    return `${amount} ${currency}`
-  }
-}
+const money = (amount: number, currency: string) => formatCurrency(amount, currency, undefined, { maximumFractionDigits: 0 })
 
 /** The week in numbers: time per area against the budget, then the rest in small tiles. */
 export function WeekNumbers({ stats }: { stats: WeekStats }) {

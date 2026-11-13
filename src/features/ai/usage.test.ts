@@ -1,5 +1,6 @@
 import { FunctionsHttpError } from '@supabase/supabase-js'
 import { describe, expect, it, vi } from 'vitest'
+import { DEFAULT_ENTITLEMENTS } from '@shared/billing.ts'
 import type { DataSource } from '@/lib/dataSource'
 import { AI_FUNCTIONS, formatUsd, loadAiUsage, summarizeUsage, type UsageRow } from './usage'
 
@@ -15,10 +16,10 @@ describe('summarizeUsage', () => {
         row('anchor', '2026-11-20T09:00:00.000Z', 0.002),
         row('tutor', '2026-11-19T12:00:00.000Z', 0.003),
         row('syllabus', '2026-11-10T08:00:00.000Z', 0.02),
-        row('brief', '2026-10-31T23:00:00.000Z', 0.5), // last month
-        row('something-new', '2026-11-20T08:00:00.000Z', 0.001), // only in the totals
+        row('brief', '2026-10-31T23:00:00.000Z', 0.5),
+        row('something-new', '2026-11-20T08:00:00.000Z', 0.001),
       ],
-      { now: NOW, monthStart: MONTH_START, dailyLimit: 150 },
+      { now: NOW, monthStart: MONTH_START, dailyLimit: 25 },
     )
     expect(summary).toMatchObject({ day: 3, month: 4, nextFreeAt: null })
     expect(summary.monthUsd).toBeCloseTo(0.026)
@@ -30,14 +31,12 @@ describe('summarizeUsage', () => {
   })
 
   it('counts a request exactly 24 hours old, like the server', () => {
-    expect(summarizeUsage([row('brief', '2026-11-19T10:00:00.000Z')], { now: NOW, monthStart: MONTH_START, dailyLimit: 150 }).day).toBe(1)
+    expect(summarizeUsage([row('brief', '2026-11-19T10:00:00.000Z')], { now: NOW, monthStart: MONTH_START, dailyLimit: 25 }).day).toBe(1)
   })
 
   it('says when the next request frees up at the daily limit', () => {
     const rows = [row('generate', '2026-11-19T12:00:00.000Z'), row('generate', '2026-11-19T15:00:00.000Z'), row('generate', '2026-11-20T09:00:00.000Z')]
-    // 3 used of 3: one more is allowed once the oldest is a day old.
     expect(summarizeUsage(rows, { now: NOW, monthStart: MONTH_START, dailyLimit: 3 }).nextFreeAt).toEqual(new Date('2026-11-20T12:00:00.000Z'))
-    // 3 used of 2 (the limit was lowered): two have to leave.
     expect(summarizeUsage(rows, { now: NOW, monthStart: MONTH_START, dailyLimit: 2 }).nextFreeAt).toEqual(new Date('2026-11-20T15:00:00.000Z'))
     expect(summarizeUsage(rows, { now: NOW, monthStart: MONTH_START, dailyLimit: 4 }).nextFreeAt).toBeNull()
   })
@@ -82,15 +81,31 @@ describe('loadAiUsage', () => {
     expect(await loadAiUsage({ kind: 'demo' })).toEqual({ kind: 'demo' })
   })
 
-  it("puts the student's own rows next to the server's limits and the app's spending", async () => {
+  it("puts the student's own rows next to tier entitlements and server counters", async () => {
     const answer = {
-      limits: { userDailyRequests: 40, monthlyBudgetUsd: 25, dailyBudgetUsd: 25 / 30 },
+      tier: 'pro' as const,
+      entitlement: {
+        ...DEFAULT_ENTITLEMENTS.pro,
+        codingLabLanguages: [...DEFAULT_ENTITLEMENTS.pro.codingLabLanguages],
+      },
+      user: { requestsLast24h: 1, tokensThisMonth: 45_000 },
+      subscription: null,
+      limits: { userDailyRequests: 250, monthlyAiTokens: 5_000_000, monthlyBudgetUsd: 100 },
       app: { spentLast24hUsd: 0.3, spentThisMonthUsd: 4.2 },
+      budgetAlert: false,
       aiConfigured: true,
     }
     const { source, asked, client } = signedIn([row('capture', '2026-11-20T09:30:00.000Z', 0.01)], async () => ({ data: answer, error: null }))
     const view = await loadAiUsage(source, new Date(2026, 10, 20, 15, 0))
-    expect(view).toMatchObject({ kind: 'signed_in', limits: answer.limits, app: answer.app, aiConfigured: true, serverError: null })
+    expect(view).toMatchObject({
+      kind: 'signed_in',
+      tier: 'pro',
+      tokensThisMonth: 45_000,
+      limits: answer.limits,
+      app: answer.app,
+      aiConfigured: true,
+      serverError: null,
+    })
     if (view.kind !== 'signed_in') throw new Error('expected signed in')
     expect(view.monthStart).toEqual(new Date(2026, 10, 1))
     expect(view.summary.month).toBe(1)
@@ -106,13 +121,14 @@ describe('loadAiUsage', () => {
     expect(asked.since).toBe(new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString())
   })
 
-  it("still shows the student's own usage with the default limits when ai-usage is not deployed", async () => {
+  it("still shows the student's own usage with Starter default limits when ai-usage is not deployed", async () => {
     const notFound = new FunctionsHttpError(new Response(JSON.stringify({ code: 'NOT_FOUND' }), { status: 404 }))
     const { source } = signedIn([row('brief', '2026-11-20T09:30:00.000Z')], async () => ({ data: null, error: notFound }))
     const view = await loadAiUsage(source, new Date(2026, 10, 20, 15, 0))
     expect(view).toMatchObject({
       kind: 'signed_in',
-      limits: { userDailyRequests: 150, monthlyBudgetUsd: 10 },
+      tier: 'free',
+      limits: { userDailyRequests: 25, monthlyAiTokens: 250_000, monthlyBudgetUsd: 100 },
       app: null,
       aiConfigured: null,
       serverError: expect.stringContaining("The ai-usage function isn't on the server yet"),

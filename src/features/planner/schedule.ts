@@ -1,42 +1,40 @@
-import { format } from 'date-fns'
 import type { Mode } from '@/features/mode/modes'
+import { dateKeyInTimezone, minuteOfInTimezone, resolveTimezone, zonedLocalToIso } from '@/lib/timezone'
 import type { Tables, TablesInsert } from '@/types/database'
 import type { LocalDate, Minute, Plan } from './types'
 
 // The saved plan: the planner's blocks as rows of plan_blocks, and the rules around them
 // (what's left to do, when to re-plan, which block is running). Plain functions, tested.
 //
-// The planner works in local dates and minutes; the database stores UTC timestamps. The device's
-// time zone is the student's time zone here.
+// The planner works in local dates and minutes in the user's IANA timezone; the database stores UTC timestamps.
 
 export type PlanBlock = Tables<'plan_blocks'>
 type WorkRow = Pick<PlanBlock, 'topic_id' | 'task_id' | 'subject_id' | 'date' | 'status' | 'planned_minutes' | 'actual_minutes'>
 type TimeRow = Pick<PlanBlock, 'start_at' | 'end_at' | 'status'>
 
-/** A local date and minute of the day (e.g. 14:30 = 870) as a UTC timestamp. */
-export function localToIso(date: LocalDate, minute: Minute): string {
-  const [year = 1970, month = 1, day = 1] = date.split('-').map(Number)
-  return new Date(year, month - 1, day, 0, minute).toISOString()
+/** A local date and minute of the day (e.g. 14:30 = 870) in `timeZone` as a UTC timestamp. */
+export function localToIso(date: LocalDate, minute: Minute, timeZone?: string): string {
+  return zonedLocalToIso(date, minute, resolveTimezone(timeZone))
 }
 
-/** The local date of a moment ('YYYY-MM-DD'). */
-export function localDateOf(at: Date | string): LocalDate {
-  return format(new Date(at), 'yyyy-MM-dd')
+/** The local date of a moment ('YYYY-MM-DD') in `timeZone`. */
+export function localDateOf(at: Date | string, timeZone?: string): LocalDate {
+  return dateKeyInTimezone(at, resolveTimezone(timeZone))
 }
 
-/** Minutes after local midnight. */
-export function minuteOf(at: Date): Minute {
-  return at.getHours() * 60 + at.getMinutes()
+/** Minutes after midnight in `timeZone`. */
+export function minuteOf(at: Date, timeZone?: string): Minute {
+  return minuteOfInTimezone(at, resolveTimezone(timeZone))
 }
 
 /** The plan as rows to save. Blocks of work that can't be finished in time are marked at_risk. */
-export function planRows(plan: Plan, version: number): TablesInsert<'plan_blocks'>[] {
+export function planRows(plan: Plan, version: number, timeZone?: string): TablesInsert<'plan_blocks'>[] {
   const risky = new Set(plan.atRisk.map((item) => item.key))
   return plan.days.flatMap((day) =>
     day.blocks.map((block) => ({
       date: block.date,
-      start_at: localToIso(block.date, block.start),
-      end_at: localToIso(block.date, block.end),
+      start_at: localToIso(block.date, block.start, timeZone),
+      end_at: localToIso(block.date, block.end, timeZone),
       area: block.area,
       kind: block.kind,
       subject_id: block.subjectId ?? null,

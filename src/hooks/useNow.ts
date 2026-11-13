@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { useProfile } from '@/features/profile/queries'
+import { resolveTimezone } from '@/lib/timezone'
 
 /**
  * The current time, refreshed every `intervalMs` (default 30 seconds) and whenever the
@@ -21,4 +23,10 @@ export function useNow(intervalMs = 30_000): Date {
   }, [intervalMs])
 
   return now
+}
+
+/** The active IANA timezone from the user's profile, falling back safely to the device timezone. */
+export function useTimezone(): string {
+  const profile = useProfile()
+  return resolveTimezone(profile.data?.timezone)
 }

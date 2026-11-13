@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { addDays, format } from 'date-fns'
+import { useTimezone } from '@/hooks/useNow'
 import { dbError, need, readAll, useDataSource, type DataSource } from '@/lib/dataSource'
+import { dateKeyInTimezone, resolveTimezone } from '@/lib/timezone'
 import { demoDb } from '@/lib/demoDb'
 import type { Tables, TablesUpdate } from '@/types/database'
 import { isOnTarget, planChallenge, startTarget, type ChallengeWeek } from './challenge'
@@ -166,29 +168,32 @@ export interface MetricsView {
  * out this week, then settles and sets the weekly challenge (in that order, so a challenge is only
  * judged once its week is saved).
  */
-export async function syncMetrics(source: DataSource, now = new Date()): Promise<MetricsView> {
-  const thisWeekStart = weekStartOf(now)
+export async function syncMetrics(source: DataSource, now = new Date(), timeZone?: string): Promise<MetricsView> {
+  const zone = timeZone ? resolveTimezone(timeZone) : undefined
+  const thisWeekStart = weekStartOf(now, zone)
   const [inputs, saved] = await Promise.all([loadMetricInputs(source, addDays(thisWeekStart, -7 * WEEKS_BACK)), listSnapshots(source)])
   const have = new Set(saved.map((snapshot) => snapshot.week_start))
   let added = false
   for (let weeksAgo = WEEKS_BACK; weeksAgo >= 1; weeksAgo--) {
     const week = addDays(thisWeekStart, -7 * weeksAgo)
-    if (have.has(format(week, 'yyyy-MM-dd'))) continue
-    const metrics = weekMetrics(inputs, week)
+    const weekKey = zone ? dateKeyInTimezone(week, zone) : format(week, 'yyyy-MM-dd')
+    if (have.has(weekKey)) continue
+    const metrics = weekMetrics(inputs, week, zone)
     if (!hasActivity(metrics)) continue
     await saveSnapshot(source, metrics)
     added = true
   }
   const snapshots = added ? await listSnapshots(source) : saved
-  const thisWeek = weekMetrics(inputs, thisWeekStart)
+  const thisWeek = weekMetrics(inputs, thisWeekStart, zone)
   return { snapshots, thisWeek, ...(await syncChallenges(source, snapshots, thisWeek.weekStart)) }
 }
 
 export function useMetrics() {
   const { source, owner } = useDataSource()
+  const timeZone = useTimezone()
   return useQuery({
-    queryKey: metricsKey(owner),
-    queryFn: () => syncMetrics(need(source)),
+    queryKey: [...metricsKey(owner), timeZone],
+    queryFn: () => syncMetrics(need(source), new Date(), timeZone),
     enabled: source !== null,
   })
 }

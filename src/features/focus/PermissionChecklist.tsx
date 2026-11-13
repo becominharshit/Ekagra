@@ -41,18 +41,21 @@ export function PermissionChecklist() {
 
   if (!focusGuardAvailable()) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <ShieldCheck className="size-5" aria-hidden />
-            App blocking runs in the Android app
-          </CardTitle>
-          <CardDescription>
-            On your phone, FocusGuard blocks the apps you pick while you focus, with an emergency unlock through the Academic Tollbooth. Install the Android app and open this screen there to turn it
-            on. You can already pick the apps below.
-          </CardDescription>
-        </CardHeader>
-      </Card>
+      <div className="grid gap-4">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <ShieldCheck className="size-5" aria-hidden />
+              App and site blocking
+            </CardTitle>
+            <CardDescription>
+              On Android, FocusGuard uses system-granted Usage Access and Display Over Other Apps to guard blocked apps during focus sessions, with emergency unlocks through the Academic
+              Tollbooth. On desktop browsers, load the Manifest V3 Ekagra FocusGuard extension (`extension/`) to redirect distracting websites back to study.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+        <AndroidPrivacyDisclosureCard />
+      </div>
     )
   }
 
@@ -113,7 +116,36 @@ export function PermissionChecklist() {
         </CardContent>
       </Card>
       <BatteryGuideCard manufacturer={data?.manufacturer ?? ''} />
+      <AndroidPrivacyDisclosureCard />
     </div>
+  )
+}
+
+/** Explicit Play-safe permission & on-device privacy disclosure matching AndroidManifest.xml. */
+export function AndroidPrivacyDisclosureCard() {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Android permissions &amp; on-device privacy disclosure</CardTitle>
+        <CardDescription>
+          FocusGuard requests only the permissions below and processes active-app checks strictly on your device. No screen contents, keystrokes, messages, or app history leave your phone.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-2 text-sm text-muted-foreground">
+        <p>
+          <span className="font-medium text-foreground">Usage Access (PACKAGE_USAGE_STATS):</span> Checks which package name is currently in the foreground so Ekagra can intervene when a
+          blocklisted app opens during an active focus block.
+        </p>
+        <p>
+          <span className="font-medium text-foreground">Display Over Other Apps (SYSTEM_ALERT_WINDOW):</span> Shows the local "Back to study" shield overlay over a blocked app with a direct path to
+          resume focus or answer the Academic Tollbooth.
+        </p>
+        <p>
+          <span className="font-medium text-foreground">Foreground Service (FOREGROUND_SERVICE_SPECIAL_USE):</span> Runs the focus timer and guard loop reliably while a session is active, with an
+          ongoing notification showing remaining focus minutes.
+        </p>
+      </CardContent>
+    </Card>
   )
 }
 

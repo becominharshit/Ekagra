@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import type { Subject } from '@/features/academics/subjects'
+import { useCurriculum } from '@/features/academics/curriculum'
 import { gradeForPercent, marksTotal } from './gpa'
 import { addMark, deleteMark, markProblem, useGradeScale, useGradesMutation, useMarks } from './gradesData'
 
@@ -18,6 +19,7 @@ const num = (value: number | string) => String(Number(value))
 export function MarksCard({ subject }: { subject: Subject }) {
   const marks = useMarks()
   const scale = useGradeScale()
+  const curriculum = useCurriculum()
   const remove = useGradesMutation(deleteMark)
   const [adding, setAdding] = useState(false)
   const own = (marks.data ?? []).filter((mark) => mark.subject_id === subject.id)
@@ -35,9 +37,9 @@ export function MarksCard({ subject }: { subject: Subject }) {
           {own.length === 0
             ? 'Internal tests, assignments and lab marks, as they come.'
             : `${num(total.obtained)} of ${num(total.max)} so far${suggested ? `: about ${suggested.letter} at this rate` : ''}.`}{' '}
-          Credits {subject.credits === null ? '–' : num(subject.credits)} · grade {subject.grade ?? '–'} ·{' '}
+          {curriculum.creditsLabel} {subject.credits === null ? '–' : num(subject.credits)} · grade {subject.grade ?? '–'} ·{' '}
           <Link to="/academics/grades" className="underline underline-offset-3 hover:text-foreground">
-            SGPA and CGPA
+            {curriculum.termLabel} and {curriculum.cumulativeLabel}
           </Link>
         </CardDescription>
       </CardHeader>

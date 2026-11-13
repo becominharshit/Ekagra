@@ -14,6 +14,75 @@ export type Database = {
   }
   public: {
     Tables: {
+      abuse_reports: {
+        Row: {
+          category: string
+          context_id: string | null
+          context_type: string
+          created_at: string
+          details: string | null
+          id: string
+          reported_user_id: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          category: string
+          context_id?: string | null
+          context_type?: string
+          created_at?: string
+          details?: string | null
+          id?: string
+          reported_user_id: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          category?: string
+          context_id?: string | null
+          context_type?: string
+          created_at?: string
+          details?: string | null
+          id?: string
+          reported_user_id?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      analytics_events: {
+        Row: {
+          app_surface: string
+          created_at: string
+          event_name: string
+          id: string
+          properties: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          app_surface?: string
+          created_at?: string
+          event_name: string
+          id?: string
+          properties?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          app_surface?: string
+          created_at?: string
+          event_name?: string
+          id?: string
+          properties?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       ai_anchors: {
         Row: {
           action: string
@@ -239,6 +308,33 @@ export type Database = {
           id?: string
           label?: string | null
           package_name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      blocked_users: {
+        Row: {
+          blocked_user_id: string
+          created_at: string
+          id: string
+          reason: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          blocked_user_id: string
+          created_at?: string
+          id?: string
+          reason?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          blocked_user_id?: string
+          created_at?: string
+          id?: string
+          reason?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -1530,6 +1626,7 @@ export type Database = {
           correct_count: number
           created_at: string
           flashcard_id: string | null
+          fsrs: Json
           id: string
           ladder_step: number
           last_correct_on: string | null
@@ -1548,6 +1645,7 @@ export type Database = {
           correct_count?: number
           created_at?: string
           flashcard_id?: string | null
+          fsrs?: Json
           id?: string
           ladder_step?: number
           last_correct_on?: string | null
@@ -1566,6 +1664,7 @@ export type Database = {
           correct_count?: number
           created_at?: string
           flashcard_id?: string | null
+          fsrs?: Json
           id?: string
           ladder_step?: number
           last_correct_on?: string | null
@@ -1917,6 +2016,42 @@ export type Database = {
             referencedColumns: ["id", "user_id"]
           },
         ]
+      }
+      plan_entitlements: {
+        Row: {
+          coding_lab_languages: string[]
+          created_at: string
+          daily_ai_requests: number
+          max_studio_sources: number
+          monthly_ai_tokens: number
+          offline_sync_enabled: boolean
+          plan_tier: string
+          priority_tier: string
+          updated_at: string
+        }
+        Insert: {
+          coding_lab_languages?: string[]
+          created_at?: string
+          daily_ai_requests: number
+          max_studio_sources: number
+          monthly_ai_tokens: number
+          offline_sync_enabled?: boolean
+          plan_tier: string
+          priority_tier?: string
+          updated_at?: string
+        }
+        Update: {
+          coding_lab_languages?: string[]
+          created_at?: string
+          daily_ai_requests?: number
+          max_studio_sources?: number
+          monthly_ai_tokens?: number
+          offline_sync_enabled?: boolean
+          plan_tier?: string
+          priority_tier?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       profiles: {
         Row: {
@@ -2435,6 +2570,56 @@ export type Database = {
           },
         ]
       }
+      subscriptions: {
+        Row: {
+          cancel_at_period_end: boolean
+          created_at: string
+          current_period_end: string | null
+          customer_id: string | null
+          id: string
+          plan_tier: string
+          provider: string
+          status: string
+          subscription_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          cancel_at_period_end?: boolean
+          created_at?: string
+          current_period_end?: string | null
+          customer_id?: string | null
+          id?: string
+          plan_tier?: string
+          provider: string
+          status?: string
+          subscription_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          cancel_at_period_end?: boolean
+          created_at?: string
+          current_period_end?: string | null
+          customer_id?: string | null
+          id?: string
+          plan_tier?: string
+          provider?: string
+          status?: string
+          subscription_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscriptions_plan_tier_fkey"
+            columns: ["plan_tier"]
+            isOneToOne: false
+            referencedRelation: "plan_entitlements"
+            referencedColumns: ["plan_tier"]
+          },
+        ]
+      }
       subjects: {
         Row: {
           archived_at: string | null
@@ -2938,6 +3123,45 @@ export type Database = {
           title?: string
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      webhook_events: {
+        Row: {
+          created_at: string
+          error: string | null
+          event_id: string
+          event_type: string
+          id: string
+          payload: Json
+          processed_at: string
+          provider: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          error?: string | null
+          event_id: string
+          event_type: string
+          id?: string
+          payload?: Json
+          processed_at?: string
+          provider: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          error?: string | null
+          event_id?: string
+          event_type?: string
+          id?: string
+          payload?: Json
+          processed_at?: string
+          provider?: string
+          status?: string
+          updated_at?: string
         }
         Relationships: []
       }

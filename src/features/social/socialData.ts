@@ -1,9 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { addDays, format, startOfWeek } from 'date-fns'
+import { addDays } from 'date-fns'
+import { addDays as addLocalDays, weekStart as weekStartHelper } from '@/features/planner/time'
+import { useTimezone } from '@/hooks/useNow'
 import { dbError, need, readAll, useDataSource, type DataSource } from '@/lib/dataSource'
 import { demoDb } from '@/lib/demoDb'
+import { dateKeyInTimezone, resolveTimezone, timePartsInTimezone, zonedLocalToIso } from '@/lib/timezone'
 import type { TablesInsert } from '@/types/database'
-import { myNumbers, normalizeCode, type Friend, type MyNumbers, type Nudge, type NudgeKind, type SharedStats, type SharedView } from './social'
+import { listBlockedUserIds } from './safety'
+import { isCode, myNumbers, normalizeCode, type Friend, type MyNumbers, type Nudge, type NudgeKind, type SharedStats, type SharedView } from './social'
 
 // Partners and nudges, from Supabase or (Demo Mode) the device. Real friends need accounts: in
 // Demo Mode the student's own sharing is kept on the device, Aarav is a sample partner, and codes
@@ -40,19 +44,21 @@ export async function saveMyStats(source: DataSource, row: Published): Promise<v
 }
 
 /** This week's focus minutes, the study streak and the plan done %, from the student's own data. */
-export async function loadMyNumbers(source: DataSource, now: Date): Promise<MyNumbers> {
-  if (source.kind === 'demo') return myNumbers({ now, focus: demoDb.list('focus_sessions'), blocks: demoDb.list('plan_blocks') })
+export async function loadMyNumbers(source: DataSource, now: Date, timeZone?: string): Promise<MyNumbers> {
+  if (source.kind === 'demo') return myNumbers({ now, focus: demoDb.list('focus_sessions'), blocks: demoDb.list('plan_blocks'), timeZone })
   const { client, userId } = source
-  const monday = startOfWeek(now, { weekStartsOn: 1 })
+  const zone = resolveTimezone(timeZone)
+  const weekStartDate = weekStartHelper(dateKeyInTimezone(now, zone))
+  const weekEndDate = addLocalDays(weekStartDate, 6)
   const [focus, blocks] = await Promise.all([
     readAll((from, to) =>
       client.from('focus_sessions').select('started_at, actual_minutes').eq('user_id', userId).gte('started_at', addDays(now, -STREAK_LOOKBACK_DAYS).toISOString()).order('id').range(from, to),
     ),
     readAll((from, to) =>
-      client.from('plan_blocks').select('date, status').eq('user_id', userId).gte('date', format(monday, 'yyyy-MM-dd')).lte('date', format(addDays(monday, 6), 'yyyy-MM-dd')).order('id').range(from, to),
+      client.from('plan_blocks').select('date, status').eq('user_id', userId).gte('date', weekStartDate).lte('date', weekEndDate).order('id').range(from, to),
     ),
   ])
-  return myNumbers({ now, focus, blocks })
+  return myNumbers({ now, focus, blocks, timeZone: zone })
 }
 
 // ---------------------------------------------------------------------------
@@ -62,9 +68,11 @@ export async function loadMyNumbers(source: DataSource, now: Date): Promise<MyNu
 export const SAMPLE_PARTNER_ID = 'sample-aarav'
 
 /** Demo Mode's sample partner: their numbers grow through the week; they study 19:00–21:00. */
-export function samplePartner(now: Date): Friend {
-  const daysIn = (now.getDay() + 6) % 7
-  const studying = now.getHours() >= 19 && now.getHours() < 21 ? new Date(now.getFullYear(), now.getMonth(), now.getDate(), 21).toISOString() : null
+export function samplePartner(now: Date, timeZone?: string): Friend {
+  const zone = resolveTimezone(timeZone)
+  const parts = timePartsInTimezone(now, zone)
+  const daysIn = (parts.weekday + 6) % 7
+  const studying = parts.hour >= 19 && parts.hour < 21 ? zonedLocalToIso(parts.date, 21 * 60, zone) : null
   const name = 'Aarav (sample)'
   return {
     userId: SAMPLE_PARTNER_ID,
@@ -73,7 +81,7 @@ export function samplePartner(now: Date): Friend {
     stats: {
       user_id: SAMPLE_PARTNER_ID,
       display_name: name,
-      week_start: format(startOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd'),
+      week_start: weekStartHelper(parts.date),
       focus_minutes: 70 + daysIn * 80,
       streak_days: 5 + daysIn,
       plan_pct: 72,
@@ -93,15 +101,19 @@ export async function loadSharedViews(source: Extract<DataSource, { kind: 'supab
   return new Map(data.flatMap((row) => (row.user_id ? [[row.user_id, row] as const] : [])))
 }
 
-export async function listPartners(source: DataSource, now: Date): Promise<Friend[]> {
-  if (source.kind === 'demo') return [samplePartner(now)]
+export async function listPartners(source: DataSource, now: Date, timeZone?: string): Promise<Friend[]> {
+  const blocked = await listBlockedUserIds(source)
+  if (source.kind === 'demo') {
+    return blocked.has(SAMPLE_PARTNER_ID) ? [] : [samplePartner(now, timeZone)]
+  }
   const { data, error } = await source.client.from('partner_links').select('partner_id, created_at').eq('user_id', source.userId).order('created_at')
   if (error) throw dbError(error)
+  const activeLinks = data.filter((link) => !blocked.has(link.partner_id))
   const views = await loadSharedViews(
     source,
-    data.map((link) => link.partner_id),
+    activeLinks.map((link) => link.partner_id),
   )
-  return data.map((link) => {
+  return activeLinks.map((link) => {
     const stats = views.get(link.partner_id) ?? null
     return { userId: link.partner_id, name: stats?.display_name ?? 'Your partner', stats }
   })
@@ -126,6 +138,7 @@ export async function partnerCode(source: DataSource, { fresh = false }: { fresh
 }
 
 export async function acceptPartnerCode(source: DataSource, code: string): Promise<void> {
+  if (!isCode(code)) throw new Error('Enter the 10-character partner code.')
   if (source.kind === 'demo') throw new Error("Demo Mode can't connect to real friends. Sign in to use partner codes.")
   const { error } = await source.client.rpc('accept_partner_invite', { code: normalizeCode(code) })
   if (error) throw dbError(error)
@@ -147,6 +160,7 @@ export type ReceivedNudge = Nudge & { from: string }
 /** The last 7 days' nudges: received ones with the sender's name, and the ones sent (to count today's). */
 export async function listNudges(source: DataSource, now: Date): Promise<{ received: ReceivedNudge[]; sent: Nudge[] }> {
   if (source.kind === 'demo') return { received: [], sent: [] }
+  const blocked = await listBlockedUserIds(source)
   const { data, error } = await source.client
     .from('nudges')
     .select('*')
@@ -155,7 +169,7 @@ export async function listNudges(source: DataSource, now: Date): Promise<{ recei
     .order('created_at', { ascending: false })
     .limit(200)
   if (error) throw dbError(error)
-  const received = data.filter((nudge) => nudge.to_user_id === source.userId)
+  const received = data.filter((nudge) => nudge.to_user_id === source.userId && !blocked.has(nudge.user_id))
   const names = await loadSharedViews(source, [...new Set(received.map((nudge) => nudge.user_id))])
   return {
     received: received.map((nudge) => ({ ...nudge, from: names.get(nudge.user_id)?.display_name ?? 'A friend' })),
@@ -188,9 +202,10 @@ export function useMyStats() {
 /** My numbers this week (only worked out once sharing is set up). */
 export function useMyNumbers(enabled = true) {
   const { source, owner } = useDataSource()
+  const timeZone = useTimezone()
   return useQuery({
-    queryKey: [...socialKey(owner), 'numbers'],
-    queryFn: () => loadMyNumbers(need(source), new Date()),
+    queryKey: [...socialKey(owner), 'numbers', timeZone],
+    queryFn: () => loadMyNumbers(need(source), new Date(), timeZone),
     enabled: source !== null && enabled,
     refetchInterval: 5 * 60_000,
   })
@@ -198,7 +213,13 @@ export function useMyNumbers(enabled = true) {
 
 export function usePartners() {
   const { source, owner } = useDataSource()
-  return useQuery({ queryKey: [...socialKey(owner), 'partners'], queryFn: () => listPartners(need(source), new Date()), enabled: source !== null, refetchInterval: 2 * 60_000 })
+  const timeZone = useTimezone()
+  return useQuery({
+    queryKey: [...socialKey(owner), 'partners', timeZone],
+    queryFn: () => listPartners(need(source), new Date(), timeZone),
+    enabled: source !== null,
+    refetchInterval: 2 * 60_000,
+  })
 }
 
 /** Nudges (once sharing is set up), checked every minute, also while the app is in the background (for the notification). */

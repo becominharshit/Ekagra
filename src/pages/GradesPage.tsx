@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { useCurriculum, type CurriculumProfile } from '@/features/academics/curriculum'
 import { updateSubject, useAcademicsMutation, useSubjects, type Subject } from '@/features/academics/subjects'
 import { cgpa, gpaLabel, gradeForPercent, marksTotal, requiredSgpa, sgpa, type GradeStep } from '@/features/grades/gpa'
 import { GradeScaleEditor } from '@/features/grades/GradeScaleEditor'
@@ -25,13 +26,14 @@ import { useProfile } from '@/features/profile/queries'
 
 const NO_GRADE = 'none'
 
-/** Academics → Grades (/academics/grades): SGPA from this semester's subjects, CGPA with earlier semesters. */
+/** Academics → Grades (/academics/grades): Term GPA/SGPA from subjects, cumulative average with earlier terms. */
 export function GradesPage() {
   const profile = useProfile()
   const subjects = useSubjects()
   const marks = useMarks()
   const semesters = useSemesterResults()
   const scale = useGradeScale()
+  const curriculum = useCurriculum()
   const current = profile.data?.semester ?? null
   const courses = (subjects.data ?? []).filter((subject) => subject.kind === 'course')
   const now = sgpa(courses, scale)
@@ -51,7 +53,10 @@ export function GradesPage() {
           Academics
         </Link>
       </Button>
-      <PageHeader title="Grades" subtitle="SGPA from your subjects' credits and grades, CGPA with your earlier semesters." />
+      <PageHeader
+        title="Grades"
+        subtitle={`${curriculum.termLabel} from your subjects' ${curriculum.creditsLabel.toLowerCase()} and grades, ${curriculum.cumulativeLabel} with your earlier terms.`}
+      />
       <div className="grid gap-4">
         {loading && (
           <p className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -68,45 +73,63 @@ export function GradesPage() {
         <Card>
           <CardContent className="grid grid-cols-2 gap-4">
             <div>
-              <p className="text-sm text-muted-foreground">SGPA{current ? ` (semester ${current})` : ''}</p>
+              <p className="text-sm text-muted-foreground">
+                {curriculum.termLabel}
+                {current ? ` (term ${current})` : ''}
+              </p>
               <p className="font-heading text-3xl font-semibold tabular-nums">{gpaLabel(now.sgpa)}</p>
               <p className="text-xs text-muted-foreground">
-                {now.missing > 0 ? `${now.missing} ${now.missing === 1 ? 'subject is' : 'subjects are'} still without a grade` : `${now.credits} credits`}
+                {now.missing > 0
+                  ? `${now.missing} ${now.missing === 1 ? 'subject is' : 'subjects are'} still without a grade`
+                  : `${now.credits} ${curriculum.creditsLabel.toLowerCase()}`}
               </p>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">CGPA</p>
+              <p className="text-sm text-muted-foreground">{curriculum.cumulativeLabel}</p>
               <p className="font-heading text-3xl font-semibold tabular-nums">{gpaLabel(overall.cgpa)}</p>
-              <p className="text-xs text-muted-foreground">{overall.credits > 0 ? `${overall.credits} credits` : 'Add earlier semesters below'}</p>
+              <p className="text-xs text-muted-foreground">
+                {overall.credits > 0 ? `${overall.credits} ${curriculum.creditsLabel.toLowerCase()}` : 'Add earlier terms below'}
+              </p>
             </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>This semester</CardTitle>
+            <CardTitle>This term</CardTitle>
             <CardDescription>
-              Credits from your syllabus, and the grade you got (or expect). Your marks so far suggest a grade
-              {current === null && '. Set your semester in Me → Edit routine and budget'}.
+              {curriculum.creditsLabel} from your syllabus, and the grade you got (or expect). Your marks so far suggest a grade
+              {current === null && '. Set your term in Me → Edit routine and budget'}.
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3">
             {subjects.data && courses.length === 0 && <p className="text-sm text-muted-foreground">Add your subjects in Academics first.</p>}
             {courses.map((subject) => (
-              <SubjectGradeRow key={subject.id} subject={subject} scale={scale} marks={(marks.data ?? []).filter((mark) => mark.subject_id === subject.id)} />
+              <SubjectGradeRow
+                key={subject.id}
+                subject={subject}
+                scale={scale}
+                creditsLabel={curriculum.creditsLabel}
+                marks={(marks.data ?? []).filter((mark) => mark.subject_id === subject.id)}
+              />
             ))}
           </CardContent>
         </Card>
 
-        <EarlierSemesters rows={semesters.data ?? []} current={current} />
-        <TargetCard earlier={earlierResults} currentCredits={currentCredits} maxPoints={Math.max(...scale.map((step) => step.points))} />
-        <GradeScaleEditor scale={scale} />
+        <EarlierSemesters rows={semesters.data ?? []} current={current} curriculum={curriculum} />
+        <TargetCard
+          earlier={earlierResults}
+          currentCredits={currentCredits}
+          maxPoints={Math.max(...scale.map((step) => step.points))}
+          curriculum={curriculum}
+        />
+        <GradeScaleEditor key={curriculum.id} scale={scale} curriculum={curriculum} />
       </div>
     </>
   )
 }
 
-function SubjectGradeRow({ subject, scale, marks }: { subject: Subject; scale: GradeStep[]; marks: Mark[] }) {
+function SubjectGradeRow({ subject, scale, creditsLabel, marks }: { subject: Subject; scale: GradeStep[]; creditsLabel: string; marks: Mark[] }) {
   const save = useAcademicsMutation<{ credits?: number | null; grade?: string | null }, Subject>((source, patch) => updateSubject(source, subject.id, patch))
   const [credits, setCredits] = useState(subject.credits === null ? '' : String(Number(subject.credits)))
   const [problem, setProblem] = useState<string | null>(null)
@@ -138,7 +161,7 @@ function SubjectGradeRow({ subject, scale, marks }: { subject: Subject; scale: G
       </div>
       <div className="grid grid-cols-2 gap-2">
         <Label className="grid gap-1 font-normal">
-          <span className="text-xs text-muted-foreground">Credits</span>
+          <span className="text-xs text-muted-foreground">{creditsLabel}</span>
           <Input type="number" inputMode="decimal" min={0.5} max={30} step="0.5" value={credits} onChange={(event) => setCredits(event.target.value)} onBlur={saveCredits} />
         </Label>
         <div className="grid gap-1">
@@ -167,7 +190,7 @@ function SubjectGradeRow({ subject, scale, marks }: { subject: Subject; scale: G
   )
 }
 
-function EarlierSemesters({ rows, current }: { rows: SemesterRow[]; current: number | null }) {
+function EarlierSemesters({ rows, current, curriculum }: { rows: SemesterRow[]; current: number | null; curriculum: CurriculumProfile }) {
   const save = useGradesMutation(saveSemesterResult)
   const remove = useGradesMutation(deleteSemesterResult)
   const [semester, setSemester] = useState('')
@@ -178,7 +201,10 @@ function EarlierSemesters({ rows, current }: { rows: SemesterRow[]; current: num
   function submit(event: FormEvent) {
     event.preventDefault()
     const input = { semester: Number(semester), sgpa: Number(sgpaText), credits: Number(credits) }
-    const issue = !semester || !sgpaText || !credits ? 'Fill in the semester, its SGPA and its credits.' : semesterProblem(input)
+    const issue =
+      !semester || !sgpaText || !credits
+        ? `Fill in the term, its ${curriculum.termLabel} and its ${curriculum.creditsLabel.toLowerCase()}.`
+        : semesterProblem(input, curriculum.maxGradePoints, curriculum.termLabel)
     setProblem(issue)
     if (issue) return
     save.mutate(input, {
@@ -193,8 +219,10 @@ function EarlierSemesters({ rows, current }: { rows: SemesterRow[]; current: num
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Earlier semesters</CardTitle>
-        <CardDescription>From your marksheets: each semester's SGPA and total credits.</CardDescription>
+        <CardTitle>Earlier terms</CardTitle>
+        <CardDescription>
+          From your transcripts: each term&apos;s {curriculum.termLabel} and total {curriculum.creditsLabel.toLowerCase()}.
+        </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-3 text-sm">
         {rows.length > 0 && (
@@ -202,15 +230,18 @@ function EarlierSemesters({ rows, current }: { rows: SemesterRow[]; current: num
             {rows.map((row) => (
               <li key={row.id} className="flex items-center justify-between gap-2 border-t pt-1.5 first:border-t-0">
                 <span>
-                  Semester {row.semester}: <span className="font-medium tabular-nums">{gpaLabel(Number(row.sgpa))}</span>
-                  <span className="text-muted-foreground"> · {Number(row.credits)} credits</span>
-                  {current !== null && row.semester >= current && <span className="text-muted-foreground"> (not counted: this semester comes from your subjects)</span>}
+                  Term {row.semester}: <span className="font-medium tabular-nums">{gpaLabel(Number(row.sgpa))}</span>
+                  <span className="text-muted-foreground">
+                    {' '}
+                    · {Number(row.credits)} {curriculum.creditsLabel.toLowerCase()}
+                  </span>
+                  {current !== null && row.semester >= current && <span className="text-muted-foreground"> (not counted: this term comes from your subjects)</span>}
                 </span>
                 <span className="flex shrink-0">
                   <Button
                     variant="ghost"
                     size="icon-sm"
-                    aria-label={`Change semester ${row.semester}`}
+                    aria-label={`Change term ${row.semester}`}
                     onClick={() => {
                       setSemester(String(row.semester))
                       setSgpaText(String(Number(row.sgpa)))
@@ -219,7 +250,7 @@ function EarlierSemesters({ rows, current }: { rows: SemesterRow[]; current: num
                   >
                     <Pencil aria-hidden />
                   </Button>
-                  <Button variant="ghost" size="icon-sm" aria-label={`Delete semester ${row.semester}`} disabled={remove.isPending} onClick={() => remove.mutate(row.id)}>
+                  <Button variant="ghost" size="icon-sm" aria-label={`Delete term ${row.semester}`} disabled={remove.isPending} onClick={() => remove.mutate(row.id)}>
                     <Trash2 aria-hidden />
                   </Button>
                 </span>
@@ -230,15 +261,15 @@ function EarlierSemesters({ rows, current }: { rows: SemesterRow[]; current: num
         <form className="grid gap-2" onSubmit={submit}>
           <div className="grid grid-cols-3 gap-2">
             <Label className="grid gap-1 font-normal">
-              <span className="text-xs text-muted-foreground">Semester</span>
+              <span className="text-xs text-muted-foreground">Term</span>
               <Input type="number" inputMode="numeric" min={1} max={16} value={semester} onChange={(event) => setSemester(event.target.value)} />
             </Label>
             <Label className="grid gap-1 font-normal">
-              <span className="text-xs text-muted-foreground">SGPA</span>
-              <Input type="number" inputMode="decimal" min={0} max={10} step="0.01" value={sgpaText} onChange={(event) => setSgpaText(event.target.value)} />
+              <span className="text-xs text-muted-foreground">{curriculum.termLabel}</span>
+              <Input type="number" inputMode="decimal" min={0} max={curriculum.maxGradePoints} step="0.01" value={sgpaText} onChange={(event) => setSgpaText(event.target.value)} />
             </Label>
             <Label className="grid gap-1 font-normal">
-              <span className="text-xs text-muted-foreground">Credits</span>
+              <span className="text-xs text-muted-foreground">{curriculum.creditsLabel}</span>
               <Input type="number" inputMode="decimal" min={1} max={100} step="0.5" value={credits} onChange={(event) => setCredits(event.target.value)} />
             </Label>
           </div>
@@ -249,7 +280,7 @@ function EarlierSemesters({ rows, current }: { rows: SemesterRow[]; current: num
           )}
           <Button type="submit" variant="outline" size="sm" className="justify-self-start" disabled={save.isPending}>
             {save.isPending && <LoaderCircle className="animate-spin" aria-hidden />}
-            Save semester
+            Save term
           </Button>
         </form>
       </CardContent>
@@ -257,7 +288,17 @@ function EarlierSemesters({ rows, current }: { rows: SemesterRow[]; current: num
   )
 }
 
-function TargetCard({ earlier, currentCredits, maxPoints }: { earlier: { credits: number; sgpa: number }[]; currentCredits: number; maxPoints: number }) {
+function TargetCard({
+  earlier,
+  currentCredits,
+  maxPoints,
+  curriculum,
+}: {
+  earlier: { credits: number; sgpa: number }[]
+  currentCredits: number
+  maxPoints: number
+  curriculum: CurriculumProfile
+}) {
   const [target, setTarget] = useState('')
   const value = Number(target)
   const needed = target === '' || !Number.isFinite(value) ? null : requiredSgpa(value, earlier, currentCredits)
@@ -265,25 +306,25 @@ function TargetCard({ earlier, currentCredits, maxPoints }: { earlier: { credits
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Target CGPA</CardTitle>
-        <CardDescription>The SGPA you need this semester to reach it.</CardDescription>
+        <CardTitle>Target {curriculum.cumulativeLabel}</CardTitle>
+        <CardDescription>The {curriculum.termLabel} you need this term to reach it.</CardDescription>
       </CardHeader>
       <CardContent className="grid gap-2 text-sm">
-        <Label className="grid max-w-40 gap-1 font-normal">
-          <span className="text-xs text-muted-foreground">Target CGPA</span>
-          <Input type="number" inputMode="decimal" min={0} max={10} step="0.1" value={target} onChange={(event) => setTarget(event.target.value)} />
+        <Label className="grid max-w-44 gap-1 font-normal">
+          <span className="text-xs text-muted-foreground">Target {curriculum.cumulativeLabel}</span>
+          <Input type="number" inputMode="decimal" min={0} max={maxPoints} step="0.1" value={target} onChange={(event) => setTarget(event.target.value)} />
         </Label>
         {target !== '' && (
           <p role="status">
             {currentCredits <= 0
-              ? 'Add the credits of this semester’s subjects first.'
+              ? `Add the ${curriculum.creditsLabel.toLowerCase()} of this term’s subjects first.`
               : needed === null
                 ? ''
                 : needed > maxPoints
-                  ? `Not reachable this semester: it would need an SGPA of ${gpaLabel(needed)}.`
+                  ? `Not reachable this term: it would need ${curriculum.termLabel} ${gpaLabel(needed)}.`
                   : needed <= 0
-                    ? 'You’re there whatever this semester brings.'
-                    : `You need an SGPA of ${gpaLabel(needed)} this semester.`}
+                    ? 'You’re there whatever this term brings.'
+                    : `You need ${curriculum.termLabel} ${gpaLabel(needed)} this term.`}
           </p>
         )}
       </CardContent>

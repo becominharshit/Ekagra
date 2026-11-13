@@ -7,7 +7,7 @@ import { demoProfileRepo } from '@/features/profile/localStore'
 import type { DataSource } from '@/lib/dataSource'
 import { demoDb } from '@/lib/demoDb'
 import { stubLocalStorage } from '@/test/memoryStorage'
-import { buildExport, forgetOnDevice, type DataExport } from './account'
+import { buildExport, exportFromServer, forgetOnDevice, type DataExport } from './account'
 
 stubLocalStorage()
 
@@ -107,5 +107,34 @@ describe('forgetOnDevice', () => {
     expect(localStorage.getItem('some-other-site')).toBe('keep')
     expect(useFocusStore.getState()).toMatchObject({ pauses: {}, pass: null })
     expect(useLaunchpadStore.getState().active).toBeNull()
+  })
+})
+
+describe('exportFromServer', () => {
+  it('invokes the account-export Edge Function and rejects Demo Mode explicitly', async () => {
+    await expect(exportFromServer({ kind: 'demo' })).rejects.toThrow(/signed-in account/i)
+
+    const invoke = async (name: string) => {
+      expect(name).toBe('account-export')
+      return {
+        data: {
+          app: 'Ekagra',
+          format: 1,
+          exportedAt: '2026-11-13T10:00:00.000Z',
+          mode: 'signed_in',
+          user: { id: 'u1', email: 'u1@example.com', name: 'Asha' },
+          note: 'Server note',
+          counts: { profiles: 1, subjects: 2 },
+          tables: { profiles: [{ id: 'u1' }], subjects: [{ id: 's1' }, { id: 's2' }] },
+        },
+        error: null,
+      }
+    }
+    const source = { kind: 'supabase', userId: 'u1', client: { functions: { invoke } } } as unknown as DataSource
+    const file = await exportFromServer(source)
+
+    expect(file.rows).toBe(3)
+    expect(file.name).toBe('ekagra-export-2026-11-13.json')
+    expect(JSON.parse(file.json)).toMatchObject({ mode: 'signed_in', counts: { profiles: 1, subjects: 2 } })
   })
 })

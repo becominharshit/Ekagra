@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { format } from 'date-fns'
 import { ArrowRight, Zap } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/button'
@@ -21,22 +21,25 @@ import { DueSoon } from '@/features/today/DueSoon'
 import { MorningBrief } from '@/features/today/MorningBrief'
 import { NowCard, UpNext } from '@/features/today/NowCard'
 import { pickQuickWin, QUICK_WIN_MINUTES, type QuickWinMinutes } from '@/features/today/quickWin'
-import { useNow } from '@/hooks/useNow'
+import { useNow, useTimezone } from '@/hooks/useNow'
+import { formatLongDateInTimezone } from '@/lib/timezone'
 
 export function TodayPage() {
+  const { t } = useTranslation('common')
   const now = useNow(60_000)
+  const timeZone = useTimezone()
 
   return (
     <>
       <div className="flex items-start justify-between gap-3">
-        <PageHeader title="Today" subtitle={format(now, 'EEEE, d MMMM')} />
+        <PageHeader title={t('today.title')} subtitle={formatLongDateInTimezone(now, timeZone)} />
         <CrashButton />
       </div>
       <div className="grid gap-4">
         <DayStatus />
         <MorningBrief />
         <NowCard />
-        <QuickWinCard now={now} />
+        <QuickWinCard now={now} timeZone={timeZone} />
         <ReviewTodayCard />
         <NudgesCard />
         <GroupFocusTodayCard />
@@ -50,9 +53,10 @@ export function TodayPage() {
   )
 }
 
-function QuickWinCard({ now }: { now: Date }) {
+function QuickWinCard({ now, timeZone }: { now: Date; timeZone: string }) {
+  const { t } = useTranslation('common')
   const [minutes, setMinutes] = useState<QuickWinMinutes | null>(null)
-  const today = localDateOf(now)
+  const today = localDateOf(now, timeZone)
   const cards = useFlashcards()
   const mistakes = useMistakes()
   const blocks = useBlocks(today, today)
@@ -76,12 +80,12 @@ function QuickWinCard({ now }: { now: Date }) {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Zap className="size-4 text-mode-study" aria-hidden />
-          I have a few minutes
+          {t('today.quickWinTitle')}
         </CardTitle>
-        <CardDescription>Between classes? Pick how much time you have for one quick win.</CardDescription>
+        <CardDescription>{t('today.quickWinDescription')}</CardDescription>
       </CardHeader>
       <CardContent className="grid gap-3">
-        <div className="flex flex-wrap gap-1.5" role="group" aria-label="Spare time">
+        <div className="flex flex-wrap gap-1.5" role="group" aria-label={t('today.spareTimeLabel')}>
           {QUICK_WIN_MINUTES.map((option) => (
             <Button
               key={option}
@@ -90,7 +94,7 @@ function QuickWinCard({ now }: { now: Date }) {
               aria-pressed={minutes === option}
               onClick={() => setMinutes(minutes === option ? null : option)}
             >
-              {option} min
+              {t('today.minutesOption', { minutes: option })}
             </Button>
           ))}
         </div>

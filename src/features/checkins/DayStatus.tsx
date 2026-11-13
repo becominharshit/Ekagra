@@ -14,12 +14,12 @@ import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { localDateOf } from '@/features/planner/schedule'
 import { useTodayMutation } from '@/features/today/todayMutation'
-import { useNow } from '@/hooks/useNow'
+import { useNow, useTimezone } from '@/hooks/useNow'
 import { crashToday, guardOn, undoCrash, useCheckIns } from './checkins'
 
 /** "I crashed": one tap (and a confirm) turns today into a minimum day. The plan keeper then re-plans. */
 export function CrashButton() {
-  const today = localDateOf(useNow(60_000))
+  const today = localDateOf(useNow(60_000), useTimezone())
   const checkIns = useCheckIns(today)
   const crash = useTodayMutation(crashToday)
   const row = checkIns.data?.find((checkIn) => checkIn.date === today)

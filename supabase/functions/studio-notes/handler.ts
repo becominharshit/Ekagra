@@ -11,11 +11,19 @@ import {
   studioNotesPartInstructions,
   studioNotesPrompt,
 } from '../_shared/prompts/studioNotes.ts'
-import { handleJson, readBody, requireUser } from '../_shared/respond.ts'
+import {
+  formatSseEvent,
+  json,
+  readBody,
+  requireUser,
+  runWithCorsAndErrors,
+  sseHeaders,
+} from '../_shared/respond.ts'
 import {
   StudioNoteAnswerSchema,
   StudioNotePartAnswerSchema,
   StudioNotesRequestSchema,
+  type SourceCitation,
   type StudioNoteAnswer,
   type StudioNoteKind,
   type StudioNotePartAnswer,
@@ -197,130 +205,267 @@ export function joinParts(parts: (VideoPart & StudioNotePartAnswer & { markdown?
 }
 
 export function handleStudioNotes(makeDeps: () => StudioNotesDeps): (request: Request) => Promise<Response> {
-  return handleJson(async (request): Promise<StudioNotesResponse> => {
-    const deadline = new Date(Date.now() + WORK_TIME_MS)
-    const deps = makeDeps()
-    const userId = await requireUser(deps.authenticate, request)
-    const input = await readBody(request, StudioNotesRequestSchema)
-    const config = readStudioAiConfig(deps.env)
-    const ai = createAiGateway({ config, usage: deps.usage, model: deps.model ?? geminiModels(config.apiKey), sleep: deps.sleep })
-    // The student hears about the daily limit now, not from a failed note later.
-    await ai.ensureQuota(userId)
+  return (request) =>
+    runWithCorsAndErrors(
+      request,
+      () => makeDeps().env,
+      async (env) => {
+        const deadline = new Date(Date.now() + WORK_TIME_MS)
+        const deps = makeDeps()
+        const userId = await requireUser(deps.authenticate, request)
+        const input = await readBody(request, StudioNotesRequestSchema)
+        const config = readStudioAiConfig(deps.env)
+        const ai = createAiGateway({ config, usage: deps.usage, model: deps.model ?? geminiModels(config.apiKey), sleep: deps.sleep })
+        // The student hears about the daily limit now, not from a failed note later.
+        await ai.ensureQuota(userId)
 
-    let videoUrl: string | null = null
-    let fps: number | undefined
-    let parts: VideoPart[] = []
-    let sliceRange: VideoPart | null = null
-    let fromNotes: string | null = null
-    if (input.source.kind === 'youtube') {
-      const id = youtubeId(input.source.url)
-      if (!id) throw new AiError(400, 'bad_request', "That isn't a link to a YouTube video.")
-      videoUrl = watchUrl(id)
-      let { startSec, endSec } = input.source
-      let hasWindow = startSec !== undefined || endSec !== undefined
-      // A mind map or revision sheet comes from the video's notes when there are some (unless a specific time window was asked for).
-      if (input.kind !== 'notes' && !hasWindow) {
-        fromNotes = await deps.store.readyNotes(input.materialId, userId).catch((error: unknown) => {
-          console.error('Could not read the notes of the video:', error)
-          return null
+        let videoUrl: string | null = null
+        let fps: number | undefined
+        let parts: VideoPart[] = []
+        let sliceRange: VideoPart | null = null
+        let fromNotes: string | null = null
+        if (input.source.kind === 'youtube') {
+          const id = youtubeId(input.source.url)
+          if (!id) throw new AiError(400, 'bad_request', "That isn't a link to a YouTube video.")
+          videoUrl = watchUrl(id)
+          let { startSec, endSec } = input.source
+          let hasWindow = startSec !== undefined || endSec !== undefined
+          // A mind map or revision sheet comes from the video's notes when there are some (unless a specific time window was asked for).
+          if (input.kind !== 'notes' && !hasWindow) {
+            fromNotes = await deps.store.readyNotes(input.materialId, userId).catch((error: unknown) => {
+              console.error('Could not read the notes of the video:', error)
+              return null
+            })
+          }
+          if (!fromNotes) {
+            const details = await checkVideo(id, deps, startSec, endSec)
+            if (details) await deps.store.describeVideo(input.materialId, userId, details).catch((error: unknown) => console.error('Could not describe the video:', error))
+            const totalSec = details?.durationSec || null
+            const requestedStart = startSec ?? 0
+            const requestedEnd = endSec ?? totalSec ?? undefined
+            // When a video or chosen range is over 3 hours (e.g. first click right after pasting a 5h video),
+            // automatically make a 90-minute part from the start time instead of failing.
+            if (requestedEnd !== undefined && requestedEnd - requestedStart > MAX_WINDOW_SECONDS) {
+              startSec = requestedStart
+              endSec = totalSec !== null ? Math.min(totalSec, requestedStart + DEFAULT_WINDOW_SECONDS) : requestedStart + DEFAULT_WINDOW_SECONDS
+              hasWindow = true
+            }
+            const windowSpan = endSec !== undefined ? endSec - (startSec ?? 0) : totalSec
+            fps = lectureFps(windowSpan)
+            parts = videoParts(totalSec, input.kind === 'notes' ? NOTES_PART_SECONDS : VIDEO_PART_SECONDS, startSec, endSec)
+            if (hasWindow && parts.length > 0) {
+              sliceRange = { start: parts[0]!.start, end: parts[parts.length - 1]!.end }
+            }
+          }
+        }
+
+        const initialTitle = withRangeTitle(input.title, sliceRange)
+        const noteId = await deps.store.create({
+          userId,
+          subjectId: input.subjectId,
+          materialId: input.materialId,
+          kind: input.kind,
+          title: initialTitle,
+          source: videoUrl ? 'youtube' : 'material',
         })
-      }
-      if (!fromNotes) {
-        const details = await checkVideo(id, deps, startSec, endSec)
-        if (details) await deps.store.describeVideo(input.materialId, userId, details).catch((error: unknown) => console.error('Could not describe the video:', error))
-        const totalSec = details?.durationSec || null
-        const requestedStart = startSec ?? 0
-        const requestedEnd = endSec ?? totalSec ?? undefined
-        // When a video or chosen range is over 3 hours (e.g. first click right after pasting a 5h video),
-        // automatically make a 90-minute part from the start time instead of failing.
-        if (requestedEnd !== undefined && requestedEnd - requestedStart > MAX_WINDOW_SECONDS) {
-          startSec = requestedStart
-          endSec = totalSec !== null ? Math.min(totalSec, requestedStart + DEFAULT_WINDOW_SECONDS) : requestedStart + DEFAULT_WINDOW_SECONDS
-          hasWindow = true
+
+        const asked = { userId, feature: 'studio-notes', deadline }
+        // Anything from a video (its parts, or the notes made from it) is long, so the cheaper, quicker model reads it.
+        const tier: 'fast' | 'smart' = videoUrl ? 'fast' : 'smart'
+        const noteFrom = ({ data, model }: { data: StudioNoteAnswer; model: string }) => ({
+          title: withRangeTitle(data.title.trim() || input.title, sliceRange),
+          content: data.markdown.trim(),
+          citations: data.citations ?? ([] as SourceCitation[]),
+          model,
+        })
+
+        interface MakeCallbacks {
+          onPartial?: (partial: unknown) => Promise<void> | void
+          onPartDone?: (completed: number, total: number) => Promise<void> | void
         }
-        const windowSpan = endSec !== undefined ? endSec - (startSec ?? 0) : totalSec
-        fps = lectureFps(windowSpan)
-        parts = videoParts(totalSec, input.kind === 'notes' ? NOTES_PART_SECONDS : VIDEO_PART_SECONDS, startSec, endSec)
-        if (hasWindow && parts.length > 0) {
-          sliceRange = { start: parts[0]!.start, end: parts[parts.length - 1]!.end }
+
+        /** Full notes of a long video: every part's detailed notes at the same time, joined in order. */
+        const fullNotes = async (url: string, callbacks?: MakeCallbacks) => {
+          let completed = 0
+          const done = await Promise.all(
+            parts.map(async (part, index) => {
+              const made = await ai.generate({
+                ...asked,
+                tier: 'fast',
+                schema: StudioNotePartAnswerSchema,
+                instructions: studioNotesPartInstructions(),
+                prompt: studioNotesPrompt(input, url, fps, { ...part, index, count: parts.length }),
+              })
+              completed += 1
+              await callbacks?.onPartDone?.(completed, parts.length)
+              return { part: { ...part, ...made.data }, model: made.model }
+            }),
+          )
+          return {
+            title: initialTitle,
+            content: joinParts(done.map(({ part }) => part)),
+            citations: [] as SourceCitation[],
+            model: done[0]?.model ?? config.models.fast,
+          }
         }
-      }
-    }
 
-    const initialTitle = withRangeTitle(input.title, sliceRange)
-    const noteId = await deps.store.create({
-      userId,
-      subjectId: input.subjectId,
-      materialId: input.materialId,
-      kind: input.kind,
-      title: initialTitle,
-      source: videoUrl ? 'youtube' : 'material',
-    })
-
-    const asked = { userId, feature: 'studio-notes', deadline }
-    // Anything from a video (its parts, or the notes made from it) is long, so the cheaper, quicker model reads it.
-    const tier = videoUrl ? 'fast' : 'smart'
-    const noteFrom = ({ data, model }: { data: StudioNoteAnswer; model: string }) => ({
-      title: withRangeTitle(data.title.trim() || input.title, sliceRange),
-      content: data.markdown.trim(),
-      model,
-    })
-
-    /** Full notes of a long video: every part's detailed notes at the same time, joined in order. */
-    const fullNotes = async (url: string) => {
-      const done = await Promise.all(
-        parts.map(async (part, index) => {
-          const made = await ai.generate({
+        /** A mind map or revision sheet of a long video: its parts' at the same time, then one from theirs (text only, quick). */
+        const combined = async (url: string, callbacks?: MakeCallbacks) => {
+          let completed = 0
+          const done = await Promise.all(
+            parts.map(async (part, index) => {
+              const made = await ai.generate({
+                ...asked,
+                tier: 'fast',
+                schema: StudioNoteAnswerSchema,
+                instructions: studioNotesInstructions(input.kind),
+                prompt: studioNotesPrompt(input, url, fps, { ...part, index, count: parts.length }),
+              })
+              completed += 1
+              await callbacks?.onPartDone?.(completed, parts.length)
+              return { ...part, markdown: made.data.markdown }
+            }),
+          )
+          const combineTask = {
             ...asked,
-            tier: 'fast',
-            schema: StudioNotePartAnswerSchema,
-            instructions: studioNotesPartInstructions(),
-            prompt: studioNotesPrompt(input, url, fps, { ...part, index, count: parts.length }),
-          })
-          return { part: { ...part, ...made.data }, model: made.model }
-        }),
-      )
-      return { title: initialTitle, content: joinParts(done.map(({ part }) => part)), model: done[0]?.model ?? config.models.fast }
-    }
-
-    /** A mind map or revision sheet of a long video: its parts' at the same time, then one from theirs (text only, quick). */
-    const combined = async (url: string) => {
-      const done = await Promise.all(
-        parts.map(async (part, index) => {
-          const made = await ai.generate({
-            ...asked,
-            tier: 'fast',
+            tier: 'fast' as const,
             schema: StudioNoteAnswerSchema,
-            instructions: studioNotesInstructions(input.kind),
-            prompt: studioNotesPrompt(input, url, fps, { ...part, index, count: parts.length }),
-          })
-          return { ...part, markdown: made.data.markdown }
-        }),
-      )
-      // Right after the parts, Gemini's free tier may be over its tokens for this minute: the gateway then waits for the next one.
-      return noteFrom(
-        await ai.generate({ ...asked, tier: 'fast', schema: StudioNoteAnswerSchema, instructions: studioCombineInstructions(input.kind), prompt: studioCombinePrompt(initialTitle, done) }),
-      )
-    }
-
-    const make = async () => {
-      const instructions = studioNotesInstructions(input.kind)
-      if (fromNotes) return noteFrom(await ai.generate({ ...asked, tier, schema: StudioNoteAnswerSchema, instructions, prompt: studioFromNotesPrompt(input, fromNotes.slice(0, FROM_NOTES_LENGTH)) }))
-      if (videoUrl && parts.length > 1) return input.kind === 'notes' ? fullNotes(videoUrl) : combined(videoUrl)
-      const singleClip = videoUrl && parts.length === 1 ? { ...parts[0]!, index: 0, count: 1 } : undefined
-      return noteFrom(await ai.generate({ ...asked, tier, schema: StudioNoteAnswerSchema, instructions, prompt: studioNotesPrompt(input, videoUrl, fps, singleClip) }))
-    }
-
-    deps.background(
-      (async () => {
-        try {
-          const made = await make()
-          await deps.store.finish(noteId, userId, { ...made, promptVersion: STUDIO_NOTES_PROMPT_VERSION })
-        } catch (error) {
-          await deps.store.fail(noteId, userId, failure(error, videoUrl !== null && fromNotes === null)).catch((stuck: unknown) => console.error('Could not mark the note as failed:', stuck))
+            instructions: studioCombineInstructions(input.kind),
+            prompt: studioCombinePrompt(initialTitle, done),
+          }
+          return noteFrom(
+            callbacks?.onPartial ? await ai.stream({ ...combineTask, onPartial: callbacks.onPartial }) : await ai.generate(combineTask),
+          )
         }
-      })(),
+
+        const make = async (callbacks?: MakeCallbacks) => {
+          const instructions = studioNotesInstructions(input.kind)
+          const singleTask = fromNotes
+            ? {
+                ...asked,
+                tier,
+                schema: StudioNoteAnswerSchema,
+                instructions,
+                prompt: studioFromNotesPrompt(input, fromNotes.slice(0, FROM_NOTES_LENGTH)),
+              }
+            : !(videoUrl && parts.length > 1)
+              ? {
+                  ...asked,
+                  tier,
+                  schema: StudioNoteAnswerSchema,
+                  instructions,
+                  prompt: studioNotesPrompt(
+                    input,
+                    videoUrl,
+                    fps,
+                    videoUrl && parts.length === 1 ? { ...parts[0]!, index: 0, count: 1 } : undefined,
+                  ),
+                }
+              : null
+          if (singleTask) {
+            return noteFrom(
+              callbacks?.onPartial ? await ai.stream({ ...singleTask, onPartial: callbacks.onPartial }) : await ai.generate(singleTask),
+            )
+          }
+          return input.kind === 'notes' ? fullNotes(videoUrl!, callbacks) : combined(videoUrl!, callbacks)
+        }
+
+        const wantsSse = request.headers.get('accept')?.toLowerCase().includes('text/event-stream') ?? false
+        if (!wantsSse) {
+          deps.background(
+            (async () => {
+              try {
+                const made = await make()
+                await deps.store.finish(noteId, userId, {
+                  title: made.title,
+                  content: made.content,
+                  model: made.model,
+                  promptVersion: STUDIO_NOTES_PROMPT_VERSION,
+                })
+              } catch (error) {
+                await deps.store
+                  .fail(noteId, userId, failure(error, videoUrl !== null && fromNotes === null))
+                  .catch((stuck: unknown) => console.error('Could not mark the note as failed:', stuck))
+              }
+            })(),
+          )
+          const payload: StudioNotesResponse = { noteId }
+          return json(payload, 200, request, env ?? deps.env)
+        }
+
+        const encoder = new TextEncoder()
+        let closed = false
+        let lastSnapshot = ''
+        const stream = new ReadableStream<Uint8Array>({
+          async start(controller) {
+            const send = (event: string, data: unknown) => {
+              if (closed) return
+              try {
+                controller.enqueue(encoder.encode(formatSseEvent(event, data)))
+              } catch {
+                closed = true
+              }
+            }
+            send('status', { stage: 'creating', noteId, title: initialTitle })
+            try {
+              const made = await make({
+                onPartDone: (completedParts, totalParts) => {
+                  send('status', { stage: 'streaming', noteId, completedParts, totalParts })
+                },
+                onPartial: (partial) => {
+                  if (!partial || typeof partial !== 'object') return
+                  const obj = partial as Record<string, unknown>
+                  const delta = {
+                    noteId,
+                    title: typeof obj.title === 'string' ? obj.title : '',
+                    markdown: typeof obj.markdown === 'string' ? obj.markdown : '',
+                    citations: Array.isArray(obj.citations) ? obj.citations : [],
+                  }
+                  const snapshot = JSON.stringify(delta)
+                  if (snapshot !== lastSnapshot) {
+                    lastSnapshot = snapshot
+                    send('delta', delta)
+                  }
+                },
+              })
+              send('status', { stage: 'saving', noteId })
+              await deps.store.finish(noteId, userId, {
+                title: made.title,
+                content: made.content,
+                model: made.model,
+                promptVersion: STUDIO_NOTES_PROMPT_VERSION,
+              })
+              send('done', {
+                noteId,
+                title: made.title,
+                content: made.content,
+                citations: made.citations,
+                model: made.model,
+                promptVersion: STUDIO_NOTES_PROMPT_VERSION,
+              })
+            } catch (error) {
+              const reason = failure(error, videoUrl !== null && fromNotes === null)
+              await deps.store
+                .fail(noteId, userId, reason)
+                .catch((stuck: unknown) => console.error('Could not mark the note as failed:', stuck))
+              send('error', { code: error instanceof AiError ? error.code : 'server_error', message: reason })
+            } finally {
+              if (!closed) {
+                closed = true
+                try {
+                  controller.close()
+                } catch {
+                  // stream already closed
+                }
+              }
+            }
+          },
+          cancel() {
+            closed = true
+          },
+        })
+
+        return new Response(stream, { status: 200, headers: sseHeaders(request, env ?? deps.env) })
+      },
     )
-    return { noteId }
-  })
 }

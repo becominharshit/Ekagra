@@ -1,7 +1,9 @@
 import { readFileSync } from 'node:fs'
 import { PGlite, type Transaction } from '@electric-sql/pglite'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { KEPT_BY_WIPE, PROFILE_RESET, USER_TABLES } from '../../supabase/functions/_shared/userTables.ts'
+import { GLOBAL_SYSTEM_TABLES, KEPT_BY_WIPE, PROFILE_RESET, USER_TABLES } from '../../supabase/functions/_shared/userTables.ts'
+
+const GLOBAL_TABLE_SET = new Set<string>(GLOBAL_SYSTEM_TABLES)
 
 // Runs the real Phase 1 migration inside PGlite (a small Postgres that runs inside Node:
 // nothing to install, no internet) and checks the security rules with two users, Alice and Bob.
@@ -34,7 +36,10 @@ async function count(tx: Transaction, table: string): Promise<number> {
 
 async function countAll(tx: Transaction): Promise<Record<string, number>> {
   const counts: Record<string, number> = {}
-  for (const table of tables) counts[table] = await count(tx, table)
+  for (const table of tables) {
+    if (GLOBAL_TABLE_SET.has(table)) continue
+    counts[table] = await count(tx, table)
+  }
   return counts
 }
 
@@ -59,6 +64,11 @@ beforeAll(async () => {
   await db.exec(readSql('../../supabase/migrations/007_life.sql'))
   await db.exec(readSql('../../supabase/migrations/008_social.sql'))
   await db.exec(readSql('../../supabase/migrations/009_studio.sql'))
+  await db.exec(readSql('../../supabase/migrations/010_billing.sql'))
+  await db.exec(readSql('../../supabase/migrations/011_analytics.sql'))
+  await db.exec(readSql('../../supabase/migrations/012_coding_languages.sql'))
+  await db.exec(readSql('../../supabase/migrations/013_mistakes_fsrs.sql'))
+  await db.exec(readSql('../../supabase/migrations/014_social_safety.sql'))
 
   // Two people sign up. The sign-up trigger creates their profiles.
   await db.exec(`
@@ -222,7 +232,7 @@ describe('Phase 1 migration (001_phase1_core.sql)', () => {
 
     await as(BOB, async (tx) => {
       for (const table of tables) {
-        if (table === 'profiles') continue // checked just below
+        if (table === 'profiles' || GLOBAL_TABLE_SET.has(table)) continue // checked separately
         expect(await count(tx, table), `Bob reading ${table}`).toBe(0)
         const updated = await tx.query(`update public.${table} set updated_at = now()`)
         expect(updated.affectedRows ?? 0, `Bob updating ${table}`).toBe(0)
@@ -820,12 +830,170 @@ describe('Studio migration (009_studio.sql): notes', () => {
   })
 })
 
+describe('Billing migration (010_billing.sql)', () => {
+  it('seeds free, pro, and campus plan_entitlements as read-only for authenticated users', async () => {
+    const rows = await as(BOB, async (tx) =>
+      (await tx.query<{ plan_tier: string; daily_ai_requests: number }>('select plan_tier, daily_ai_requests from public.plan_entitlements order by daily_ai_requests')).rows,
+    )
+    expect(rows.map((r) => r.plan_tier)).toEqual(['free', 'pro', 'campus'])
+    await expect(
+      as(BOB, (tx) => tx.query(`insert into public.plan_entitlements (plan_tier, daily_ai_requests, monthly_ai_tokens, max_studio_sources) values ('free', 9999, 100, 1)`)),
+    ).rejects.toThrow(/row-level security|permission denied/)
+    const updated = await as(BOB, (tx) => tx.query(`update public.plan_entitlements set daily_ai_requests = 9999`))
+    expect(updated.affectedRows ?? 0).toBe(0)
+  })
+
+  it('lets users read only their own subscription, and restricts writes + webhook_events to service_role', async () => {
+    await db.transaction(async (tx) => {
+      await tx.exec('set local role service_role')
+      await tx.query(
+        `insert into public.subscriptions (user_id, provider, customer_id, subscription_id, plan_tier, status)
+         values ($1, 'stripe', 'cus_alice', 'sub_alice', 'pro', 'active')`,
+        [ALICE],
+      )
+      await tx.query(
+        `insert into public.webhook_events (provider, event_id, event_type, status, payload)
+         values ('stripe', 'evt_1', 'checkout.session.completed', 'processed', '{"tier":"pro"}')`,
+      )
+    })
+
+    const aliceSubs = await as(ALICE, async (tx) => (await tx.query<{ plan_tier: string }>('select plan_tier from public.subscriptions')).rows)
+    expect(aliceSubs).toEqual([{ plan_tier: 'pro' }])
+
+    const bobSubs = await as(BOB, async (tx) => (await tx.query('select * from public.subscriptions')).rows)
+    expect(bobSubs).toEqual([])
+
+    await expect(
+      as(BOB, (tx) => tx.query(`insert into public.subscriptions (user_id, provider, plan_tier, status) values ($1, 'stripe', 'pro', 'active')`, [BOB])),
+    ).rejects.toThrow(/row-level security|permission denied/)
+
+    await expect(as(BOB, (tx) => tx.query('select * from public.webhook_events'))).rejects.toThrow(/permission denied/)
+    await expect(
+      db.transaction(async (tx) => {
+        await tx.exec('set local role service_role')
+        await tx.query(`insert into public.webhook_events (provider, event_id, event_type) values ('stripe', 'evt_1', 'duplicate')`)
+      }),
+    ).rejects.toThrow(/unique constraint|duplicate key/)
+  })
+})
+
+describe('Analytics migration (011_analytics.sql)', () => {
+  it('enforces strict RLS on analytics_events (users only read/insert their own events)', async () => {
+    await as(ALICE, (tx) =>
+      tx.query(`insert into public.analytics_events (event_name, app_surface, properties) values ('study_session_started', 'web', '{"minutes":25}')`),
+    )
+    expect(await as(ALICE, (tx) => count(tx, 'analytics_events'))).toBe(1)
+    expect(await as(BOB, (tx) => count(tx, 'analytics_events'))).toBe(0)
+
+    await expect(
+      as(BOB, (tx) =>
+        tx.query(`insert into public.analytics_events (user_id, event_name) values ($1, 'spoofed')`, [ALICE]),
+      ),
+    ).rejects.toThrow(/row-level security/)
+  })
+})
+
+describe('Phase 4 Coding Lab multi-language migration (012_coding_languages.sql)', () => {
+  it('allows python, javascript, typescript, and sql while rejecting unsupported languages', async () => {
+    for (const lang of ['python', 'javascript', 'typescript', 'sql']) {
+      await as(ALICE, (tx) =>
+        tx.query(`insert into public.code_snippets (title, language, code) values ($1, $2, $3)`, [`Test ${lang}`, lang, '// ok']),
+      )
+    }
+    const aliceCount = await as(ALICE, async (tx) => {
+      const { rows } = await tx.query<{ n: number }>(`select count(*)::int as n from public.code_snippets`)
+      return rows[0]?.n ?? 0
+    })
+    expect(aliceCount).toBeGreaterThanOrEqual(4)
+    expect(await as(BOB, (tx) => count(tx, 'code_snippets'))).toBe(0)
+
+    await expect(
+      as(ALICE, (tx) =>
+        tx.query(`insert into public.code_snippets (title, language, code) values ('Invalid', 'cobol', 'STOP RUN.')`),
+      ),
+    ).rejects.toThrow(/code_snippets_language_check/)
+  })
+})
+
+describe('Phase 6 FSRS mistakes migration (013_mistakes_fsrs.sql)', () => {
+  it('stores FSRS JSON state on mistakes, enforces object check constraint, and preserves RLS', async () => {
+    const id = await as(ALICE, (tx) =>
+      insertId(tx, `insert into public.mistakes (concept, fsrs) values ('FSRS state', '{"state":2,"stability":4.2}'::jsonb)`),
+    )
+    const rows = await as(ALICE, async (tx) => (await tx.query<{ fsrs: Record<string, unknown> }>('select fsrs from public.mistakes where id = $1', [id])).rows)
+    expect(rows[0]?.fsrs).toEqual({ state: 2, stability: 4.2 })
+
+    expect(await as(BOB, (tx) => count(tx, 'mistakes'))).toBe(0)
+
+    await expect(
+      as(ALICE, (tx) => tx.query(`insert into public.mistakes (concept, fsrs) values ('Bad', '[1,2]'::jsonb)`)),
+    ).rejects.toThrow(/mistakes_fsrs_object_check/)
+  })
+})
+
+describe('Phase 6 Social Safety migration (014_social_safety.sql)', () => {
+  it('blocks a user (dissolving partner links + nudges), enforces mutual block checks on invites and groups, and unblocks cleanly', async () => {
+    const code = await as(BOB, async (tx) => (await tx.query<{ code: string }>('insert into public.partner_invites default values returning code')).rows[0]?.code ?? '')
+    await as(DAN, (tx) => tx.query('select public.accept_partner_invite($1)', [code]))
+    expect(await as(BOB, (tx) => count(tx, 'partner_links'))).toBe(1)
+
+    await as(BOB, (tx) => tx.query(`insert into public.nudges (to_user_id, kind) values ($1, 'cheer')`, [DAN]))
+    expect(await as(DAN, (tx) => count(tx, 'nudges'))).toBeGreaterThanOrEqual(1)
+
+    // Bob blocks Dan -> dissolves partner_links both ways + cleans direct nudges + sets is_connected = false.
+    await as(BOB, (tx) => tx.query(`insert into public.blocked_users (blocked_user_id, reason) values ($1, 'Spamming invites')`, [DAN]))
+    expect(await as(BOB, (tx) => count(tx, 'partner_links'))).toBe(0)
+    expect(await as(DAN, (tx) => count(tx, 'partner_links'))).toBe(0)
+    expect(await as(BOB, (tx) => count(tx, 'nudges'))).toBe(0)
+    expect(
+      await as(BOB, async (tx) => (await tx.query<{ ok: boolean }>('select public.is_connected($1) as ok', [DAN])).rows[0]?.ok),
+    ).toBe(false)
+
+    // Dan cannot accept a new partner invite from Bob or join a group Bob owns while blocked.
+    const nextCode = await as(BOB, async (tx) => (await tx.query<{ code: string }>('insert into public.partner_invites default values returning code')).rows[0]?.code ?? '')
+    await expect(as(DAN, (tx) => tx.query('select public.accept_partner_invite($1)', [nextCode]))).rejects.toThrow(/cannot be accepted/i)
+    await expect(as(DAN, (tx) => tx.query('select public.accept_partner_invite($1)', ['bad']))).rejects.toThrow(/valid invite code/i)
+
+    const groupId = await as(BOB, (tx) => insertId(tx, `insert into public.study_groups (name) values ('Safety Check Group')`))
+    const gCode = await as(BOB, async (tx) => (await tx.query<{ invite_code: string }>('select invite_code from public.study_groups where id = $1', [groupId])).rows[0]?.invite_code ?? '')
+    await expect(as(DAN, (tx) => tx.query('select public.join_group($1)', [gCode]))).rejects.toThrow(/unavailable/i)
+
+    // Unblocking restores clean state (and clean up temp group).
+    await as(BOB, (tx) => tx.query('delete from public.blocked_users where blocked_user_id = $1', [DAN]))
+    await as(BOB, (tx) => tx.query('select public.leave_group($1)', [groupId]))
+  })
+
+  it('stores abuse reports with strict RLS (cannot self-report, cannot read others reports, cannot mutate moderation status)', async () => {
+    await as(BOB, (tx) =>
+      tx.query(
+        `insert into public.abuse_reports (reported_user_id, category, context_type, details) values ($1, 'spam', 'partner', 'Repeated unwanted links')`,
+        [DAN],
+      ),
+    )
+    expect(await as(BOB, (tx) => count(tx, 'abuse_reports'))).toBe(1)
+    expect(await as(DAN, (tx) => count(tx, 'abuse_reports'))).toBe(0)
+
+    await expect(
+      as(BOB, (tx) => tx.query(`insert into public.abuse_reports (reported_user_id, category) values ($1, 'harassment')`, [BOB])),
+    ).rejects.toThrow(/check constraint|row-level security/)
+
+    await expect(
+      as(BOB, (tx) => tx.query(`insert into public.abuse_reports (reported_user_id, category) values ($1, 'invalid_cat')`, [DAN])),
+    ).rejects.toThrow(/abuse_reports_category_check/)
+
+    // Users cannot self-resolve moderation status (no UPDATE RLS policy for authenticated).
+    const res = await as(BOB, (tx) => tx.query(`update public.abuse_reports set status = 'resolved' where reported_user_id = $1`, [DAN]))
+    expect(res.affectedRows ?? 0).toBe(0)
+  })
+})
+
 // These run last: they delete Alice's and Bob's data.
 describe('Account controls (account-delete Edge Function)', () => {
   /** Rows of this user in every table. */
   async function rowsOf(userId: string): Promise<Record<string, number>> {
     const counts: Record<string, number> = {}
     for (const table of tables) {
+      if (GLOBAL_TABLE_SET.has(table)) continue
       const column = table === 'profiles' ? 'id' : 'user_id'
       const { rows } = await db.query<{ n: number }>(`select count(*)::int as n from public.${table} where ${column} = $1`, [userId])
       if ((rows[0]?.n ?? 0) > 0) counts[table] = rows[0]?.n ?? 0
@@ -834,10 +1002,10 @@ describe('Account controls (account-delete Edge Function)', () => {
   }
 
   it('knows every table that holds student rows (a new table must be added to _shared/userTables.ts)', () => {
-    expect([...USER_TABLES].sort()).toEqual(tables.filter((table) => table !== 'profiles').sort())
+    expect([...USER_TABLES].sort()).toEqual(tables.filter((table) => table !== 'profiles' && !GLOBAL_TABLE_SET.has(table)).sort())
   })
 
-  it("wipes a student's data table by table in that order, keeps AI usage and resets the profile", async () => {
+  it("wipes a student's data table by table in that order, keeps AI usage + subscriptions and resets the profile", async () => {
     expect(Object.keys(await rowsOf(ALICE)).length).toBeGreaterThan(15)
     // Like the Edge Function: the secret key (service role) deletes one table after another.
     await db.transaction(async (tx) => {
@@ -852,12 +1020,20 @@ describe('Account controls (account-delete Edge Function)', () => {
       ])
     })
 
-    expect(await rowsOf(ALICE)).toEqual({ ai_usage: 1, profiles: 1 })
+    expect(await rowsOf(ALICE)).toEqual({ ai_usage: 1, profiles: 1, subscriptions: 1 })
     const profile = await as(ALICE, async (tx) => (await tx.query('select full_name, onboarded_at, settings, chronotype from public.profiles')).rows)
     expect(profile).toEqual([{ full_name: 'Alice', onboarded_at: null, settings: {}, chronotype: 'neutral' }])
   })
 
-  it("deletes every row of a student when the sign-in account is deleted", async () => {
+  it("deletes every row of a student when the sign-in account is deleted while keeping webhook audit events", async () => {
+    await db.transaction(async (tx) => {
+      await tx.exec('set local role service_role')
+      await tx.query(
+        `insert into public.subscriptions (user_id, provider, customer_id, subscription_id, plan_tier, status)
+         values ($1, 'razorpay', 'cust_bob', 'sub_bob', 'pro', 'active')`,
+        [BOB],
+      )
+    })
     await as(BOB, async (tx) => {
       const subject = await insertId(tx, `insert into public.subjects (name) values ('Maths')`)
       const topic = await insertId(tx, `insert into public.topics (subject_id, title) values ($1, 'Limits')`, [subject])
@@ -874,5 +1050,7 @@ describe('Account controls (account-delete Edge Function)', () => {
     // What auth.admin.deleteUser does in the database.
     await db.query('delete from auth.users where id = $1', [BOB])
     expect(await rowsOf(BOB)).toEqual({})
+    const events = await db.query<{ n: number }>(`select count(*)::int as n from public.webhook_events`)
+    expect(events.rows[0]?.n).toBe(1)
   })
 })

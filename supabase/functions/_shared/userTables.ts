@@ -51,6 +51,8 @@ export const USER_TABLES = [
   'step_counts',
   'speaking_sessions',
   'nudges',
+  'blocked_users',
+  'abuse_reports',
   'group_sessions',
   'group_members',
   'study_groups',
@@ -60,17 +62,23 @@ export const USER_TABLES = [
   'daily_checkins',
   'blocked_apps',
   'feedback',
+  'analytics_events',
   'jobs',
   'ai_usage',
+  'subscriptions',
 ] as const
 
 export type UserTable = (typeof USER_TABLES)[number]
 
+/** Global/system tables that do not hold per-user rows (kept outside USER_TABLES). */
+export const GLOBAL_SYSTEM_TABLES = ['plan_entitlements', 'webhook_events'] as const
+
 /**
- * "Wipe my data" keeps these: AI usage counts the daily AI limit and the app's budget, so wiping
- * can't reset them. Deleting the account removes them too.
+ * "Wipe my data" keeps these: AI usage counts the daily AI limit, and subscriptions keep active
+ * billing tiers intact. Deleting the account removes subscriptions via cascade while keeping
+ * webhook_events for billing auditability.
  */
-export const KEPT_BY_WIPE: readonly UserTable[] = ['ai_usage']
+export const KEPT_BY_WIPE: readonly UserTable[] = ['ai_usage', 'subscriptions']
 
 /** "Wipe my data" puts the profile back to how sign-up left it (name and photo stay), so setup starts again. */
 export const PROFILE_RESET = {

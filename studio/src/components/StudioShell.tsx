@@ -21,6 +21,12 @@ export function StudioShell() {
 
   return (
     <div className="flex h-full flex-col">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:bg-background focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:shadow-md focus:ring-2 focus:ring-ring"
+      >
+        Skip to content
+      </a>
       <header className="pt-safe border-b bg-background">
         <div className="flex h-14 items-center justify-between gap-3 px-4 lg:px-6">
           <Link to="/" className="flex min-w-0 items-center gap-2">
@@ -42,7 +48,7 @@ export function StudioShell() {
       </header>
       <div className="flex min-h-0 flex-1">
         <StudioNav />
-        <main ref={mainRef} className="min-w-0 flex-1 overflow-y-auto">
+        <main id="main-content" tabIndex={-1} ref={mainRef} className="min-w-0 flex-1 overflow-y-auto focus:outline-none">
           <div className="mx-auto w-full max-w-5xl px-4 pt-5 pb-16 lg:px-8">
             <Outlet />
           </div>

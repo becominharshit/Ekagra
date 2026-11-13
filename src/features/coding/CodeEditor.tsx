@@ -3,9 +3,10 @@ import { indentWithTab } from '@codemirror/commands'
 import { python } from '@codemirror/lang-python'
 import { keymap } from '@codemirror/view'
 import { basicSetup, EditorView } from 'codemirror'
+import type { CodingLanguage } from './languages'
 
-// A Python editor (CodeMirror 6): line numbers, highlighting, brackets that close themselves,
-// Tab to indent. Ctrl+Enter (Cmd+Enter on a Mac) runs the code.
+// A multi-language code editor (CodeMirror 6): line numbers, brackets that close themselves,
+// Tab to indent, Ctrl+Enter (Cmd+Enter on Mac) to run.
 
 const theme = EditorView.theme({
   '&': { backgroundColor: 'var(--background)', color: 'var(--foreground)', fontSize: '14px' },
@@ -19,12 +20,12 @@ interface CodeEditorProps {
   onChange: (code: string) => void
   onRun?: () => void
   label: string
+  language?: CodingLanguage
 }
 
-export function CodeEditor({ value, onChange, onRun, label }: CodeEditorProps) {
+export function CodeEditor({ value, onChange, onRun, label, language = 'python' }: CodeEditorProps) {
   const parentRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
-  // The editor is made once; it reads the latest props through these refs.
   const latest = useRef({ value, onChange, onRun, label })
   useEffect(() => {
     latest.current = { value, onChange, onRun, label }
@@ -49,9 +50,9 @@ export function CodeEditor({ value, onChange, onRun, label }: CodeEditorProps) {
           indentWithTab,
         ]),
         basicSetup,
-        python(),
+        ...(language === 'python' ? [python()] : []),
         theme,
-        EditorView.contentAttributes.of({ 'aria-label': latest.current.label }),
+        EditorView.contentAttributes.of({ 'aria-label': label }),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) latest.current.onChange(update.state.doc.toString())
         }),
@@ -62,9 +63,9 @@ export function CodeEditor({ value, onChange, onRun, label }: CodeEditorProps) {
       view.destroy()
       viewRef.current = null
     }
-  }, [])
+  }, [language, label])
 
-  // A change from outside (e.g. "Reset to starter code") replaces the text; it can be undone.
+  // A change from outside (e.g. "Reset to starter code" or language switch) replaces the text; it can be undone.
   useEffect(() => {
     const view = viewRef.current
     if (view && view.state.doc.toString() !== value) {

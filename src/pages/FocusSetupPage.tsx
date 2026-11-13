@@ -22,7 +22,10 @@ export function FocusSetupPage() {
           Me
         </Link>
       </Button>
-      <PageHeader title="Focus and app blocking" subtitle="FocusGuard blocks the apps you pick while you focus." />
+      <PageHeader
+        title="Focus and app blocking"
+        subtitle="FocusGuard blocks selected distraction apps on Android via Usage Access, Display Over Other Apps, and a Foreground Service — and websites on desktop via the MV3 extension."
+      />
       <div className="grid gap-4">
         <PermissionChecklist />
         <BlockedAppsPicker />

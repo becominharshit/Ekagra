@@ -1,0 +1,51 @@
+{
+  "appName": "Ekagra",
+  "loading": "Loading…",
+  "back": "Back",
+  "privacy": "Privacy",
+  "terms": "Terms",
+  "pricing": "Pricing",
+  "skipToContent": "Skip to main content",
+  "signIn": {
+    "badge": "Studies, skills and life in one place",
+    "heroTitleLine1": "One clear next step.",
+    "heroTitleHighlight": "Every day.",
+    "heroSubtitle": "Ekagra turns your syllabus, deadlines and side hustle into a calm daily plan, with notes and revision made for the way you actually study.",
+    "features": {
+      "plan": {
+        "title": "A plan for today",
+        "text": "Your syllabus, deadlines and energy in one clear next step."
+      },
+      "notes": {
+        "title": "Notes that make sense",
+        "text": "Full notes, flowchart mind maps and one-page revision sheets."
+      },
+      "skills": {
+        "title": "Skills beside studies",
+        "text": "A side hustle plan that fits around your college timetable."
+      },
+      "progress": {
+        "title": "Progress you can see",
+        "text": "Weekly reviews that change the plan when something is not working."
+      }
+    },
+    "cardTitle": "Start where you are",
+    "cardDescription": "Sign in to keep your plan, notes and progress on every device.",
+    "continueGoogle": "Continue with Google",
+    "tryDemo": "Try Demo Mode",
+    "demoConfiguredHint": "Demo Mode needs no account. It keeps everything on this device, and nothing is sent to a server.",
+    "demoUnconfiguredHint": "Google sign-in turns on once Supabase is connected (see docs/4-setup-guide.md). Demo Mode works now.",
+    "freeToStart": "Free to start. Your data stays yours.",
+    "footerTagline": "Built for students everywhere. Your data stays yours.",
+    "privacyLink": "Privacy policy and permissions",
+    "termsLink": "Terms of service",
+    "signInFailed": "Sign-in failed. Please try again."
+  },
+  "today": {
+    "title": "Today",
+    "quickWinTitle": "I have a few minutes",
+    "quickWinDescription": "Between classes? Pick how much time you have for one quick win.",
+    "spareTimeLabel": "Spare time",
+    "minutesOption": "{{minutes}} min"
+  }
+}

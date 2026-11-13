@@ -1,6 +1,14 @@
-import { MAX_FILE_BYTES, StudioNotesResponseSchema, type StudioNoteKind, type StudioNotesRequest } from '@shared/schemas.ts'
+import {
+  MAX_FILE_BYTES,
+  SourceCitationSchema,
+  StudioNotesResponseSchema,
+  type SourceCitation,
+  type StudioNoteKind,
+  type StudioNotesRequest,
+} from '@shared/schemas.ts'
+import { z } from 'zod'
 import { MIN_PDF_TEXT } from '@/features/academics/source'
-import { callAiFunction } from '@/features/ai/aiClient'
+import { callAiFunction, streamAiFunction } from '@/features/ai/aiClient'
 import type { DataSource } from '@/lib/dataSource'
 import { fileToSource } from '@/lib/files'
 import { downloadMaterial, materialText, type Material } from '@studio/features/library/library'
@@ -72,8 +80,10 @@ export async function notesSource(source: DataSource, material: Material, firstP
     const { readPdfText } = await import('@/lib/pdf')
     const { pages, pageCount } = await readPdfText(await file.arrayBuffer(), PDF_PAGES, firstPage)
     if (pages.length === 0) throw new Error(`This PDF has ${pageCount} pages: start at page ${pageCount} or before.`)
-    const { text, lastPage } = textForNotes(pages, firstPage)
-    if (text.replace(/\s/g, '').length >= MIN_PDF_TEXT) return { source: { kind: 'text', text }, pages: { first: firstPage, last: lastPage, count: pageCount } }
+    const rawChars = pages.reduce((sum, page) => sum + page.replace(/\s/g, '').length, 0)
+    const labeled = pages.map((page, idx) => `[Page ${firstPage + idx}]\n${page.trim()}`)
+    const { text, lastPage } = textForNotes(labeled, firstPage)
+    if (rawChars >= MIN_PDF_TEXT) return { source: { kind: 'text', text }, pages: { first: firstPage, last: lastPage, count: pageCount } }
     // Pictures of pages (a scan): the AI reads the file itself, if it's small enough to send.
     if (file.size > MAX_FILE_BYTES) {
       throw new Error("This PDF is scanned (pictures of pages) and too big for the AI to read. Add photos of the pages you need instead.")
@@ -94,22 +104,59 @@ export interface MakeNotesInput {
   year?: number | null
 }
 
+const StudioNotesStreamDoneSchema = z.object({
+  noteId: z.uuid(),
+  title: z.string().optional(),
+  content: z.string().optional(),
+  citations: z.array(SourceCitationSchema).optional(),
+})
+
+export interface MakeNotesStreamCallbacks {
+  onStatus?: (status: { stage?: string; noteId?: string; completedParts?: number; totalParts?: number }) => void
+  onDelta?: (delta: { noteId?: string; title?: string; markdown?: string; citations?: SourceCitation[] }) => void
+  signal?: AbortSignal
+}
+
+async function prepareNotesRequest(source: DataSource, input: MakeNotesInput) {
+  if (source.kind === 'demo') throw new Error("Studio's AI needs you to be signed in.")
+  const { source: what } = await notesSource(source, input.material, input.firstPage, {
+    startSec: input.startSec,
+    endSec: input.endSec,
+  })
+  return {
+    materialId: input.material.id,
+    subjectId: input.subjectId,
+    kind: input.kind,
+    title: input.material.title.slice(0, 200),
+    source: what,
+    program: input.program ?? null,
+    year: input.year ?? null,
+  }
+}
+
+/** Streams note generation over SSE so Studio shows live token-by-token progress and grounded citations. */
+export async function makeNotesStream(
+  source: DataSource,
+  input: MakeNotesInput,
+  callbacks: MakeNotesStreamCallbacks = {},
+): Promise<string> {
+  const payload = await prepareNotesRequest(source, input)
+  const done = await streamAiFunction('studio-notes', payload, {
+    schema: StudioNotesStreamDoneSchema,
+    signal: callbacks.signal,
+    onStatus: (status) => {
+      callbacks.onStatus?.(status as { stage?: string; noteId?: string; completedParts?: number; totalParts?: number })
+    },
+    onDelta: (delta) => {
+      callbacks.onDelta?.(delta as { noteId?: string; title?: string; markdown?: string; citations?: SourceCitation[] })
+    },
+  })
+  return done.noteId
+}
+
 /** Starts making a note and returns its id (the note says 'processing' until it's done). */
 export async function makeNotes(source: DataSource, input: MakeNotesInput): Promise<string> {
-  if (source.kind === 'demo') throw new Error("Studio's AI needs you to be signed in.")
-  const { source: what } = await notesSource(source, input.material, input.firstPage, { startSec: input.startSec, endSec: input.endSec })
-  const { noteId } = await callAiFunction(
-    'studio-notes',
-    {
-      materialId: input.material.id,
-      subjectId: input.subjectId,
-      kind: input.kind,
-      title: input.material.title.slice(0, 200),
-      source: what,
-      program: input.program ?? null,
-      year: input.year ?? null,
-    },
-    StudioNotesResponseSchema,
-  )
+  const payload = await prepareNotesRequest(source, input)
+  const { noteId } = await callAiFunction('studio-notes', payload, StudioNotesResponseSchema)
   return noteId
 }

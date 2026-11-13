@@ -1,5 +1,6 @@
 import { SPEAK_CAPTURES, SPEAK_SCENARIOS, SPEAK_SCORES } from '@shared/schemas.ts'
 import { format, parseISO } from 'date-fns'
+import { dateKeyInTimezone } from '@/lib/timezone'
 import type { Tables } from '@/types/database'
 
 // Speaking practice: the kinds of speech and their questions, and what is counted in code from a
@@ -56,7 +57,7 @@ export const PROMPTS: Record<Scenario, string[]> = {
   ],
   group_discussion: [
     'Should attendance be compulsory in college?',
-    'Is AI a threat to jobs in India?',
+    'Is AI a threat or an opportunity for early-career jobs?',
     'Online classes or offline classes: which are better?',
     'Should social media be banned for children under 16?',
     'Is a college degree still needed to succeed?',
@@ -294,9 +295,11 @@ export function clockLabel(seconds: number): string {
   return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`
 }
 
-/** Seconds of practice on a local date ('YYYY-MM-DD'). */
-export function practisedOn(sessions: Pick<SpeakingSession, 'created_at' | 'duration_sec'>[], date: string): number {
-  return sessions.filter((session) => format(parseISO(session.created_at), 'yyyy-MM-dd') === date).reduce((sum, session) => sum + session.duration_sec, 0)
+/** Seconds of practice on a date ('YYYY-MM-DD') in `timeZone` (or OS local time if omitted). */
+export function practisedOn(sessions: Pick<SpeakingSession, 'created_at' | 'duration_sec'>[], date: string, timeZone?: string): number {
+  return sessions
+    .filter((session) => (timeZone ? dateKeyInTimezone(session.created_at, timeZone) === date : format(parseISO(session.created_at), 'yyyy-MM-dd') === date))
+    .reduce((sum, session) => sum + session.duration_sec, 0)
 }
 
 /** The last `count` sessions, oldest first, as points for the progress charts (null: no AI scores). */

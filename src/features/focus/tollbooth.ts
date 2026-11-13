@@ -1,17 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { academicsKey } from '@/features/academics/subjects'
+import { CARD_STATE } from '@/features/flashcards/fsrs'
 import { givenText, readCheckQuestion, rightAnswerText, type StoredCheckQuestion } from '@/features/lessons/quiz'
+import { mistakeFsrsStats, mistakeWeaknessScore, type Mistake } from '@/features/mistakes/ladder'
 import { dbError, need, useDataSource, type DataSource } from '@/lib/dataSource'
 import { demoDb } from '@/lib/demoDb'
-import type { Tables, TablesInsert } from '@/types/database'
+import type { Json, Tables, TablesInsert } from '@/types/database'
 import { distractionsKey, type DistractionEvent } from './distractions'
 
 // The Academic Tollbooth: to open a blocked app during focus (an emergency unlock), answer 3
 // rapid-fire questions from the subject you're studying, then say why. All right: blocked apps
 // open for a few minutes (a tollbooth_unlock event). One wrong: they stay blocked
 // (tollbooth_failed) and the missed concept can go into the Mistake Notebook. A few a day at most.
-// Questions come from the subject's MCQs and numericals, its flashcards (as 4-choice questions
-// whose wrong choices are other cards' answers) or, when there aren't enough, built-in mental maths.
+// Prioritization: open mistakes + due/weak/lapsed FSRS flashcards + coding debugging prompts
+// (when working in Coding Lab) + subject MCQs/numericals + built-in mental maths.
 
 export const SECONDS_PER_QUESTION = 20
 /** After a wrong try, the next one can start after this many seconds. */
@@ -20,12 +22,20 @@ export const COOLDOWN_SECONDS = 60
 const MAX_CHOICE_LENGTH = 140
 
 type Question = Tables<'questions'>
-type Card = Pick<Tables<'flashcards'>, 'id' | 'front' | 'back' | 'topic_id' | 'suspended'>
+type Card = Pick<Tables<'flashcards'>, 'id' | 'front' | 'back' | 'topic_id' | 'suspended'> & {
+  fsrs?: Json
+  due_at?: string | null
+}
 type Topic = Pick<Tables<'topics'>, 'id' | 'subject_id'>
+type MistakeSummary = Pick<
+  Mistake,
+  'id' | 'topic_id' | 'question_id' | 'flashcard_id' | 'concept' | 'why_wrong' | 'correct_approach' | 'status' | 'fsrs' | 'next_review_at' | 'correct_count'
+>
+type SnippetSummary = Pick<Tables<'code_snippets'>, 'id' | 'topic_id' | 'title' | 'language' | 'passed' | 'last_output'>
 
 export type TollboothQuestion = Exclude<StoredCheckQuestion, { type: 'short' }> & {
-  /** A saved question (its attempt is saved), a flashcard, or a built-in question. */
-  origin: 'question' | 'flashcard' | 'builtin'
+  /** Where the prompt came from: saved question, FSRS card, open mistake, coding debug challenge, or mental maths. */
+  origin: 'question' | 'flashcard' | 'mistake' | 'coding' | 'builtin'
   topicId: string | null
 }
 
@@ -36,6 +46,90 @@ export interface TollboothAnswer {
   right: boolean
   timeMs: number
 }
+
+interface CodingDebugSpec {
+  id: string
+  language: 'python' | 'javascript' | 'typescript' | 'sql'
+  prompt: string
+  answer: string
+  distractors: [string, string, string]
+  explanation: string
+}
+
+const CODING_DEBUG_PROMPTS: CodingDebugSpec[] = [
+  {
+    id: 'py-mutable-default',
+    language: 'python',
+    prompt: 'Debug Python: `def add_item(x, items=[]): items.append(x); return items`. Calling it twice shares `items`. Why?',
+    answer: 'Default list arguments are evaluated once at function definition, not per call',
+    distractors: [
+      'Python lists cannot be returned from two different functions',
+      'append() mutates global scope instead of local lists',
+      'Return statements reuse cached objects only for numbers',
+    ],
+    explanation: 'Use `items=None` and create `items = []` inside the function body.',
+  },
+  {
+    id: 'py-off-by-one',
+    language: 'python',
+    prompt: 'Debug Python: Why does `for i in range(1, len(arr))` miss one element when iterating an array?',
+    answer: 'It skips index 0 because range starts at 1 instead of 0',
+    distractors: [
+      'len(arr) returns the last valid index instead of element count',
+      'Python arrays are 1-indexed when passed to range()',
+      'The loop always terminates two elements before the end',
+    ],
+    explanation: 'Python sequences are 0-indexed, so iterating all elements starts at `range(len(arr))`.',
+  },
+  {
+    id: 'js-closure-var',
+    language: 'javascript',
+    prompt: 'Debug JS: `for (var i = 0; i < 3; i++) setTimeout(() => log(i), 0)` logs `3, 3, 3`. How do you fix it?',
+    answer: 'Replace var with let so each loop iteration gets its own lexical binding',
+    distractors: [
+      'Replace setTimeout delay 0 with 1 so timers run synchronously',
+      'Use === instead of < in the loop termination condition',
+      'Freeze the array before scheduling any callback',
+    ],
+    explanation: '`var` is function-scoped while `let` creates a fresh binding per iteration.',
+  },
+  {
+    id: 'ts-await-missing',
+    language: 'typescript',
+    prompt: 'Debug TS/JS: `const data = fetchJson()` logs `Promise { <pending> }` instead of parsed fields. What is missing?',
+    answer: 'An await keyword (or .then handler) to unwrap the async Promise result',
+    distractors: [
+      'Adding JSON.stringify() around the async function call',
+      'Marking fetchJson() with the static keyword',
+      'Returning void from the caller function',
+    ],
+    explanation: 'Async functions return a Promise; you must `await` or chain `.then()` to access resolved data.',
+  },
+  {
+    id: 'sql-null-eq',
+    language: 'sql',
+    prompt: 'Debug SQL: `SELECT * FROM tasks WHERE completed_at = NULL` returns 0 rows even with NULLs. Fix it:',
+    answer: 'Use `completed_at IS NULL` because NULL is never equal with `=`',
+    distractors: [
+      'Replace single `=` with `==` for three-valued logic comparisons',
+      'Wrap NULL in quotes (`\'NULL\'`) so SQL matches empty dates',
+      'Move the filter from WHERE into ORDER BY',
+    ],
+    explanation: 'In SQL three-valued logic, `x = NULL` evaluates to UNKNOWN, not TRUE; use `IS NULL`.',
+  },
+  {
+    id: 'sql-group-where',
+    language: 'sql',
+    prompt: 'Debug SQL: `SELECT user_id, COUNT(*) FROM logs WHERE COUNT(*) > 5 GROUP BY user_id` fails. Why?',
+    answer: 'Aggregate predicates like COUNT(*) must go in HAVING, not WHERE',
+    distractors: [
+      'COUNT(*) cannot be selected alongside user_id in SELECT',
+      'GROUP BY must be placed before the FROM clause',
+      'HAVING only works inside DELETE statements',
+    ],
+    explanation: 'WHERE filters rows before grouping; HAVING filters groups after aggregation.',
+  },
+]
 
 /** A random number generator that gives the same numbers for the same seed (so a try can be checked in tests). */
 export function seededRandom(seed: number): () => number {
@@ -64,6 +158,25 @@ function shuffle<T>(items: T[], random: () => number): T[] {
 
 const randomInt = (random: () => number, low: number, high: number) => low + Math.floor(random() * (high - low + 1))
 
+/** Priority weight for an FSRS flashcard (0 when unused/unscheduled so non-FSRS pools shuffle evenly). */
+export function cardWeaknessScore(card: Pick<Card, 'fsrs' | 'due_at'>, now: Date): number {
+  const stats = mistakeFsrsStats(card.fsrs ?? {})
+  const dueAtMs = card.due_at ? Date.parse(card.due_at) : Number.NaN
+  const isDue = !Number.isNaN(dueAtMs) && dueAtMs <= now.getTime()
+  const hasHistory = stats.lapses > 0 || stats.stability > 0 || stats.state !== CARD_STATE.new
+  if (!isDue && !hasHistory) return 0
+
+  let score = 0
+  if (isDue) {
+    const overdueHours = Math.max(0, (now.getTime() - dueAtMs) / 3_600_000)
+    score += 50 + Math.min(36, overdueHours)
+  }
+  score += stats.lapses * 28
+  if (stats.state === CARD_STATE.learning || stats.state === CARD_STATE.relearning) score += 20
+  if (stats.stability > 0 && stats.stability < 4) score += 16
+  return score
+}
+
 /** A flashcard as a 4-choice question: its own answer and 3 other cards' answers. Null when it can't be one. */
 export function cardQuestion(card: Pick<Card, 'id' | 'front' | 'back' | 'topic_id'>, answers: string[], random: () => number): TollboothQuestion | null {
   const right = card.back.trim()
@@ -79,6 +192,61 @@ export function cardQuestion(card: Pick<Card, 'id' | 'front' | 'back' | 'topic_i
   if (wrong.length < 3) return null
   const options = shuffle([right, ...wrong], random)
   return { origin: 'flashcard', id: card.id, topicId: card.topic_id, type: 'mcq', prompt: card.front.trim(), options, correct: options.indexOf(right), explanation: '', difficulty: null }
+}
+
+/** An open mistake converted to a 4-choice question when its correct approach is concise enough to scan. */
+export function mistakeQuestion(mistake: MistakeSummary, answers: string[], random: () => number): TollboothQuestion | null {
+  const right = mistake.correct_approach?.trim() ?? ''
+  const concept = mistake.concept.trim()
+  if (!concept || !right || right.length > MAX_CHOICE_LENGTH) return null
+  const seen = new Set([right.toLowerCase()])
+  const wrong: string[] = []
+  for (let tries = 0; tries < 40 && wrong.length < 3 && answers.length > 0; tries++) {
+    const text = answers[Math.floor(random() * answers.length)]?.trim() ?? ''
+    if (!text || text.length > MAX_CHOICE_LENGTH || seen.has(text.toLowerCase())) continue
+    seen.add(text.toLowerCase())
+    wrong.push(text)
+  }
+  if (wrong.length < 3) return null
+  const options = shuffle([right, ...wrong], random)
+  return {
+    origin: 'mistake',
+    id: mistake.id,
+    topicId: mistake.topic_id,
+    type: 'mcq',
+    prompt: concept,
+    options,
+    correct: options.indexOf(right),
+    explanation: mistake.why_wrong?.trim() ?? '',
+    difficulty: null,
+  }
+}
+
+/** Coding debugging challenge (matched to failed/active language when supplied). */
+export function codingDebugQuestion(
+  random: () => number,
+  index: number,
+  preferredLanguage?: string | null,
+  snippet?: SnippetSummary,
+): TollboothQuestion {
+  const matching = preferredLanguage
+    ? CODING_DEBUG_PROMPTS.filter((item) => item.language === preferredLanguage)
+    : CODING_DEBUG_PROMPTS
+  const candidates = matching.length > 0 ? matching : CODING_DEBUG_PROMPTS
+  const spec = candidates[Math.floor(random() * candidates.length)] ?? CODING_DEBUG_PROMPTS[0]!
+  const options = shuffle([spec.answer, ...spec.distractors], random)
+  const prefix = snippet && snippet.passed === false ? `[Fix "${snippet.title}"] ` : ''
+  return {
+    origin: 'coding',
+    id: `${spec.id}-${index}`,
+    topicId: snippet?.topic_id ?? null,
+    type: 'mcq',
+    prompt: `${prefix}${spec.prompt}`,
+    options,
+    correct: options.indexOf(spec.answer),
+    explanation: spec.explanation,
+    difficulty: 2,
+  }
 }
 
 /** Quick mental maths with 4 close choices: always clearly right or wrong, and different for every seed. */
@@ -125,35 +293,120 @@ export interface TollboothPool {
   questions: Question[]
   cards: Card[]
   topics: Topic[]
+  mistakes?: MistakeSummary[]
+  snippets?: SnippetSummary[]
 }
 
 /**
- * The questions for one try: the subject's own questions and flashcards in a random mix, then
- * built-in ones when there aren't enough. Without a subject, every subject's count.
+ * Picks up to `count` questions for a Tollbooth attempt:
+ * 1) High-priority items first: open FSRS mistakes, due/weak/lapsed FSRS flashcards,
+ *    and coding debugging prompts for recent/failing Coding Lab snippets.
+ * 2) Remaining checkable MCQs, numericals, and flashcards in the active subject.
+ * 3) Coding debug / mental maths fallback if there still aren't enough.
  */
-export function pickQuestions(pool: TollboothPool, subjectId: string | null, seed: number, count = 3): TollboothQuestion[] {
+export function pickQuestions(
+  pool: TollboothPool,
+  subjectId: string | null,
+  seed: number,
+  count = 3,
+  now = new Date(),
+): TollboothQuestion[] {
   const random = seededRandom(seed)
   const subjectOf = new Map(pool.topics.map((topic) => [topic.id, topic.subject_id]))
   const inSubject = (subject: string | null | undefined) => subjectId === null || subject === subjectId
+
+  const openMistakes = (pool.mistakes ?? []).filter(
+    (m) => m.status === 'open' && (subjectId === null || (m.topic_id !== null && inSubject(subjectOf.get(m.topic_id)))),
+  )
+  const mistakeQuestionBoost = new Map<string, number>()
+  const mistakeCardBoost = new Map<string, number>()
+  for (const m of openMistakes) {
+    const score = 100 + mistakeWeaknessScore(m, now)
+    if (m.question_id) mistakeQuestionBoost.set(m.question_id, Math.max(mistakeQuestionBoost.get(m.question_id) ?? 0, score))
+    if (m.flashcard_id) mistakeCardBoost.set(m.flashcard_id, Math.max(mistakeCardBoost.get(m.flashcard_id) ?? 0, score))
+  }
+
   const own = pool.questions.filter((row) => inSubject(row.subject_id) && (row.type === 'mcq' || row.type === 'numerical'))
   const usable = pool.cards.filter((card) => !card.suspended)
   const subjectCards = usable.filter((card) => card.topic_id !== null && inSubject(subjectOf.get(card.topic_id)))
-  // Wrong choices come from the subject's own cards when there are enough, else from all cards.
-  const answers = (subjectCards.length >= 4 ? subjectCards : usable).map((card) => card.back)
 
-  const candidates = shuffle([...own.map((row) => ({ row, card: null })), ...subjectCards.map((card) => ({ row: null, card }))], random)
-  const picked: TollboothQuestion[] = []
-  for (const { row, card } of candidates) {
-    if (picked.length === count) break
-    if (row) {
-      const question = readCheckQuestion(row)
-      if (question && question.type !== 'short') picked.push({ ...question, origin: 'question', topicId: row.topic_id })
-    } else if (card) {
-      const question = cardQuestion(card, answers, random)
-      if (question) picked.push(question)
+  const distractorSource = [
+    ...(subjectCards.length >= 4 ? subjectCards : usable).map((card) => card.back),
+    ...openMistakes.flatMap((m) => (m.correct_approach ? [m.correct_approach] : [])),
+  ]
+
+  type RankedCandidate = { priority: number; tie: number; build: () => TollboothQuestion | null }
+  const ranked: RankedCandidate[] = []
+
+  const relevantSnippets = (pool.snippets ?? []).filter(
+    (s) => subjectId === null || (s.topic_id !== null && inSubject(subjectOf.get(s.topic_id))) || s.passed === false,
+  )
+  const failingSnippet = relevantSnippets.find((s) => s.passed === false)
+  if (failingSnippet) {
+    ranked.push({
+      priority: 120,
+      tie: random(),
+      build: () => codingDebugQuestion(random, 0, failingSnippet.language, failingSnippet),
+    })
+  } else if (relevantSnippets.length > 0) {
+    const latest = relevantSnippets[0]!
+    ranked.push({
+      priority: 30,
+      tie: random(),
+      build: () => codingDebugQuestion(random, 0, latest.language, latest),
+    })
+  }
+
+  for (const m of openMistakes) {
+    // Only add standalone mistake candidate if it is not already covered by a linked question/card candidate in scope.
+    const coveredByQuestion = Boolean(m.question_id && own.some((q) => q.id === m.question_id))
+    const coveredByCard = Boolean(m.flashcard_id && subjectCards.some((c) => c.id === m.flashcard_id))
+    if (!coveredByQuestion && !coveredByCard) {
+      ranked.push({
+        priority: 110 + mistakeWeaknessScore(m, now),
+        tie: random(),
+        build: () => mistakeQuestion(m, distractorSource, random),
+      })
     }
   }
-  while (picked.length < count) picked.push(builtinQuestion(random, picked.length))
+
+  for (const row of own) {
+    ranked.push({
+      priority: mistakeQuestionBoost.get(row.id) ?? 0,
+      tie: random(),
+      build: () => {
+        const question = readCheckQuestion(row)
+        return question && question.type !== 'short' ? { ...question, origin: 'question', topicId: row.topic_id } : null
+      },
+    })
+  }
+
+  for (const card of subjectCards) {
+    const score = cardWeaknessScore(card, now) + (mistakeCardBoost.get(card.id) ?? 0)
+    ranked.push({
+      priority: score,
+      tie: random(),
+      build: () => cardQuestion(card, distractorSource, random),
+    })
+  }
+
+  // Sort high-priority items first; items with equal priority keep their seeded random order.
+  ranked.sort((a, b) => (b.priority !== a.priority ? b.priority - a.priority : a.tie - b.tie))
+
+  const picked: TollboothQuestion[] = []
+  for (const candidate of ranked) {
+    if (picked.length === count) break
+    const question = candidate.build()
+    if (question) picked.push(question)
+  }
+  while (picked.length < count) {
+    if (relevantSnippets.length > 0 && picked.filter((q) => q.origin === 'coding').length === 0) {
+      const snippet = failingSnippet ?? relevantSnippets[0]
+      picked.push(codingDebugQuestion(random, picked.length, snippet?.language, snippet))
+    } else {
+      picked.push(builtinQuestion(random, picked.length))
+    }
+  }
   return picked
 }
 
@@ -258,18 +511,44 @@ export async function saveTollbooth(source: DataSource, attempt: TollboothTry): 
   return unlockUntil
 }
 
-/** Every question and flashcard the Tollbooth can ask from, and which subject each topic is in. */
+/** Questions, FSRS cards, topics, open mistakes, and recent coding snippets for Tollbooth selection. */
 export async function loadTollboothPool(source: DataSource): Promise<TollboothPool> {
-  if (source.kind === 'demo') return { questions: demoDb.list('questions'), cards: demoDb.list('flashcards'), topics: demoDb.list('topics') }
+  if (source.kind === 'demo') {
+    return {
+      questions: demoDb.list('questions'),
+      cards: demoDb.list('flashcards'),
+      topics: demoDb.list('topics'),
+      mistakes: demoDb.list('mistakes').filter((m) => m.status === 'open'),
+      snippets: demoDb.list('code_snippets'),
+    }
+  }
   const { client, userId } = source
-  const [questions, cards, topics] = await Promise.all([
+  const [questions, cards, topics, mistakes, snippets] = await Promise.all([
     client.from('questions').select('*').eq('user_id', userId).in('type', ['mcq', 'numerical']).limit(1000),
-    client.from('flashcards').select('id, front, back, topic_id, suspended').eq('user_id', userId).limit(2000),
+    client.from('flashcards').select('id, front, back, topic_id, suspended, fsrs, due_at').eq('user_id', userId).limit(2000),
     client.from('topics').select('id, subject_id').eq('user_id', userId),
+    client
+      .from('mistakes')
+      .select('id, topic_id, question_id, flashcard_id, concept, why_wrong, correct_approach, status, fsrs, next_review_at, correct_count')
+      .eq('user_id', userId)
+      .eq('status', 'open')
+      .limit(500),
+    client
+      .from('code_snippets')
+      .select('id, topic_id, title, language, passed, last_output')
+      .eq('user_id', userId)
+      .order('updated_at', { ascending: false })
+      .limit(50),
   ])
-  const error = questions.error ?? cards.error ?? topics.error
+  const error = questions.error ?? cards.error ?? topics.error ?? mistakes.error ?? snippets.error
   if (error) throw dbError(error)
-  return { questions: questions.data ?? [], cards: cards.data ?? [], topics: topics.data ?? [] }
+  return {
+    questions: questions.data ?? [],
+    cards: cards.data ?? [],
+    topics: topics.data ?? [],
+    mistakes: mistakes.data ?? [],
+    snippets: snippets.data ?? [],
+  }
 }
 
 export function useTollboothPool() {

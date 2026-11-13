@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { useAcademicsMutation, useSubjects } from '@/features/academics/subjects'
 import { announceAnchor, announceAnchorDeleted } from '@/features/bridge/studio'
 import { AnchorBar } from '@/features/materials/AnchorBar'
-import { AnchorDialog, AskDialog } from '@/features/materials/AnchorDialogs'
+import { AnchorDialog, AskDialog, type StreamingAnchorPreview } from '@/features/materials/AnchorDialogs'
 import { ACTION_LABEL, createAnchor, deleteAnchor, useAnchors, type Anchor } from '@/features/materials/anchors'
 import { useMaterial, usePdfFile, type Material } from '@/features/materials/materials'
 import { PdfPageView, type PageSelection } from '@/features/materials/PdfPageView'
@@ -76,6 +76,7 @@ function Viewer({ material, file, linkedPage, linkedAnchor }: { material: Materi
   const [zoom, setZoom] = useState(0)
   const [selection, setSelection] = useState<PageSelection | null>(null)
   const [opened, setOpened] = useState<{ anchor: Anchor; cardCount: number } | null>(null)
+  const [streaming, setStreaming] = useState<StreamingAnchorPreview | null>(null)
   const [asking, setAsking] = useState(false)
 
   const lastPage = pageCount ?? material.page_count ?? 1
@@ -85,6 +86,7 @@ function Viewer({ material, file, linkedPage, linkedAnchor }: { material: Materi
   const closeAnchor = () => {
     setOpened(null)
     setLinkedOpen(null)
+    setStreaming(null)
   }
   const subjectName = subjects.data?.find((subject) => subject.id === material.subject_id)?.name ?? null
   const handleSelection = useCallback((next: PageSelection | null) => setSelection(next), [])
@@ -100,6 +102,15 @@ function Viewer({ material, file, linkedPage, linkedAnchor }: { material: Materi
   }
 
   function run(action: AnchorAction, question?: string) {
+    setAsking(false)
+    setStreaming({
+      action,
+      pageNumber: page,
+      selectedText: selection?.text ?? null,
+      question: question ?? null,
+      answerMd: '',
+      citations: [],
+    })
     create.mutate(
       {
         material,
@@ -116,14 +127,28 @@ function Viewer({ material, file, linkedPage, linkedAnchor }: { material: Materi
           year: profile.data?.year ?? null,
           mentorTone: toMentorTone(profile.data?.mentor_tone),
         },
+        onDelta: (delta) => {
+          setStreaming((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  answerMd: delta.answerMd || prev.answerMd,
+                  citations: delta.citations.length > 0 ? delta.citations : prev.citations,
+                }
+              : prev,
+          )
+        },
       },
       {
         onSuccess: (created) => {
-          setAsking(false)
+          setStreaming(null)
           setSelection(null)
           window.getSelection()?.removeAllRanges()
           setOpened(created)
           announceAnchor(created.anchor, material.title)
+        },
+        onError: () => {
+          setStreaming(null)
         },
       },
     )
@@ -231,11 +256,16 @@ function Viewer({ material, file, linkedPage, linkedAnchor }: { material: Materi
         onClose={() => setAsking(false)}
       />
       <AnchorDialog
-        key={shown?.anchor.id ?? 'none'}
+        key={shown?.anchor.id ?? (streaming ? 'streaming' : 'none')}
         anchor={shown?.anchor ?? null}
+        streaming={streaming}
         cardCount={shown?.cardCount ?? 0}
         materialTitle={material.title}
         deleting={remove.isPending}
+        onJumpToPage={(targetPage) => {
+          closeAnchor()
+          goTo(targetPage)
+        }}
         onDelete={(anchor) =>
           remove.mutate(anchor.id, {
             onSuccess: () => {

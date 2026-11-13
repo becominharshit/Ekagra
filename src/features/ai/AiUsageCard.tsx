@@ -1,18 +1,29 @@
 import { format } from 'date-fns'
-import { DEFAULT_AI_LIMITS } from '@shared/schemas.ts'
+import { Link } from 'react-router'
+import { DEFAULT_ENTITLEMENTS } from '@shared/billing.ts'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { PLAN_CATALOG } from '@/features/billing/billing'
 import { cn } from '@/lib/utils'
 import { formatUsd, useAiUsage, type AiUsageView } from './usage'
 
-/** Me → AI usage: today's requests against the daily limit, and this month's cost per AI feature. */
+/** Me → AI usage: today's requests and monthly token allowance against the student's active plan tier. */
 export function AiUsageCard() {
   const usage = useAiUsage()
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>AI usage</CardTitle>
-        <CardDescription>Your AI requests and what they cost. The limits keep the app within its AI budget.</CardDescription>
+        <div className="flex items-center justify-between gap-2">
+          <CardTitle>AI usage</CardTitle>
+          {usage.data?.kind === 'signed_in' && (
+            <Badge variant={usage.data.tier === 'free' ? 'secondary' : 'default'}>
+              {PLAN_CATALOG[usage.data.tier].name}
+            </Badge>
+          )}
+        </div>
+        <CardDescription>Your daily AI requests, monthly token allowance, and cost by feature.</CardDescription>
       </CardHeader>
       <CardContent className="grid gap-5">
         {usage.isPending ? (
@@ -23,9 +34,10 @@ export function AiUsageCard() {
           </p>
         ) : usage.data.kind === 'demo' ? (
           <p className="text-sm text-muted-foreground">
-            Demo Mode makes its sample AI answers on this device, so nothing is sent to the AI, counted or paid. Signed in, each student
-            gets {DEFAULT_AI_LIMITS.userDailyRequests} AI requests a day, and the whole app shares a ${DEFAULT_AI_LIMITS.monthlyBudgetUsd} monthly AI
-            budget.
+            Demo Mode runs sample AI responses locally on your device. Signed-in Starter accounts include{' '}
+            {DEFAULT_ENTITLEMENTS.free.dailyAiRequests} AI requests/day and{' '}
+            {DEFAULT_ENTITLEMENTS.free.monthlyAiTokens.toLocaleString()} monthly tokens, with Pro upgrading to{' '}
+            {DEFAULT_ENTITLEMENTS.pro.dailyAiRequests} priority requests/day.
           </p>
         ) : (
           <SignedInUsage view={usage.data} />
@@ -36,7 +48,7 @@ export function AiUsageCard() {
 }
 
 function SignedInUsage({ view }: { view: Extract<AiUsageView, { kind: 'signed_in' }> }) {
-  const { summary, limits, app } = view
+  const { summary, limits, tier, tokensThisMonth } = view
 
   return (
     <>
@@ -49,34 +61,28 @@ function SignedInUsage({ view }: { view: Extract<AiUsageView, { kind: 'signed_in
         </div>
         <UsageBar label="AI requests in the last 24 hours" value={summary.day} max={limits.userDailyRequests} />
         {summary.nextFreeAt && (
-          <p className="text-sm text-muted-foreground">You've used today's requests. The next one frees up at {format(summary.nextFreeAt, 'h:mm a')}.</p>
+          <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
+            <span>Daily cap reached; resets from {format(summary.nextFreeAt, 'h:mm a')}.</span>
+            {tier === 'free' && (
+              <Button asChild size="sm" variant="link" className="h-auto p-0">
+                <Link to="/pricing">Upgrade to Pro</Link>
+              </Button>
+            )}
+          </div>
         )}
       </section>
 
       <section className="grid gap-2" aria-label="This month">
         <div className="flex items-baseline justify-between gap-3">
-          <h3 className="text-sm font-medium">This month (since {format(view.monthStart, 'd MMM')})</h3>
+          <h3 className="text-sm font-medium">Monthly tokens (since {format(view.monthStart, 'd MMM')})</h3>
           <span className="text-sm tabular-nums">
-            {summary.month} {summary.month === 1 ? 'request' : 'requests'} · {formatUsd(summary.monthUsd)}
+            {tokensThisMonth.toLocaleString()} of {limits.monthlyAiTokens.toLocaleString()}
           </span>
         </div>
-        {app && app.spentThisMonthUsd !== null && (
-          <>
-            <div className="flex items-baseline justify-between gap-3 text-sm text-muted-foreground">
-              <span>The whole app</span>
-              <span className="tabular-nums">
-                {formatUsd(app.spentThisMonthUsd)} of ${limits.monthlyBudgetUsd.toFixed(2)}
-              </span>
-            </div>
-            <UsageBar label="The app's AI spending this month" value={app.spentThisMonthUsd} max={limits.monthlyBudgetUsd} />
-          </>
-        )}
-        {app && app.spentLast24hUsd !== null && (
-          <p className="text-sm text-muted-foreground">
-            In the last 24 hours the app used {formatUsd(app.spentLast24hUsd)} of its {formatUsd(limits.dailyBudgetUsd)} daily share
-            {app.spentLast24hUsd >= limits.dailyBudgetUsd ? ', so AI is paused for everyone until older requests are a day old.' : '.'}
-          </p>
-        )}
+        <UsageBar label="Monthly AI tokens used" value={tokensThisMonth} max={limits.monthlyAiTokens} />
+        <p className="text-xs text-muted-foreground">
+          {summary.month} {summary.month === 1 ? 'request' : 'requests'} this month · estimated API cost {formatUsd(summary.monthUsd)}
+        </p>
       </section>
 
       <section className="grid gap-2" aria-label="By feature">
@@ -115,7 +121,7 @@ function SignedInUsage({ view }: { view: Extract<AiUsageView, { kind: 'signed_in
 
       {view.serverError && (
         <p className="text-xs text-muted-foreground">
-          The app's budget isn't available ({view.serverError}), so the default limits are shown.
+          Server plan details aren't available ({view.serverError}), so Starter limits are shown.
         </p>
       )}
       {view.aiConfigured === false && (

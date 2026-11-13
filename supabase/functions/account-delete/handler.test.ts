@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { AccountDeleteResponseSchema } from '../_shared/schemas.ts'
-import { USER_TABLES } from '../_shared/userTables.ts'
+import { KEPT_BY_WIPE, USER_TABLES } from '../_shared/userTables.ts'
 import { handleAccountRequest, WIPED_TABLES, type AccountDeps } from './handler.ts'
 import { removeUserFiles } from './storage.ts'
 
@@ -19,6 +19,9 @@ function deps(overrides: Partial<AccountDeps> = {}) {
     resetProfile: async (userId) => {
       done.push(`profile of ${userId} reset`)
     },
+    cancelSubscription: async (userId) => {
+      done.push(`subscription of ${userId} canceled`)
+    },
     deleteUser: async (userId) => {
       done.push(`account ${userId}`)
     },
@@ -36,21 +39,22 @@ function post(body: unknown, token = 'good-token'): Request {
 }
 
 describe('account-delete', () => {
-  it('wipes the files, then every table children first, then resets the profile; AI usage stays', async () => {
+  it('wipes the files, then every table children first, then resets the profile; AI usage and subscriptions stay', async () => {
     const { make, done } = deps()
     const response = await handleAccountRequest(make)(post({ mode: 'data', confirm: 'DELETE' }))
     expect(response.status).toBe(200)
     expect(AccountDeleteResponseSchema.parse(await response.json())).toEqual({ deleted: 'data', files: 3 })
     expect(done).toEqual(['files of student-1', ...WIPED_TABLES.map((table) => `${table} of student-1`), 'profile of student-1 reset'])
     expect(WIPED_TABLES).not.toContain('ai_usage')
-    expect(WIPED_TABLES).toHaveLength(USER_TABLES.length - 1)
+    expect(WIPED_TABLES).not.toContain('subscriptions')
+    expect(WIPED_TABLES).toHaveLength(USER_TABLES.length - KEPT_BY_WIPE.length)
   })
 
-  it('deletes the files, then the account (the rows go with it)', async () => {
+  it('deletes the files, cancels active billing, then deletes the account (the rows go with it)', async () => {
     const { make, done } = deps()
     const response = await handleAccountRequest(make)(post({ mode: 'account', confirm: 'DELETE' }))
     expect(AccountDeleteResponseSchema.parse(await response.json())).toEqual({ deleted: 'account', files: 3 })
-    expect(done).toEqual(['files of student-1', 'account student-1'])
+    expect(done).toEqual(['files of student-1', 'subscription of student-1 canceled', 'account student-1'])
   })
 
   it('needs a sign-in and the typed confirmation, and deletes nothing without them', async () => {

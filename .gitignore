@@ -28,6 +28,11 @@ supabase/.branches
 # Deno lock files (made by `deno check`; Supabase's Edge Runtime may not read newer ones)
 supabase/functions/**/deno.lock
 
+# Playwright reports and traces
+test-results/
+playwright-report/
+blob-report/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

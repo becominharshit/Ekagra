@@ -1,4 +1,6 @@
 import { createBrowserRouter, Navigate } from 'react-router'
+import { RootLayout } from '@/components/ConsentBanner'
+import { RouteErrorFallback } from '@/components/ErrorBoundary'
 import { AppShell } from '@/components/layout/AppShell'
 import { PageLoading } from '@/components/layout/PageLoading'
 import { RequireAuth } from '@/features/auth/RequireAuth'
@@ -16,7 +18,13 @@ export const router = createBrowserRouter([
   {
     // Shown while the first page's code downloads.
     HydrateFallback: PageLoading,
+    element: <RootLayout />,
+    errorElement: <RouteErrorFallback />,
     children: [
+      {
+        path: '/',
+        lazy: async () => ({ Component: (await import('@/pages/SignInPage')).HomeGate }),
+      },
       {
         path: '/sign-in',
         lazy: async () => ({ Component: (await import('@/pages/SignInPage')).SignInPage }),
@@ -30,6 +38,14 @@ export const router = createBrowserRouter([
         lazy: async () => ({ Component: (await import('@/pages/PrivacyPage')).PrivacyPage }),
       },
       {
+        path: '/terms',
+        lazy: async () => ({ Component: (await import('@/pages/TermsPage')).TermsPage }),
+      },
+      {
+        path: '/pricing',
+        lazy: async () => ({ Component: (await import('@/pages/PricingPage')).PricingPage }),
+      },
+      {
         element: <RequireAuth />,
         children: [
           {
@@ -37,10 +53,9 @@ export const router = createBrowserRouter([
             lazy: async () => ({ Component: (await import('@/pages/OnboardingPage')).OnboardingPage }),
           },
           {
-            path: '/',
             element: <AppShell />,
+            errorElement: <RouteErrorFallback />,
             children: [
-              { index: true, element: <Navigate to="/today" replace /> },
               {
                 path: 'today',
                 lazy: async () => ({ Component: (await import('@/pages/TodayPage')).TodayPage }),

@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { useCurriculum } from './curriculum'
 import { createSubject, updateSubject, useAcademicsMutation, type Subject } from './subjects'
 
 interface SubjectDialogProps {
@@ -40,6 +41,7 @@ export function SubjectDialog({ open, onOpenChange, subject, onSaved }: SubjectD
 }
 
 function SubjectForm({ subject, onDone }: { subject: Subject | null; onDone: (subject: Subject) => void }) {
+  const curriculum = useCurriculum()
   const [name, setName] = useState(subject?.name ?? '')
   const [code, setCode] = useState(subject?.code ?? '')
   const [examDate, setExamDate] = useState(subject?.exam_date ?? '')
@@ -85,8 +87,10 @@ function SubjectForm({ subject, onDone }: { subject: Subject | null; onDone: (su
           <Input id="subject-exam" type="date" value={examDate} onChange={(e) => setExamDate(e.target.value)} />
         </div>
       </div>
-      <div className="grid max-w-40 gap-2">
-        <Label htmlFor="subject-credits">Credits (for SGPA)</Label>
+      <div className="grid max-w-44 gap-2">
+        <Label htmlFor="subject-credits">
+          {curriculum.creditsLabel} (for {curriculum.termLabel})
+        </Label>
         <Input id="subject-credits" type="number" inputMode="decimal" min={0.5} max={30} step="0.5" placeholder="e.g. 4" value={credits} onChange={(e) => setCredits(e.target.value)} />
       </div>
       {(problem || save.error) && (

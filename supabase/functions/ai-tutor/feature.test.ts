@@ -1,7 +1,9 @@
+import { APICallError } from 'ai'
+import { MockLanguageModelV4 } from 'ai/test'
 import { describe, expect, it } from 'vitest'
 import { handleAiRequest, type ServerDeps } from '../_shared/http.ts'
 import { fakeModel, memoryUsage, modelAnswer, TEST_SECRETS } from '../_shared/testing.ts'
-import { tutorFeature } from './feature.ts'
+import { handleTutorRequest, tutorFeature } from './feature.ts'
 
 const PAGE = {
   pageText: 'BCNF: for every functional dependency X → Y, X is a superkey.',
@@ -10,9 +12,18 @@ const PAGE = {
   subjectName: 'DBMS',
 }
 const CARDS = [{ front: 'What is BCNF?', back: 'Every determinant is a superkey.' }]
+const CITATIONS = [{ label: 'p. 42', pageNumber: 42, timestampSec: null, quote: 'X is a superkey' }]
 
 async function call(body: unknown) {
-  const model = fakeModel(modelAnswer(JSON.stringify({ answerMd: 'BCNF means **every** determinant is a superkey [p. 42].', flashcards: CARDS })))
+  const model = fakeModel(
+    modelAnswer(
+      JSON.stringify({
+        answerMd: 'BCNF means **every** determinant is a superkey [p. 42].',
+        flashcards: CARDS,
+        citations: CITATIONS,
+      }),
+    ),
+  )
   const usage = memoryUsage()
   const deps = (): ServerDeps => ({ env: TEST_SECRETS, authenticate: async () => 'student-1', usage, model: () => model })
   const response = await handleAiRequest(tutorFeature, deps)(new Request('http://localhost/ai-tutor', { method: 'POST', body: JSON.stringify(body) }))
@@ -26,8 +37,9 @@ describe('ai-tutor', () => {
     expect(await response.json()).toEqual({
       answerMd: 'BCNF means **every** determinant is a superkey [p. 42].',
       flashcards: [], // only the flashcards action keeps cards
+      citations: CITATIONS,
       model: 'claude-fast-test',
-      promptVersion: 'tutor-v1',
+      promptVersion: 'tutor-v2',
     })
     expect(usage.logged[0]).toMatchObject({ feature: 'anchor', model: 'claude-fast-test' })
     const prompt = JSON.stringify(model.doGenerateCalls[0]?.prompt)
@@ -53,5 +65,64 @@ describe('ai-tutor', () => {
   it('needs a question to ask, and selected text for the other actions', async () => {
     expect((await call({ ...PAGE, action: 'ask' })).response.status).toBe(400)
     expect((await call({ ...PAGE, action: 'explain', selectedText: '  ' })).response.status).toBe(400)
+  })
+
+  it('streams progressive deltas and grounded citations over SSE', async () => {
+    const model = fakeModel(
+      modelAnswer(
+        JSON.stringify({
+          answerMd: 'BCNF guarantees lossless decomposition [p. 42].',
+          flashcards: [],
+          citations: CITATIONS,
+        }),
+      ),
+    )
+    const usage = memoryUsage()
+    const handler = handleTutorRequest(() => ({
+      env: TEST_SECRETS,
+      authenticate: async () => 'student-1',
+      usage,
+      model: () => model,
+    }))
+
+    const response = await handler(
+      new Request('http://localhost/ai-tutor', {
+        method: 'POST',
+        headers: { Accept: 'text/event-stream' },
+        body: JSON.stringify({ ...PAGE, action: 'explain', selectedText: 'X is a superkey' }),
+      }),
+    )
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('content-type')).toContain('text/event-stream')
+    const raw = await response.text()
+    expect(raw).toContain('event: status')
+    expect(raw).toContain('event: delta')
+    expect(raw).toContain('event: done')
+    expect(raw).toContain('"citations":[{"label":"p. 42"')
+    expect(usage.logged).toHaveLength(1)
+  })
+
+  it('returns 429 JSON before starting SSE when user daily quota is exceeded', async () => {
+    const model = new MockLanguageModelV4({
+      doStream: async () => {
+        throw new APICallError({ message: 'should not run', url: 'https://x', requestBodyValues: {}, statusCode: 500 })
+      },
+    })
+    const handler = handleTutorRequest(() => ({
+      env: TEST_SECRETS,
+      authenticate: async () => 'student-1',
+      usage: memoryUsage({ requests: 25 }),
+      model: () => model,
+    }))
+    const response = await handler(
+      new Request('http://localhost/ai-tutor', {
+        method: 'POST',
+        headers: { Accept: 'text/event-stream' },
+        body: JSON.stringify({ ...PAGE, action: 'explain', selectedText: 'X is a superkey' }),
+      }),
+    )
+    expect(response.status).toBe(429)
+    expect(await response.json()).toMatchObject({ code: 'daily_limit' })
   })
 })

@@ -26,7 +26,7 @@ export interface HustleTemplate {
   type: HustleType
   label: string
   description: string
-  /** Shown as the goal's placeholder, e.g. "First ₹10,000 by January". */
+  /** Shown as the goal's placeholder, e.g. "First 1,000 earned by January". */
   goalExample: string
   /** Asked when starting; the answer fills "{skill}". Null = not asked. */
   skillQuestion: string | null
@@ -48,7 +48,7 @@ export const TEMPLATES: Record<HustleType, HustleTemplate> = {
     type: 'freelancing',
     label: 'Freelancing',
     description: 'Sell a skill to clients: design, editing, writing, coding…',
-    goalExample: 'First ₹10,000 by January',
+    goalExample: 'First 1,000 earned by January',
     skillQuestion: 'Which skill will you sell?',
     skillExample: 'Logo design',
     phases: [
@@ -138,9 +138,9 @@ export const TEMPLATES: Record<HustleType, HustleTemplate> = {
     type: 'parttime',
     label: 'Part-time / tutoring',
     description: 'Teach or work a few hours a week for steady money.',
-    goalExample: '₹5,000 a month by December',
+    goalExample: '500/month by December',
     skillQuestion: 'What will you teach or do?',
-    skillExample: 'Class 10 maths',
+    skillExample: 'Calculus & linear algebra',
     phases: [
       { title: 'Define the offer', steps: [{ title: 'Pick exactly what you will teach or do, and for whom' }, { title: 'Write what a student gets from you' }] },
       { title: 'Pricing', steps: [{ title: 'Check what others nearby charge' }, { title: 'Set a price per session and a monthly package' }] },
@@ -161,7 +161,7 @@ export const TEMPLATES: Record<HustleType, HustleTemplate> = {
     type: 'custom',
     label: 'Custom',
     description: 'Your own idea. Describe it and the AI plans the phases.',
-    goalExample: 'First ₹2,000 by February',
+    goalExample: 'First 5 sales by February',
     skillQuestion: 'Which skill does it need most?',
     skillExample: 'Photography',
     phases: [
@@ -169,7 +169,7 @@ export const TEMPLATES: Record<HustleType, HustleTemplate> = {
       { title: 'Learn what you need', steps: [{ title: 'List the skills you need' }, { title: `Learn ${SKILL}`, skill: SKILL }] },
       { title: 'Prepare', steps: [{ title: 'List everything you need to start' }, { title: 'Get the first thing ready' }] },
       { title: 'Start', steps: [{ title: 'Do the first real piece of work' }, { title: 'Show it to someone and ask for feedback' }] },
-      { title: 'First results', steps: [{ title: 'Reach your first small result: first rupee, user or post' }] },
+      { title: 'First results', steps: [{ title: 'Reach your first small milestone: first sale, user or post' }] },
       { title: 'Improve and grow', steps: [{ title: 'Each week, write down what worked' }, { title: 'Do more of what worked' }] },
     ],
     itemKind: 'other',

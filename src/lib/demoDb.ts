@@ -1,4 +1,5 @@
 import { DEMO_USER } from '@/features/auth/demo'
+import { syncQueue } from './syncQueue'
 import type { Database } from '@/types/database'
 
 // Demo Mode's database: the same tables and rows as Supabase, kept in this browser's localStorage
@@ -172,6 +173,7 @@ const DEFAULTS: { [T in DemoTable]: (now: Date) => Partial<DemoRow<T>> } = {
     why_wrong: null,
     correct_approach: null,
     status: 'open',
+    fsrs: {},
     ladder_step: 0,
     correct_count: 0,
     last_correct_on: null,
@@ -441,10 +443,20 @@ function write(table: DemoTable, rows: AnyRow[]): void {
   }
 }
 
-function newRow(table: DemoTable, values: Record<string, unknown>, now: Date): AnyRow {
+function newRow(table: DemoTable, values: Record<string, unknown>, now: Date, userId = DEMO_USER.id): AnyRow {
   const timestamp = now.toISOString()
   const id = typeof values.id === 'string' ? values.id : crypto.randomUUID()
-  return { ...DEFAULTS[table](now), created_at: timestamp, updated_at: timestamp, ...values, id, user_id: DEMO_USER.id }
+  return { ...DEFAULTS[table](now), created_at: timestamp, updated_at: timestamp, ...values, id, user_id: userId }
+}
+
+/** Materializes a row with table defaults, UUID id, timestamps, and user_id for offline writes. */
+export function materializeRow<T extends DemoTable>(
+  table: T,
+  values: Record<string, unknown>,
+  userId: string,
+  now = new Date(),
+): DemoRow<T> {
+  return newRow(table, values, now, userId) as unknown as DemoRow<T>
 }
 
 function removeRows(table: DemoTable, ids: Set<string>): void {
@@ -478,6 +490,16 @@ export const demoDb = {
     const now = new Date()
     const added = values.map((value) => newRow(table, value, now))
     write(table, [...read(table), ...added])
+    for (const row of added) {
+      void syncQueue.enqueue({
+        scope: 'demo',
+        table,
+        op: 'insert',
+        recordId: row.id,
+        rows: [row],
+        updatedAt: String(row.updated_at),
+      })
+    }
     return added as unknown as DemoRow<T>[]
   },
 
@@ -490,12 +512,30 @@ export const demoDb = {
     const updated: AnyRow = { ...current, ...patch, id: current.id, user_id: current.user_id, updated_at: new Date().toISOString() }
     rows[index] = updated
     write(table, rows)
+    void syncQueue.enqueue({
+      scope: 'demo',
+      table,
+      op: 'update',
+      recordId: id,
+      patch: patch as Record<string, unknown>,
+      updatedAt: String(updated.updated_at),
+    })
     return updated as unknown as DemoRow<T>
   },
 
   /** Deletes rows, and deletes or unlinks the rows that point at them (like the foreign keys). */
   remove(table: DemoTable, ids: string[]): void {
     removeRows(table, new Set(ids))
+    const now = new Date().toISOString()
+    for (const id of ids) {
+      void syncQueue.enqueue({
+        scope: 'demo',
+        table,
+        op: 'delete',
+        recordId: id,
+        updatedAt: now,
+      })
+    }
   },
 
   /** Deletes every Demo Mode table on this device. */
@@ -507,5 +547,6 @@ export const demoDb = {
         // Storage is blocked: nothing is saved to clear.
       }
     }
+    void syncQueue.clearScope('demo')
   },
 }

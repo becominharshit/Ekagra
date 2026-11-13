@@ -1,12 +1,13 @@
 import { useQuery } from '@tanstack/react-query'
 import { startOfMonth } from 'date-fns'
+import { DEFAULT_ENTITLEMENTS, type PlanEntitlement, type PlanTier } from '@shared/billing.ts'
 import { AiUsageResponseSchema, DEFAULT_AI_LIMITS, type AiUsageResponse } from '@shared/schemas.ts'
 import { dbError, need, useDataSource, type DataSource } from '@/lib/dataSource'
 import { callAiFunction, type AiFunction } from './aiClient'
 
 // The AI usage dashboard (Me → AI usage): the student's own requests, read from ai_usage (RLS lets
-// students read their own rows), next to the limits and the whole app's spending, which come from
-// the ai-usage Edge Function. Demo Mode makes its sample answers on the device: nothing is counted.
+// students read their own rows), next to the active plan entitlements & token counters from ai-usage.
+// Demo Mode makes its sample answers on the device: nothing is counted.
 
 /** The AI Edge Functions, and the names each one saves in ai_usage.feature. */
 export const AI_FUNCTIONS: { name: AiFunction; label: string; features: string[] }[] = [
@@ -65,7 +66,7 @@ export function summarizeUsage(rows: UsageRow[], { now, monthStart, dailyLimit }
   for (const row of rows) {
     const at = Date.parse(row.created_at)
     const cost = Number(row.cost_usd) || 0
-    const usage = functionOf.get(row.feature) // a feature the app doesn't know yet only counts in the totals
+    const usage = functionOf.get(row.feature)
     if (at >= dayStart) {
       lastDay.push(at)
       if (usage) usage.day += 1
@@ -79,7 +80,6 @@ export function summarizeUsage(rows: UsageRow[], { now, monthStart, dailyLimit }
       }
     }
   }
-  // The oldest requests leave the 24 hours one by one; one more is allowed once fewer than the limit are left.
   lastDay.sort((a, b) => a - b)
   const freesUp = lastDay.length >= dailyLimit ? lastDay[lastDay.length - dailyLimit] : undefined
   return { day: lastDay.length, month, monthUsd, byFunction, nextFreeAt: freesUp === undefined ? null : new Date(freesUp + DAY_MS) }
@@ -97,7 +97,6 @@ const MAX_PAGES = 10
 
 type SignedIn = Extract<DataSource, { kind: 'supabase' }>
 
-/** The student's own ai_usage rows since then, a page at a time (150 a day is at most ~4,700 a month). */
 async function listUsageRows(source: SignedIn, since: Date): Promise<UsageRow[]> {
   const rows: UsageRow[] = []
   for (let page = 0; page < MAX_PAGES; page++) {
@@ -121,19 +120,19 @@ export type AiUsageView =
   | {
       kind: 'signed_in'
       monthStart: Date
+      tier: PlanTier
+      entitlement: PlanEntitlement
+      tokensThisMonth: number
       limits: AiUsageResponse['limits']
       summary: UsageSummary
-      /** The whole app's spending; null when the ai-usage function couldn't be reached. */
       app: AiUsageResponse['app'] | null
       aiConfigured: boolean | null
-      /** Why the limits and the app's spending are missing (then the default limits are shown). */
       serverError: string | null
     }
 
 export async function loadAiUsage(source: DataSource, now = new Date()): Promise<AiUsageView> {
   if (source.kind === 'demo') return { kind: 'demo' }
   const monthStart = startOfMonth(now)
-  // The last 24 hours can reach back into last month (on the 1st).
   const since = new Date(Math.min(monthStart.getTime(), now.getTime() - DAY_MS))
   const [rows, server] = await Promise.all([
     listUsageRows(source, since),
@@ -142,10 +141,18 @@ export async function loadAiUsage(source: DataSource, now = new Date()): Promise
       (error: unknown) => ({ answer: null, error: error instanceof Error ? error.message : 'The server did not answer.' }),
     ),
   ])
-  const limits = server.answer?.limits ?? { ...DEFAULT_AI_LIMITS, dailyBudgetUsd: DEFAULT_AI_LIMITS.monthlyBudgetUsd / 30 }
+  const entitlement: PlanEntitlement = server.answer?.entitlement ?? DEFAULT_ENTITLEMENTS.free
+  const limits: AiUsageResponse['limits'] = server.answer?.limits ?? {
+    userDailyRequests: entitlement.dailyAiRequests,
+    monthlyAiTokens: entitlement.monthlyAiTokens,
+    monthlyBudgetUsd: DEFAULT_AI_LIMITS.monthlyBudgetUsd,
+  }
   return {
     kind: 'signed_in',
     monthStart,
+    tier: server.answer?.tier ?? 'free',
+    entitlement,
+    tokensThisMonth: server.answer?.user.tokensThisMonth ?? 0,
     limits,
     summary: summarizeUsage(rows, { now, monthStart, dailyLimit: limits.userDailyRequests }),
     app: server.answer?.app ?? null,

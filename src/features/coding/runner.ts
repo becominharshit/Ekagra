@@ -1,103 +1,200 @@
 import { useCallback, useState } from 'react'
+import type { JsWorkerMessage } from './jsRuntime'
+import { LANGUAGE_SPECS, type CodingLanguage } from './languages'
 import type { RunRequest, RunResult, WorkerMessage } from './python'
+import type { SqlWorkerMessage } from './sql'
 
-// The app's side of the Python worker. There is one worker for the whole app, so Python loads
-// once and then stays ready. A run that takes longer than 10 seconds (an endless loop?) is
-// stopped by ending the worker; the next run starts a new one (Python then comes from the cache).
+// Web Worker manager for the Coding Lab. Keeps one persistent worker per runtime family
+// (Python/Pyodide, JS/TS, SQL/PGlite). Any run exceeding 10 seconds terminates its worker
+// cleanly to stop infinite loops; the next run respawns the worker cleanly from cache.
 
 export type RunnerStatus = 'idle' | 'loading' | 'running'
 
 export const RUN_LIMIT_SECONDS = 10
-const LOAD_LIMIT_MS = 3 * 60_000
-const LOAD_FAILED = "Couldn't download Python. The first run needs the internet (about 13 MB); after that it works offline."
+const PYODIDE_LOAD_LIMIT_MS = 60_000
+const LOCAL_RUNTIME_LOAD_LIMIT_MS = 30_000
+const PYODIDE_LOAD_FAILED =
+  "Couldn't download Python. The first run needs the internet (about 13 MB); after that it works offline."
+const LOCAL_LOAD_FAILED = "Couldn't start the sandboxed runtime on this device. Please try again."
 
-let worker: Worker | null = null
-let ready: Promise<void> | null = null
-let loading: { reject: (error: Error) => void; timer: number } | null = null
-let pending: { id: number; resolve: (result: RunResult) => void; timer: number } | null = null
-let nextId = 1
+type RuntimeKind = 'python' | 'js' | 'sql'
+type AnyWorkerMessage = WorkerMessage | JsWorkerMessage | SqlWorkerMessage
 
-/** Ends the worker. Loading fails with `message`; a run in progress ends with it as its error. */
-function endWorker(message: string): void {
-  worker?.terminate()
-  worker = null
-  ready = null
-  if (loading) {
-    window.clearTimeout(loading.timer)
-    loading.reject(new Error(message))
-    loading = null
+interface RuntimeSlot {
+  worker: Worker | null
+  ready: Promise<void> | null
+  loading: { reject: (error: Error) => void; timer: number } | null
+  pending: { id: number; resolve: (result: RunResult) => void; timer: number } | null
+  nextId: number
+}
+
+function createSlot(): RuntimeSlot {
+  return { worker: null, ready: null, loading: null, pending: null, nextId: 1 }
+}
+
+const slots: Record<RuntimeKind, RuntimeSlot> = {
+  python: createSlot(),
+  js: createSlot(),
+  sql: createSlot(),
+}
+
+function runtimeFor(language: CodingLanguage): RuntimeKind {
+  if (language === 'javascript' || language === 'typescript') return 'js'
+  if (language === 'sql') return 'sql'
+  return 'python'
+}
+
+function endSlot(kind: RuntimeKind, message: string): void {
+  const slot = slots[kind]
+  slot.worker?.terminate()
+  slot.worker = null
+  slot.ready = null
+  if (slot.loading) {
+    window.clearTimeout(slot.loading.timer)
+    slot.loading.reject(new Error(message))
+    slot.loading = null
   }
-  if (pending) {
-    window.clearTimeout(pending.timer)
-    pending.resolve({ output: '', error: message, tests: [], durationMs: 0 })
-    pending = null
+  if (slot.pending) {
+    window.clearTimeout(slot.pending.timer)
+    slot.pending.resolve({ output: '', error: message, tests: [], durationMs: 0 })
+    slot.pending = null
   }
 }
 
-function startWorker(): Promise<void> {
-  if (ready) return ready
-  const created = new Worker(new URL('./python.worker.ts', import.meta.url), { type: 'module' })
-  worker = created
-  ready = new Promise<void>((resolve, reject) => {
-    loading = { reject, timer: window.setTimeout(() => endWorker(LOAD_FAILED), LOAD_LIMIT_MS) }
-    created.addEventListener('message', (event: MessageEvent<WorkerMessage>) => {
-      if (worker !== created) return
+function spawnWorker(kind: RuntimeKind): Worker {
+  if (kind === 'js') return new Worker(new URL('./js.worker.ts', import.meta.url), { type: 'module' })
+  if (kind === 'sql') return new Worker(new URL('./sql.worker.ts', import.meta.url), { type: 'module' })
+  return new Worker(new URL('./python.worker.ts', import.meta.url), { type: 'module' })
+}
+
+function startSlot(kind: RuntimeKind): Promise<void> {
+  const slot = slots[kind]
+  if (slot.ready) return slot.ready
+
+  const loadFailedMsg = kind === 'python' ? PYODIDE_LOAD_FAILED : LOCAL_LOAD_FAILED
+  const loadLimitMs = kind === 'python' ? PYODIDE_LOAD_LIMIT_MS : LOCAL_RUNTIME_LOAD_LIMIT_MS
+  const created = spawnWorker(kind)
+  slot.worker = created
+
+  slot.ready = new Promise<void>((resolve, reject) => {
+    slot.loading = { reject, timer: window.setTimeout(() => endSlot(kind, loadFailedMsg), loadLimitMs) }
+
+    created.addEventListener('message', (event: MessageEvent<AnyWorkerMessage>) => {
+      if (slot.worker !== created) return
       const message = event.data
       if (message.type === 'ready') {
-        if (loading) window.clearTimeout(loading.timer)
-        loading = null
+        if (slot.loading) window.clearTimeout(slot.loading.timer)
+        slot.loading = null
         resolve()
       } else if (message.type === 'load-error') {
-        endWorker(LOAD_FAILED)
-      } else if (pending?.id === message.id) {
-        window.clearTimeout(pending.timer)
-        pending.resolve(message.result)
-        pending = null
+        endSlot(kind, loadFailedMsg)
+      } else if (slot.pending?.id === message.id) {
+        window.clearTimeout(slot.pending.timer)
+        slot.pending.resolve(message.result)
+        slot.pending = null
       }
     })
+
     created.addEventListener('error', () => {
-      if (worker === created) endWorker(loading ? LOAD_FAILED : 'Python stopped unexpectedly. Please run it again.')
+      if (slot.worker === created) {
+        endSlot(kind, slot.loading ? loadFailedMsg : 'Runtime stopped unexpectedly. Please run it again.')
+      }
     })
   })
-  return ready
+
+  return slot.ready
+}
+
+export function runtimeReady(language: CodingLanguage): boolean {
+  const slot = slots[runtimeFor(language)]
+  return slot.ready !== null && slot.loading === null
 }
 
 /** True once Python has loaded (runs start right away). */
 export function pythonReady(): boolean {
-  return ready !== null && loading === null
+  return runtimeReady('python')
 }
 
-/** Runs code in the worker, loading Python first if needed. Throws if Python can't be loaded. */
-export async function runPython(request: RunRequest, onRunning?: () => void): Promise<RunResult> {
-  if (pending) return { output: '', error: 'Python is still running the last program.', tests: [], durationMs: 0 }
-  await startWorker()
+/** Runs code in the isolated worker for the given language. */
+export async function runCode(
+  language: CodingLanguage,
+  request: RunRequest,
+  onRunning?: () => void,
+): Promise<RunResult> {
+  const kind = runtimeFor(language)
+  const slot = slots[kind]
+  if (slot.pending) {
+    return {
+      output: '',
+      error: `${LANGUAGE_SPECS[language].label} is still running the last program.`,
+      tests: [],
+      durationMs: 0,
+    }
+  }
+
+  await startSlot(kind)
   onRunning?.()
+
   return new Promise<RunResult>((resolve) => {
-    const id = nextId++
+    const id = slot.nextId++
     const timer = window.setTimeout(
-      () => endWorker(`Stopped after ${RUN_LIMIT_SECONDS} seconds. Is there an endless loop?`),
+      () => endSlot(kind, `Stopped after ${RUN_LIMIT_SECONDS} seconds. Is there an endless loop?`),
       RUN_LIMIT_SECONDS * 1000,
     )
-    pending = { id, resolve, timer }
-    worker?.postMessage({ id, ...request })
+    slot.pending = { id, resolve, timer }
+    if (kind === 'js') {
+      slot.worker?.postMessage({ id, language, ...request })
+    } else {
+      slot.worker?.postMessage({ id, ...request })
+    }
   })
+}
+
+/** Stops the running or loading worker for the given language (or all runtimes if omitted). */
+export function stopCode(language?: CodingLanguage): void {
+  if (language) {
+    endSlot(runtimeFor(language), 'Stopped.')
+    return
+  }
+  endSlot('python', 'Stopped.')
+  endSlot('js', 'Stopped.')
+  endSlot('sql', 'Stopped.')
+}
+
+/** Runs code in the Python worker, loading Pyodide first if needed. */
+export function runPython(request: RunRequest, onRunning?: () => void): Promise<RunResult> {
+  return runCode('python', request, onRunning)
 }
 
 /** Stops the program that is running, or Python that is still loading. */
 export function stopPython(): void {
-  endWorker('Stopped.')
+  stopCode('python')
 }
 
-/** For screens: run, stop, and whether Python is loading or running. */
-export function usePythonRunner() {
+/** Multi-language Coding Lab runner hook with status and safe termination. */
+export function useCodeRunner(language: CodingLanguage) {
   const [status, setStatus] = useState<RunnerStatus>('idle')
-  const run = useCallback(async (request: RunRequest): Promise<RunResult> => {
-    setStatus(pythonReady() ? 'running' : 'loading')
-    try {
-      return await runPython(request, () => setStatus('running'))
-    } finally {
-      setStatus('idle')
-    }
-  }, [])
-  return { status, run, stop: stopPython }
+
+  const run = useCallback(
+    async (request: RunRequest): Promise<RunResult> => {
+      setStatus(runtimeReady(language) ? 'running' : 'loading')
+      try {
+        return await runCode(language, request, () => setStatus('running'))
+      } finally {
+        setStatus('idle')
+      }
+    },
+    [language],
+  )
+
+  const stop = useCallback(() => {
+    stopCode(language)
+  }, [language])
+
+  return { status, run, stop }
+}
+
+/** For Python-only callers: run, stop, and whether Python is loading or running. */
+export function usePythonRunner() {
+  return useCodeRunner('python')
 }

@@ -2,7 +2,7 @@ import type { AnchorAction, TutorRequest } from '../schemas.ts'
 
 // Prompt for ai-tutor (Fast tier): 1-click AI Anchors and "Ask about this page".
 // Change the version when the wording changes.
-export const TUTOR_PROMPT_VERSION = 'tutor-v1'
+export const TUTOR_PROMPT_VERSION = 'tutor-v2'
 
 const TASKS: Record<AnchorAction, string> = {
   explain: 'Explain the selected text so the student really understands it. Use the page for context. Add a short analogy if it helps.',
@@ -24,7 +24,7 @@ export function tutorInstructions(request: TutorRequest): string {
   return [
     `You are a patient university tutor. A student${student.length > 0 ? ` ${student.join(' ')}` : ''} is reading page ${request.pageNumber} of their course material.`,
     TASKS[request.action],
-    `Write Markdown: short paragraphs, lists, **bold** for key terms. When you use the page, cite it as [p. ${request.pageNumber}]. Never invent links.`,
+    `Write Markdown: short paragraphs, lists, **bold** for key terms. When you use the page, cite it inline as [p. ${request.pageNumber}]. Populate citations with exact pageNumber (${request.pageNumber}), label ("p. ${request.pageNumber}"), timestampSec (null), and a short supporting quote from the page ([] if answered only from general knowledge). Never invent links.`,
     TONES[request.mentorTone ?? 'balanced'],
     request.action === 'flashcards' ? '' : 'Return an empty flashcards list.',
     'Answer only with JSON in the required format.',

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { DEFAULT_ENTITLEMENTS } from '../_shared/billing.ts'
 import { AiUsageResponseSchema } from '../_shared/schemas.ts'
 import { TEST_SECRETS } from '../_shared/testing.ts'
 import { handleUsageRequest, type UsageDeps } from './handler.ts'
@@ -14,14 +15,24 @@ const COSTS = [
 
 function deps(overrides: Partial<UsageDeps> = {}) {
   const spentSince = vi.fn(async (since: Date) => COSTS.filter((cost) => cost.at >= since).reduce((sum, cost) => sum + cost.usd, 0))
+  const userRequestsSince = vi.fn(async () => 4)
+  const userTokensSince = vi.fn(async () => 12_500)
+  const loadBillingState = vi.fn(async () => ({
+    subscription: null,
+    tier: 'free' as const,
+    entitlement: DEFAULT_ENTITLEMENTS.free,
+  }))
   const make = (): UsageDeps => ({
     env: TEST_SECRETS,
     authenticate: async (request) => (request.headers.get('Authorization') === 'Bearer good-token' ? 'student-1' : null),
     spentSince,
+    userRequestsSince,
+    userTokensSince,
+    loadBillingState,
     now: () => NOW,
     ...overrides,
   })
-  return { make, spentSince }
+  return { make, spentSince, userRequestsSince, userTokensSince, loadBillingState }
 }
 
 function post(body?: unknown, token = 'good-token'): Request {
@@ -33,25 +44,53 @@ function post(body?: unknown, token = 'good-token'): Request {
 }
 
 describe('ai-usage', () => {
-  it("returns the limits and what the whole app spent in the last 24 hours and since the student's month began", async () => {
-    const { make, spentSince } = deps()
+  it("returns the active student's tier entitlement, personal counters, and app spend", async () => {
+    const { make, spentSince, userTokensSince } = deps()
     const response = await handleUsageRequest(make)(post({ monthStart: '2026-10-31T18:30:00.000Z' }))
     expect(response.status).toBe(200)
     const body: unknown = await response.json()
     expect(AiUsageResponseSchema.parse(body)).toEqual({
-      limits: { userDailyRequests: 150, monthlyBudgetUsd: 10, dailyBudgetUsd: 10 / 30 },
+      tier: 'free',
+      entitlement: {
+        ...DEFAULT_ENTITLEMENTS.free,
+        codingLabLanguages: [...DEFAULT_ENTITLEMENTS.free.codingLabLanguages],
+      },
+      user: { requestsLast24h: 4, tokensThisMonth: 12_500 },
+      subscription: null,
+      limits: { userDailyRequests: 25, monthlyAiTokens: 250_000, monthlyBudgetUsd: 100 },
       app: { spentLast24hUsd: 0.0025, spentThisMonthUsd: 0.5025 },
+      budgetAlert: false,
       aiConfigured: true,
     })
     expect(spentSince).toHaveBeenCalledWith(new Date('2026-11-19T10:00:00.000Z'))
     expect(spentSince).toHaveBeenCalledWith(new Date('2026-10-31T18:30:00.000Z'), 50)
+    expect(userTokensSince).toHaveBeenCalledWith('student-1', new Date('2026-11-01T00:00:00.000Z'), 50)
   })
 
-  it('uses the limits from the secrets, and works before the AI key is set', async () => {
-    const { make } = deps({ env: { AI_USER_DAILY_REQUESTS: '40', AI_MONTHLY_BUDGET_USD: '25' } })
+  it('returns Pro entitlements and subscription summary when user is subscribed', async () => {
+    const { make } = deps({
+      env: { AI_MONTHLY_BUDGET_USD: '0.25' },
+      loadBillingState: async () => ({
+        subscription: {
+          userId: 'student-1',
+          provider: 'stripe',
+          customerId: 'cus_1',
+          subscriptionId: 'sub_1',
+          planTier: 'pro',
+          status: 'active',
+          currentPeriodEnd: '2026-12-13T00:00:00.000Z',
+          cancelAtPeriodEnd: false,
+        },
+        tier: 'pro',
+        entitlement: DEFAULT_ENTITLEMENTS.pro,
+      }),
+    })
     const body = AiUsageResponseSchema.parse(await (await handleUsageRequest(make)(post({}))).json())
-    expect(body.limits).toEqual({ userDailyRequests: 40, monthlyBudgetUsd: 25, dailyBudgetUsd: 25 / 30 })
+    expect(body.tier).toBe('pro')
+    expect(body.limits).toEqual({ userDailyRequests: 250, monthlyAiTokens: 5_000_000, monthlyBudgetUsd: 0.25 })
+    expect(body.budgetAlert).toBe(true)
     expect(body.aiConfigured).toBe(false)
+    expect(body.subscription?.provider).toBe('stripe')
   })
 
   it("counts from the 1st of the month (UTC) without a month start, or with one that can't be right", async () => {
@@ -66,6 +105,7 @@ describe('ai-usage', () => {
     const { make } = deps({ spentSince: async () => Number.POSITIVE_INFINITY })
     const body = AiUsageResponseSchema.parse(await (await handleUsageRequest(make)(post({}))).json())
     expect(body.app).toEqual({ spentLast24hUsd: null, spentThisMonthUsd: null })
+    expect(body.budgetAlert).toBe(true)
   })
 
   it('turns away requests without a valid sign-in, and bad month starts', async () => {
@@ -82,7 +122,9 @@ describe('ai-usage', () => {
     expect(response.status).toBe(503)
     expect(await response.json()).toMatchObject({ code: 'usage_unavailable' })
 
-    const preflight = await handleUsageRequest(deps().make)(new Request('http://localhost/x', { method: 'OPTIONS' }))
-    expect(preflight.headers.get('Access-Control-Allow-Origin')).toBe('*')
+    const preflight = await handleUsageRequest(deps().make)(
+      new Request('http://localhost/x', { method: 'OPTIONS', headers: { Origin: 'https://ekagra.app' } }),
+    )
+    expect(preflight.headers.get('Access-Control-Allow-Origin')).toBe('https://ekagra.app')
   })
 })

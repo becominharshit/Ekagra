@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { endOfDay } from 'date-fns'
+import { useQuery } from '@tanstack/react-query'
 import { ArrowLeft, Check, Eye, Layers, PartyPopper, Pencil, Plus, RotateCcw, Trash2, X } from 'lucide-react'
 import { Link } from 'react-router'
 import { Markdown } from '@/components/Markdown'
@@ -21,11 +21,12 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useStudy } from '@/features/academics/roadmap'
 import { useAcademicsMutation } from '@/features/academics/subjects'
 import { useFlashcards } from '@/features/flashcards/flashcards'
-import { intervalLabel, type Flashcard } from '@/features/flashcards/fsrs'
-import { dueMistakes, mistakeLabel, RIGHT_ANSWERS_TO_FIX, type Mistake } from '@/features/mistakes/ladder'
+import { GRADE_LABEL, GRADES, intervalLabel, type Flashcard, type Grade } from '@/features/flashcards/fsrs'
+import { dueMistakes, mistakeLabel, previewMistakeIntervals, RIGHT_ANSWERS_TO_FIX, type Mistake } from '@/features/mistakes/ladder'
 import { MistakeDialog } from '@/features/mistakes/MistakeDialog'
 import { deleteMistake, makeCardFromMistake, recordMistakeReview, reopen, useMistakes } from '@/features/mistakes/mistakes'
-import { useNow } from '@/hooks/useNow'
+import { useNow, useTimezone } from '@/hooks/useNow'
+import { dateKeyInTimezone, zonedLocalToIso } from '@/lib/timezone'
 
 /** Where a mistake came from, in words. */
 function origin(mistake: Mistake, cardById: Map<string, Flashcard>): string {
@@ -34,9 +35,12 @@ function origin(mistake: Mistake, cardById: Map<string, Flashcard>): string {
   return 'Added by you'
 }
 
-/** The mistake notebook: today's reviews first, then every mistake (open or fixed). */
+/** The mistake notebook: today's FSRS reviews first, then every mistake (open or fixed). */
 export function MistakesPage() {
   const now = useNow(60_000)
+  const timeZone = useTimezone()
+  const today = dateKeyInTimezone(now, timeZone)
+  const endOfToday = new Date(zonedLocalToIso(today, 23 * 60 + 59, timeZone))
   const mistakes = useMistakes()
   const cards = useFlashcards()
   const study = useStudy()
@@ -48,9 +52,8 @@ export function MistakesPage() {
   const [editing, setEditing] = useState<Mistake | null>(null)
   const [deleting, setDeleting] = useState<Mistake | null>(null)
 
-  const endOfToday = endOfDay(now)
   const all = mistakes.data ?? []
-  const due = dueMistakes(all, endOfToday)
+  const due = dueMistakes(all, endOfToday, now)
   const open = all.filter((mistake) => mistake.status === 'open')
   const fixedCount = all.length - open.length
   const cardById = new Map((cards.data ?? []).map((card) => [card.id, card]))
@@ -68,7 +71,7 @@ export function MistakesPage() {
       </Button>
       <PageHeader
         title="Mistake notebook"
-        subtitle="Mistakes come back after 1, 3 and 7 days. Get one right at each of those 3 reviews and it's fixed."
+        subtitle="Scheduled with FSRS spaced repetition so weak mistakes return right before you forget. Recall well across 3 days to fix one."
       />
 
       <div className="grid gap-4">
@@ -85,20 +88,20 @@ export function MistakesPage() {
         )}
 
         {due[0] ? (
-          <MistakeReview key={due[0].id} mistake={due[0]} left={due.length} />
+          <MistakeReview key={due[0].id} mistake={due[0]} left={due.length} now={now} timeZone={timeZone} />
         ) : (
           mistakes.data && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <PartyPopper className="size-4" aria-hidden />
-                  {all.length === 0 ? 'No mistakes yet' : 'Nothing to review today'}
+                  {all.length === 0 ? 'No mistakes yet' : 'Nothing to review right now'}
                 </CardTitle>
                 <CardDescription>
                   {all.length === 0
                     ? 'Forgotten flashcards and wrong quiz answers land here by themselves. You can add your own too.'
                     : nextReview !== null
-                      ? `The next one comes back in ${intervalLabel(nextReview - now.getTime())}.`
+                      ? `The next one comes back in ${intervalLabel(Math.max(60_000, nextReview - now.getTime()))}.`
                       : 'Every mistake is fixed. Well done.'}
                 </CardDescription>
               </CardHeader>
@@ -206,10 +209,23 @@ export function MistakesPage() {
   )
 }
 
-/** One due mistake: recall the correct approach, check it, then say how it went. */
-function MistakeReview({ mistake, left }: { mistake: Mistake; left: number }) {
+const MISTAKE_GRADE_LABEL: Record<Grade, string> = {
+  1: 'Still wrong',
+  2: GRADE_LABEL[2],
+  3: 'Got it right',
+  4: GRADE_LABEL[4],
+}
+
+/** One due mistake: recall the correct approach, check it, then rate recall using FSRS. */
+function MistakeReview({ mistake, left, now, timeZone }: { mistake: Mistake; left: number; now: Date; timeZone: string }) {
   const review = useAcademicsMutation(recordMistakeReview)
   const [revealed, setRevealed] = useState(false)
+  const schedulerQuery = useQuery({
+    queryKey: ['fsrs-mistake-scheduler'],
+    queryFn: async () => (await import('@/features/flashcards/scheduler')).getScheduler(0.9, false),
+    staleTime: Number.POSITIVE_INFINITY,
+  })
+  const intervals = schedulerQuery.data ? previewMistakeIntervals(mistake, now, schedulerQuery.data) : null
 
   return (
     <Card>
@@ -238,15 +254,26 @@ function MistakeReview({ mistake, left }: { mistake: Mistake; left: number }) {
           </div>
         )}
         {revealed ? (
-          <div className="grid grid-cols-2 gap-2" role="group" aria-label="How did it go?">
-            <Button variant="outline" disabled={review.isPending} onClick={() => review.mutate({ mistake, right: false })}>
-              <X aria-hidden />
-              Still wrong
-            </Button>
-            <Button disabled={review.isPending} onClick={() => review.mutate({ mistake, right: true })}>
-              <Check aria-hidden />
-              Got it right
-            </Button>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="group" aria-label="How well did you recall the fix?">
+            {GRADES.map((grade) => {
+              const hint = intervals ? intervalLabel(intervals[grade]) : '…'
+              return (
+                <Button
+                  key={grade}
+                  variant={grade === 3 ? 'default' : 'outline'}
+                  className="h-auto flex-col gap-0.5 py-2"
+                  disabled={review.isPending}
+                  onClick={() => review.mutate({ mistake, grade, now, timeZone })}
+                >
+                  <span className="inline-flex items-center gap-1 font-medium">
+                    {grade === 1 && <X className="size-3.5" aria-hidden />}
+                    {grade === 3 && <Check className="size-3.5" aria-hidden />}
+                    {MISTAKE_GRADE_LABEL[grade]}
+                  </span>
+                  <span className="text-[11px] opacity-80">{hint}</span>
+                </Button>
+              )
+            })}
           </div>
         ) : (
           <Button onClick={() => setRevealed(true)}>

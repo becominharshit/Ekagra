@@ -3,16 +3,21 @@ import { LoaderCircle, Plus, RotateCcw, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { useSaveSettings } from '@/features/profile/queries'
-import { DEFAULT_GRADE_SCALE, scaleProblems, type GradeStep } from './gpa'
+import { CURRICULUM_LIST, curriculumForProfile, getCurriculumProfile, type CurriculumProfile } from '@/features/academics/curriculum'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { useProfile, useSaveSettings } from '@/features/profile/queries'
+import { scaleProblems, type GradeStep } from './gpa'
 
 type Row = { letter: string; points: string; minPercent: string }
 
 const toRows = (scale: GradeStep[]): Row[] => scale.map((step) => ({ letter: step.letter, points: String(step.points), minPercent: String(step.minPercent) }))
 
 /** The grade scale: letters, grade points and % cut-offs (saved in the settings). */
-export function GradeScaleEditor({ scale }: { scale: GradeStep[] }) {
+export function GradeScaleEditor({ scale, curriculum }: { scale: GradeStep[]; curriculum?: CurriculumProfile }) {
+  const profile = useProfile()
+  const activeCurriculum = curriculum ?? curriculumForProfile(profile.data)
   const save = useSaveSettings()
+  const [selectedCurriculumId, setSelectedCurriculumId] = useState(activeCurriculum.id)
   const [rows, setRows] = useState<Row[]>(() => toRows(scale))
   const [problems, setProblems] = useState<string[]>([])
   const [saved, setSaved] = useState(false)
@@ -22,23 +27,51 @@ export function GradeScaleEditor({ scale }: { scale: GradeStep[] }) {
     setSaved(false)
   }
 
-  function submit(next: Row[]) {
+  function submit(next: Row[], nextCurriculumId = selectedCurriculumId) {
     const steps: GradeStep[] = next.map((row) => ({ letter: row.letter.trim(), points: Number(row.points), minPercent: Number(row.minPercent) }))
     const issues = scaleProblems(steps)
     setProblems(issues)
     if (issues.length > 0) return
-    save.mutate({ grades: { scale: steps } }, { onSuccess: () => setSaved(true) })
+    save.mutate({ grades: { curriculum: nextCurriculumId, scale: steps } }, { onSuccess: () => setSaved(true) })
   }
+
+  function switchCurriculum(nextId: string) {
+    const nextProfile = getCurriculumProfile(nextId)
+    setSelectedCurriculumId(nextProfile.id)
+    const nextRows = toRows(nextProfile.defaultGradeScale)
+    setRows(nextRows)
+    submit(nextRows, nextProfile.id)
+  }
+
+  const chosen = getCurriculumProfile(selectedCurriculumId)
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Grade scale</CardTitle>
+        <CardTitle>Grade scale &amp; curriculum</CardTitle>
         <CardDescription>
-          Letters and grade points from your university, and the lowest total % for each (used to suggest a grade from your marks).
+          Pick your grading system preset or customize letters, grade points, and percentage cut-offs.
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-3">
+        <div className="grid gap-1.5">
+          <label htmlFor="grade-curriculum" className="text-xs font-medium text-muted-foreground">
+            Curriculum profile
+          </label>
+          <Select value={selectedCurriculumId} onValueChange={switchCurriculum}>
+            <SelectTrigger id="grade-curriculum">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {CURRICULUM_LIST.map((item) => (
+                <SelectItem key={item.id} value={item.id}>
+                  {item.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">{chosen.description}</p>
+        </div>
         <div className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 text-xs text-muted-foreground">
           <span>Grade</span>
           <span>Points</span>
@@ -48,7 +81,7 @@ export function GradeScaleEditor({ scale }: { scale: GradeStep[] }) {
         {rows.map((row, index) => (
           <div key={index} className="grid grid-cols-[1fr_1fr_1fr_auto] items-center gap-2">
             <Input aria-label={`Grade ${index + 1}`} maxLength={4} value={row.letter} onChange={(event) => change(index, { letter: event.target.value })} />
-            <Input aria-label={`Points for ${row.letter || `grade ${index + 1}`}`} type="number" inputMode="decimal" min={0} max={10} step="0.5" value={row.points} onChange={(event) => change(index, { points: event.target.value })} />
+            <Input aria-label={`Points for ${row.letter || `grade ${index + 1}`}`} type="number" inputMode="decimal" min={0} max={10} step="0.1" value={row.points} onChange={(event) => change(index, { points: event.target.value })} />
             <Input aria-label={`Lowest % for ${row.letter || `grade ${index + 1}`}`} type="number" inputMode="decimal" min={0} max={100} value={row.minPercent} onChange={(event) => change(index, { minPercent: event.target.value })} />
             <Button variant="ghost" size="icon-sm" aria-label={`Remove ${row.letter || `grade ${index + 1}`}`} onClick={() => setRows(rows.filter((_, at) => at !== index))}>
               <X aria-hidden />
@@ -64,13 +97,13 @@ export function GradeScaleEditor({ scale }: { scale: GradeStep[] }) {
             variant="ghost"
             size="sm"
             onClick={() => {
-              const standard = toRows(DEFAULT_GRADE_SCALE)
+              const standard = toRows(chosen.defaultGradeScale)
               setRows(standard)
-              submit(standard)
+              submit(standard, chosen.id)
             }}
           >
             <RotateCcw aria-hidden />
-            Back to the 10-point scale
+            Reset to {chosen.shortLabel}
           </Button>
         </div>
         {(problems.length > 0 || save.error) && (

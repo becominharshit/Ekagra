@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ChevronDown, ChevronUp, Download, FileText, List, LoaderCircle, PenLine } from 'lucide-react'
+import { CitationChips } from '@/components/CitationChips'
 import { Markdown } from '@/components/Markdown'
 import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { cn } from '@/lib/utils'
+import { extractCitations } from './citations'
 import { exportNotePdf } from './exportNotePdf'
 import { MindMap } from './MindMap'
 import { extractNoteHeadings } from './notes'
@@ -38,7 +40,19 @@ function Paper({ children, className }: { children: ReactNode; className?: strin
   )
 }
 
-export function NoteBody({ kind, title, content }: { kind: string; title: string; content: string }) {
+export function NoteBody({
+  kind,
+  title,
+  content,
+  onCitePage,
+  onCiteTimestamp,
+}: {
+  kind: string
+  title: string
+  content: string
+  onCitePage?: (pageNumber: number) => void
+  onCiteTimestamp?: (seconds: number) => void
+}) {
   const [view, setView] = useState<'typed' | 'handwritten'>('typed')
   const [tocOpen, setTocOpen] = useState(false)
   const [exporting, setExporting] = useState(false)
@@ -74,6 +88,7 @@ export function NoteBody({ kind, title, content }: { kind: string; title: string
   const type = TYPE_NAME[kind] ?? 'notes'
   const label = `${KIND_LABEL[kind] ?? 'Note'} (${view})`
   const headings = extractNoteHeadings(content)
+  const citations = extractCitations(content)
 
   function savePdf() {
     setExporting(true)
@@ -116,6 +131,8 @@ export function NoteBody({ kind, title, content }: { kind: string; title: string
         )}
       </div>
 
+      <CitationChips citations={citations} onCitePage={onCitePage} onCiteTimestamp={onCiteTimestamp} />
+
       {headings.length >= 3 && tocOpen && (
         <nav aria-label="Note sections" className="max-w-3xl rounded-xl border bg-muted/40 p-3 text-sm">
           <p className="mb-2 text-xs font-medium text-muted-foreground">Jump to a section</p>
@@ -138,11 +155,15 @@ export function NoteBody({ kind, title, content }: { kind: string; title: string
 
       {handwritten ? (
         <Paper>
-          <Markdown className={HANDWRITTEN}>{content}</Markdown>
+          <Markdown className={HANDWRITTEN} onCitePage={onCitePage} onCiteTimestamp={onCiteTimestamp}>
+            {content}
+          </Markdown>
         </Paper>
       ) : (
         <article className="max-w-3xl">
-          <Markdown className={READING}>{content}</Markdown>
+          <Markdown className={READING} onCitePage={onCitePage} onCiteTimestamp={onCiteTimestamp}>
+            {content}
+          </Markdown>
         </article>
       )}
 

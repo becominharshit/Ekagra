@@ -2,7 +2,9 @@ import { addDays, format, parseISO } from 'date-fns'
 import { onePerDate, SLEEP_AIM, sleepRegularity } from '@/features/life/health/health'
 import type { MetricValues } from '@/features/metrics/metrics'
 import { DAY_WINDOWS, WINDOW_HOURS, type DayWindow } from '@/features/planner/planner'
+import { addDays as addLocalDays, weekStart as weekStartHelper } from '@/features/planner/time'
 import type { Area, Budget } from '@/features/planner/types'
+import { dateKeyInTimezone, resolveTimezone, timePartsInTimezone, zonedLocalToIso } from '@/lib/timezone'
 
 // The numbers of one week (Monday to Sunday) for the Sunday review: time per area against the
 // budget, plan blocks done, each subject, topics learned, quiz accuracy (also by part of the day,
@@ -15,8 +17,8 @@ export const WINDOW_PHRASE: Record<DayWindow, string> = { morning: 'in the morni
 /** "Make evenings your best focus hours". */
 export const WINDOW_NAME: Record<DayWindow, string> = { morning: 'mornings', afternoon: 'afternoons', evening: 'evenings', night: 'nights' }
 
-export function dayWindowOf(date: Date): DayWindow {
-  const hour = date.getHours()
+export function dayWindowOf(date: Date, timeZone?: string): DayWindow {
+  const hour = timeZone ? timePartsInTimezone(date, resolveTimezone(timeZone)).hour : date.getHours()
   if (hour >= WINDOW_HOURS.morning[0] && hour < WINDOW_HOURS.morning[1]) return 'morning'
   if (hour >= WINDOW_HOURS.afternoon[0] && hour < WINDOW_HOURS.afternoon[1]) return 'afternoon'
   if (hour >= WINDOW_HOURS.evening[0] && hour < WINDOW_HOURS.evening[1]) return 'evening'
@@ -55,6 +57,8 @@ export interface WeekStatsInputs {
   workouts: { date: string }[]
   /** The week's 4 learning metrics (worked out by src/features/metrics), when known. */
   metrics?: MetricValues | null
+  /** Optional user IANA timezone for accurate day-window and date-key boundaries. */
+  timeZone?: string
 }
 
 type Share = { attempts: number; accuracy: number | null }
@@ -141,7 +145,7 @@ function doneMinutes(block: WeekStatsInputs['blocks'][number]): number {
  * focus minutes that day and the answers given that day. One night per morning: what the student
  * typed wins over Health Connect's (as in Life → Sleep & steps).
  */
-export function sleepWeek(inputs: Pick<WeekStatsInputs, 'sleep' | 'focus' | 'attempts'>, firstDay: string, lastDay: string): SleepWeek {
+export function sleepWeek(inputs: Pick<WeekStatsInputs, 'sleep' | 'focus' | 'attempts'>, firstDay: string, lastDay: string, timeZone?: string): SleepWeek {
   const nights = onePerDate(inputs.sleep)
   const windowFirst = format(addDays(parseISO(lastDay), 1 - WINDOW_DAYS), 'yyyy-MM-dd')
   const week = nights.filter((night) => night.date >= firstDay && night.date <= lastDay)
@@ -149,13 +153,13 @@ export function sleepWeek(inputs: Pick<WeekStatsInputs, 'sleep' | 'focus' | 'att
 
   const focusByDay = new Map<string, number>()
   for (const session of inputs.focus) {
-    const day = format(new Date(session.started_at), 'yyyy-MM-dd')
+    const day = timeZone ? dateKeyInTimezone(session.started_at, timeZone) : format(new Date(session.started_at), 'yyyy-MM-dd')
     focusByDay.set(day, (focusByDay.get(day) ?? 0) + (session.actual_minutes ?? 0))
   }
   const answersByDay = new Map<string, { right: number; total: number }>()
   for (const attempt of inputs.attempts) {
     if (attempt.is_correct === null) continue
-    const day = format(new Date(attempt.created_at), 'yyyy-MM-dd')
+    const day = timeZone ? dateKeyInTimezone(attempt.created_at, timeZone) : format(new Date(attempt.created_at), 'yyyy-MM-dd')
     const counts = answersByDay.get(day) ?? { right: 0, total: 0 }
     counts.total += 1
     if (attempt.is_correct) counts.right += 1
@@ -181,10 +185,11 @@ export function sleepWeek(inputs: Pick<WeekStatsInputs, 'sleep' | 'focus' | 'att
 }
 
 export function weekStats(inputs: WeekStatsInputs): WeekStats {
+  const zone = inputs.timeZone ? resolveTimezone(inputs.timeZone) : undefined
   const from = inputs.weekStart.getTime()
   const to = addDays(inputs.weekStart, 7).getTime()
-  const firstDay = format(inputs.weekStart, 'yyyy-MM-dd')
-  const lastDay = format(addDays(inputs.weekStart, 6), 'yyyy-MM-dd')
+  const firstDay = zone ? dateKeyInTimezone(inputs.weekStart, zone) : format(inputs.weekStart, 'yyyy-MM-dd')
+  const lastDay = zone ? addLocalDays(firstDay, 6) : format(addDays(inputs.weekStart, 6), 'yyyy-MM-dd')
   const inWeek = (iso: string | null) => {
     if (!iso) return false
     const at = Date.parse(iso)
@@ -212,7 +217,7 @@ export function weekStats(inputs: WeekStatsInputs): WeekStats {
   for (const attempt of inputs.attempts) {
     const at = Date.parse(attempt.created_at)
     if (attempt.is_correct === null || at < windowFrom || at >= to) continue
-    const window = dayWindowOf(new Date(at))
+    const window = dayWindowOf(new Date(at), zone)
     accuracyByWindow[window].attempts += 1
     if (attempt.is_correct) windowRight[window] += 1
   }
@@ -273,7 +278,7 @@ export function weekStats(inputs: WeekStatsInputs): WeekStats {
         3,
       ).map(({ value, count: times }) => ({ app: value, count: times })),
       topHours: top(
-        distractions.map((event) => new Date(event.at).getHours()),
+        distractions.map((event) => (zone ? timePartsInTimezone(event.at, zone).hour : new Date(event.at).getHours())),
         3,
       ).map(({ value, count: times }) => ({ hour: value, count: times })),
       reasons: top(
@@ -295,7 +300,7 @@ export function weekStats(inputs: WeekStatsInputs): WeekStats {
       minutes: inputs.timeEntries.filter((entry) => inWeek(entry.started_at)).reduce((sum, entry) => sum + entry.minutes, 0),
       income: [...income].map(([currency, amount]) => ({ currency, amount: round(amount, 2) })),
     },
-    sleep: sleepWeek(inputs, firstDay, lastDay),
+    sleep: sleepWeek(inputs, firstDay, lastDay, zone),
     workouts: inputs.workouts.filter((workout) => onWeekDay(workout.date)).length,
     metrics: inputs.metrics ?? null,
   }
@@ -313,7 +318,17 @@ export function readWeekStats(json: unknown): WeekStats | null {
 export const REMINDER_HOUR = 18
 
 /** When the next review reminder should come: the review day at 18:00 (next week's when today's has passed or is done). */
-export function nextReviewAt(now: Date, reviewDay: number, { doneThisWeek = false }: { doneThisWeek?: boolean } = {}): Date {
+export function nextReviewAt(now: Date, reviewDay: number, { doneThisWeek = false, timeZone }: { doneThisWeek?: boolean; timeZone?: string } = {}): Date {
+  if (timeZone) {
+    const zone = resolveTimezone(timeZone)
+    const parts = timePartsInTimezone(now, zone)
+    const daysAhead = (reviewDay - parts.weekday + 7) % 7
+    const candidateDate = addLocalDays(parts.date, daysAhead)
+    const candidate = new Date(zonedLocalToIso(candidateDate, REMINDER_HOUR * 60, zone))
+    return candidate.getTime() <= now.getTime() || (daysAhead === 0 && doneThisWeek)
+      ? new Date(zonedLocalToIso(addLocalDays(candidateDate, 7), REMINDER_HOUR * 60, zone))
+      : candidate
+  }
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), REMINDER_HOUR)
   const daysAhead = (reviewDay - now.getDay() + 7) % 7
   const candidate = addDays(today, daysAhead)
@@ -329,7 +344,15 @@ export function reviewOffset(reviewDay: number): number {
  * The week a review is about (its Monday): the latest week whose review day has come. With the
  * usual Sunday, that's this week on Sunday and last week from Monday to Saturday.
  */
-export function reviewWeekStart(now: Date, reviewDay = 0): Date {
+export function reviewWeekStart(now: Date, reviewDay = 0, timeZone?: string): Date {
+  if (timeZone) {
+    const zone = resolveTimezone(timeZone)
+    const parts = timePartsInTimezone(now, zone)
+    const thisMonday = weekStartHelper(parts.date)
+    const daysIn = (parts.weekday + 6) % 7
+    const targetMonday = daysIn >= reviewOffset(reviewDay) ? thisMonday : addLocalDays(thisMonday, -7)
+    return new Date(zonedLocalToIso(targetMonday, 0, zone))
+  }
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   const thisMonday = addDays(today, -((today.getDay() + 6) % 7))
   const daysIn = Math.round((today.getTime() - thisMonday.getTime()) / 86_400_000)

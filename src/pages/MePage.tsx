@@ -1,12 +1,14 @@
 import { useState } from 'react'
-import { CalendarCheck2, LockKeyhole, LogOut, ShieldCheck, SlidersHorizontal, UserRound, Users } from 'lucide-react'
+import { CalendarCheck2, CreditCard, LockKeyhole, LogOut, ShieldCheck, SlidersHorizontal, UserRound, Users } from 'lucide-react'
 import { Link, useNavigate } from 'react-router'
 import { PageHeader } from '@/components/layout/PageHeader'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { signOut } from '@/features/auth/auth'
 import { AiUsageCard } from '@/features/ai/AiUsageCard'
 import { useAuthStore } from '@/features/auth/authStore'
+import { PLAN_CATALOG, useBilling } from '@/features/billing/billing'
 import { FeedbackCard } from '@/features/feedback/FeedbackCard'
 import { blockedPackages, useBlockedApps } from '@/features/focus/blockedApps'
 import { useProfile, useRoutine } from '@/features/profile/queries'
@@ -25,6 +27,7 @@ export function MePage() {
       <PageHeader title="Me" subtitle="Your profile and settings." />
       <div className="grid gap-4">
         <AccountCard />
+        <PlanAndBillingCard />
         <ReviewCard />
         <FriendsCard />
         <PlanSettingsCard />
@@ -33,6 +36,38 @@ export function MePage() {
         <FeedbackCard />
       </div>
     </>
+  )
+}
+
+/** Active billing plan, entitlements, and upgrade / manage portal link. */
+function PlanAndBillingCard() {
+  const billing = useBilling()
+  const tier = billing.data?.tier ?? 'free'
+  const entry = PLAN_CATALOG[tier]
+  const entitlement = billing.data?.entitlement
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between gap-2">
+          <CardTitle>Plan & Billing</CardTitle>
+          <Badge variant={tier === 'free' ? 'secondary' : 'default'}>{entry.name}</Badge>
+        </div>
+        <CardDescription>
+          {entitlement
+            ? `${entitlement.dailyAiRequests} daily AI requests · ${(entitlement.monthlyAiTokens / 1000).toLocaleString()}k monthly tokens`
+            : entry.tagline}
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Button asChild variant="outline">
+          <Link to="/pricing">
+            <CreditCard aria-hidden />
+            {tier === 'free' ? 'Upgrade to Ekagra Pro' : 'Manage plan & invoices'}
+          </Link>
+        </Button>
+      </CardContent>
+    </Card>
   )
 }
 

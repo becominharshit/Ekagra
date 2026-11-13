@@ -36,13 +36,16 @@ async function insertEntry(source: DataSource, row: Omit<Tables<'time_entries'>,
   if (error) throw dbError(error)
 }
 
-/** Time added by hand. It is dated at noon that day, so it stays on that day in any time zone. */
-export function addManualTime(source: DataSource, { hustleId, fields }: { hustleId: string; fields: ManualTime }): Promise<void> {
+/** Time added by hand. It is dated at noon that day in `timeZone`, so it stays on that day in any time zone. */
+export function addManualTime(
+  source: DataSource,
+  { hustleId, fields, timeZone }: { hustleId: string; fields: ManualTime; timeZone?: string },
+): Promise<void> {
   return insertEntry(source, {
     hustle_id: hustleId,
     client_id: fields.clientId,
     focus_session_id: null,
-    started_at: localToIso(fields.date, 12 * 60),
+    started_at: localToIso(fields.date, 12 * 60, timeZone),
     ended_at: null,
     minutes: Math.round(fields.minutes),
     source: 'manual',

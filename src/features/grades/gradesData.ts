@@ -74,9 +74,9 @@ export interface SemesterInput {
   credits: number
 }
 
-export function semesterProblem({ semester, sgpa, credits }: SemesterInput): string | null {
+export function semesterProblem({ semester, sgpa, credits }: SemesterInput, maxScale = 10, termLabel = 'Term GPA'): string | null {
   if (!Number.isInteger(semester) || semester < 1 || semester > 16) return 'The semester is a whole number from 1 to 16.'
-  if (!Number.isFinite(sgpa) || sgpa < 0 || sgpa > 10) return 'The SGPA goes from 0 to 10.'
+  if (!Number.isFinite(sgpa) || sgpa < 0 || sgpa > maxScale) return `${termLabel} goes from 0 to ${maxScale}.`
   if (!Number.isFinite(credits) || credits <= 0 || credits > 100) return 'Credits go from more than 0 to 100.'
   return null
 }

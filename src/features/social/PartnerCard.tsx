@@ -1,16 +1,17 @@
 import { useState, type FormEvent } from 'react'
-import { format, parseISO } from 'date-fns'
 import { Copy, LoaderCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { useNow } from '@/hooks/useNow'
+import { useNow, useTimezone } from '@/hooks/useNow'
+import { formatShortDateInTimezone } from '@/lib/timezone'
 import { FriendNumbers, StudyingBadge } from './FriendStats'
+import { FriendSafetyActions, SafetyDialog, type SafetyTarget } from './SafetyDialogs'
 import { formatCode, isCode, NUDGE_KINDS, NUDGE_LABEL, nudgesLeft } from './social'
 import { acceptPartnerCode, partnerCode, removePartner, sendNudge, useNudges, usePartners, useSocialMutation } from './socialData'
 
-/** Partners with their shared numbers and nudges, and inviting or joining with a code. */
+/** Partners with their shared numbers and nudges, safety controls, and inviting or joining with a code. */
 export function PartnerCard({ weekStart, demo }: { weekStart: string; demo: boolean }) {
   const now = useNow(60_000)
   const partners = usePartners()
@@ -19,6 +20,7 @@ export function PartnerCard({ weekStart, demo }: { weekStart: string; demo: bool
   const remove = useSocialMutation(removePartner)
   const [sent, setSent] = useState<string | null>(null)
   const [removing, setRemoving] = useState<string | null>(null)
+  const [safetyTarget, setSafetyTarget] = useState<SafetyTarget | null>(null)
   const list = partners.data ?? []
   const problem = partners.error ?? nudge.error ?? remove.error
 
@@ -64,6 +66,12 @@ export function PartnerCard({ weekStart, demo }: { weekStart: string; demo: bool
                         {NUDGE_LABEL[kind]}
                       </Button>
                     ))}
+                    <FriendSafetyActions
+                      userId={friend.userId}
+                      name={friend.name}
+                      contextType="partner"
+                      onSelect={setSafetyTarget}
+                    />
                     {!friend.sample &&
                       (removing === friend.userId ? (
                         <span className="flex items-center gap-1.5 text-sm">
@@ -99,11 +107,17 @@ export function PartnerCard({ weekStart, demo }: { weekStart: string; demo: bool
         )}
         <InvitePanel demo={demo} />
       </CardContent>
+      <SafetyDialog
+        target={safetyTarget}
+        onOpenChange={(open) => !open && setSafetyTarget(null)}
+        onSubmitted={(msg) => setSent(msg)}
+      />
     </Card>
   )
 }
 
 function InvitePanel({ demo }: { demo: boolean }) {
+  const timeZone = useTimezone()
   const code = useSocialMutation((source, fresh: boolean) => partnerCode(source, { fresh }))
   const accept = useSocialMutation(acceptPartnerCode)
   const [typed, setTyped] = useState('')
@@ -142,7 +156,7 @@ function InvitePanel({ demo }: { demo: boolean }) {
             <p className="text-xs text-muted-foreground">
               {demo
                 ? "In Demo Mode this is a sample code: it can't connect anyone. Sign in to invite a friend."
-                : `Send it to your friend. It works once, until ${format(parseISO(code.data.expiresAt), 'd MMM')}.`}
+                : `Send it to your friend. It works once, until ${formatShortDateInTimezone(code.data.expiresAt, timeZone)}.`}
             </p>
           </>
         ) : (

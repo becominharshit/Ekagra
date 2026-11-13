@@ -30,10 +30,10 @@ function deps(overrides: Partial<ServerDeps> = {}): () => ServerDeps {
   })
 }
 
-function post(body: unknown, token = 'good-token'): Request {
+function post(body: unknown, token = 'good-token', origin = 'https://ekagra.app'): Request {
   return new Request('http://localhost/functions/v1/ai-test', {
     method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Origin: origin },
     body: JSON.stringify(body),
   })
 }
@@ -43,16 +43,36 @@ afterEach(() => {
 })
 
 describe('handleAiRequest', () => {
-  it('answers the browser preflight (CORS)', async () => {
-    const response = await handleAiRequest(oneTopic, deps())(new Request('http://localhost/x', { method: 'OPTIONS' }))
-    expect(response.status).toBe(200)
-    expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*')
+  it('answers browser preflight (CORS) strictly from ALLOWED_ORIGINS allowlist', async () => {
+    const allowed = await handleAiRequest(oneTopic, deps())(
+      new Request('http://localhost/x', { method: 'OPTIONS', headers: { Origin: 'https://ekagra.app' } }),
+    )
+    expect(allowed.status).toBe(200)
+    expect(allowed.headers.get('Access-Control-Allow-Origin')).toBe('https://ekagra.app')
+
+    const capacitor = await handleAiRequest(oneTopic, deps())(
+      new Request('http://localhost/x', { method: 'OPTIONS', headers: { Origin: 'capacitor://localhost' } }),
+    )
+    expect(capacitor.status).toBe(200)
+    expect(capacitor.headers.get('Access-Control-Allow-Origin')).toBe('capacitor://localhost')
+
+    const custom = await handleAiRequest(oneTopic, deps({ env: { ...TEST_SECRETS, ALLOWED_ORIGINS: 'https://campus.example.edu' } }))(
+      new Request('http://localhost/x', { method: 'OPTIONS', headers: { Origin: 'https://campus.example.edu' } }),
+    )
+    expect(custom.status).toBe(200)
+    expect(custom.headers.get('Access-Control-Allow-Origin')).toBe('https://campus.example.edu')
+
+    const blocked = await handleAiRequest(oneTopic, deps())(
+      new Request('http://localhost/x', { method: 'OPTIONS', headers: { Origin: 'https://evil.example.com' } }),
+    )
+    expect(blocked.status).toBe(403)
+    expect(blocked.headers.get('Access-Control-Allow-Origin')).toBeNull()
   })
 
-  it("returns the feature's answer as JSON", async () => {
+  it("returns the feature's answer as JSON with matched origin CORS", async () => {
     const response = await handleAiRequest(oneTopic, deps())(post({ subject: 'DBMS' }))
     expect(response.status).toBe(200)
-    expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*')
+    expect(response.headers.get('Access-Control-Allow-Origin')).toBe('https://ekagra.app')
     expect(await response.json()).toEqual({ topic: 'Joins' })
   })
 

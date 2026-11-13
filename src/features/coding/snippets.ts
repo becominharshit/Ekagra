@@ -3,6 +3,7 @@ import { academicsKey } from '@/features/academics/subjects'
 import { dbError, need, useDataSource, type DataSource } from '@/lib/dataSource'
 import { demoDb } from '@/lib/demoDb'
 import type { Tables, TablesInsert, TablesUpdate } from '@/types/database'
+import { LANGUAGE_SPECS, type CodingLanguage } from './languages'
 import { problemTitle, readCodeAnswer, readCodeTests, starterRef, starterRows } from './problems'
 
 // The Coding Lab's saved code (code_snippets) and its code problems (questions with type "code"),
@@ -84,9 +85,13 @@ export async function deleteSnippet(source: DataSource, id: string): Promise<voi
   if (error) throw dbError(error)
 }
 
-/** A new free file to try things out. */
-export function newScratchFile(source: DataSource): Promise<Snippet> {
-  return createSnippet(source, { title: 'Untitled', code: 'print("Hello from Python!")\n' })
+/** A new free file to try things out in the chosen language (defaults to Python). */
+export function newScratchFile(source: DataSource, language: CodingLanguage = 'python'): Promise<Snippet> {
+  return createSnippet(source, {
+    title: 'Untitled',
+    language,
+    code: LANGUAGE_SPECS[language].defaultCode,
+  })
 }
 
 /** The student's file for a problem: the existing one, or a new one with the starter code. */

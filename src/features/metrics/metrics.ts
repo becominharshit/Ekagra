@@ -1,4 +1,6 @@
 import { addDays, format, parseISO, startOfWeek } from 'date-fns'
+import { weekStart as weekStartHelper } from '@/features/planner/time'
+import { dateKeyInTimezone, resolveTimezone, zonedLocalToIso } from '@/lib/timezone'
 
 // The 4 learning metrics of a week (docs/2-technical-design.md §9), worked out from what the
 // student did. Pure functions, tested on their own.
@@ -59,9 +61,11 @@ export interface WeekMetrics {
   details: { reviews: number; retests: number; timedAnswers: number; firstTries: number; learnedTopics: number }
 }
 
-/** Weeks start on Monday. */
-export function weekStartOf(date: Date): Date {
-  return startOfWeek(date, { weekStartsOn: 1 })
+/** Weeks start on Monday in `timeZone` (or browser local time when omitted). */
+export function weekStartOf(date: Date, timeZone?: string): Date {
+  if (!timeZone) return startOfWeek(date, { weekStartsOn: 1 })
+  const zone = resolveTimezone(timeZone)
+  return new Date(zonedLocalToIso(weekStartHelper(dateKeyInTimezone(date, zone)), 0, zone))
 }
 
 export function median(values: number[]): number | null {
@@ -73,7 +77,8 @@ export function median(values: number[]): number | null {
 
 const round = (value: number, places: number) => Math.round(value * 10 ** places) / 10 ** places
 
-export function weekMetrics(inputs: MetricInputs, weekStart: Date): WeekMetrics {
+export function weekMetrics(inputs: MetricInputs, weekStart: Date, timeZone?: string): WeekMetrics {
+  const zone = timeZone ? resolveTimezone(timeZone) : null
   const from = weekStart.getTime()
   const to = addDays(weekStart, 7).getTime()
   const inWeek = (iso: string) => {
@@ -121,8 +126,8 @@ export function weekMetrics(inputs: MetricInputs, weekStart: Date): WeekMetrics 
   let learnedTopics = 0
   for (const topic of inputs.topics) {
     if (!topic.learned_at || !inWeek(topic.learned_at) || !topic.est_minutes || topic.est_minutes <= 0) continue
-    // Plan blocks are dated in local time, so the day it was learned is too.
-    const learnedOn = format(new Date(topic.learned_at), 'yyyy-MM-dd')
+    // Plan blocks are dated in the user's timezone, so the day it was learned is too.
+    const learnedOn = zone ? dateKeyInTimezone(topic.learned_at, zone) : format(new Date(topic.learned_at), 'yyyy-MM-dd')
     const minutes = inputs.topicMinutes.filter((row) => row.topic_id === topic.id && row.date <= learnedOn).reduce((sum, row) => sum + row.minutes, 0)
     if (minutes <= 0) continue
     estimated += topic.est_minutes
@@ -133,7 +138,7 @@ export function weekMetrics(inputs: MetricInputs, weekStart: Date): WeekMetrics 
   const memoryCount = reviews.length + retests
   const processing = rightSeconds.length >= MIN_TIMED ? median(rightSeconds) : null
   return {
-    weekStart: format(weekStart, 'yyyy-MM-dd'),
+    weekStart: zone ? dateKeyInTimezone(weekStart, zone) : format(weekStart, 'yyyy-MM-dd'),
     memory: memoryCount >= MIN_MEMORY ? round((goodReviews + rightRetests) / memoryCount, 4) : null,
     learningSpeed: learnedTopics > 0 ? round(Math.min(999, estimated / actual), 3) : null,
     processingSpeed: processing === null ? null : Math.max(0.1, round(processing, 1)),

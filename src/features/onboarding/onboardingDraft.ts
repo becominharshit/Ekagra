@@ -1,3 +1,4 @@
+import { getCurriculumProfile, recommendedCurriculumForLocale } from '@/features/academics/curriculum'
 import { formatTime, parseTime } from '@/features/planner/time'
 import type { Budget, Chronotype } from '@/features/planner/types'
 import type { OnboardingResult, ProfileRow, RoutineRow } from '@/features/profile/queries'
@@ -7,8 +8,11 @@ import {
   readSettings,
   toChronotype,
   toMentorTone,
+  type CurriculumId,
   type MentorTone,
 } from '@/features/profile/settings'
+import { defaultCurrencyForLocale } from '@/lib/currency'
+import { resolveTimezone } from '@/lib/timezone'
 import type { Json } from '@/types/database'
 import { routineToRows, rowsToRoutine, validateRoutine, type RoutineDraft } from './routineDraft'
 
@@ -24,6 +28,13 @@ export interface AboutDraft {
   semester: number | null
 }
 
+/** Step 1 region & academic system preferences. */
+export interface RegionDraft {
+  curriculum: CurriculumId
+  currency: string
+  timezone: string
+}
+
 /** Step 3: when you think best, and how your mentor should talk to you. */
 export interface RhythmDraft {
   chronotype: Chronotype
@@ -35,6 +46,7 @@ export interface RhythmDraft {
 
 export interface OnboardingDraft {
   about: AboutDraft
+  region: RegionDraft
   /** Step 2 */
   routine: RoutineDraft
   rhythm: RhythmDraft
@@ -47,6 +59,8 @@ export function draftFrom(profile: ProfileRow, routineRows: RoutineRow[]): Onboa
   const settings = readSettings(profile.settings)
   const chronotype = toChronotype(profile.chronotype)
   const peak = peakWindowFor(settings, chronotype)
+  const timezone = resolveTimezone(profile.timezone)
+  const curriculum = settings.grades.curriculum ?? recommendedCurriculumForLocale(timezone)
   return {
     about: {
       fullName: profile.full_name ?? '',
@@ -54,6 +68,11 @@ export function draftFrom(profile: ProfileRow, routineRows: RoutineRow[]): Onboa
       program: profile.program ?? '',
       year: profile.year,
       semester: profile.semester,
+    },
+    region: {
+      curriculum,
+      currency: profile.currency || defaultCurrencyForLocale(),
+      timezone,
     },
     routine: rowsToRoutine(routineRows),
     rhythm: { chronotype, peakStart: peak.start, peakEnd: peak.end, mentorTone: toMentorTone(profile.mentor_tone) },
@@ -99,10 +118,30 @@ export function resultFrom(
   draft: OnboardingDraft,
   profile: ProfileRow,
   now: Date = new Date(),
-  timezone: string = deviceTimezone(),
+  timezone?: string,
 ): OnboardingResult {
   const saved = isJsonObject(profile.settings) ? profile.settings : {}
   const savedPlanner = isJsonObject(saved.planner) ? saved.planner : {}
+  const savedGrades = isJsonObject(saved.grades) ? saved.grades : {}
+  const resolvedTimezone = timezone ?? (draft.region.timezone || deviceTimezone())
+  const baselineCurriculum =
+    typeof savedGrades.curriculum === 'string'
+      ? savedGrades.curriculum
+      : recommendedCurriculumForLocale(resolveTimezone(profile.timezone))
+  const nextSettings: { [key: string]: Json | undefined } = {
+    ...saved,
+    budget: { ...draft.budget },
+    planner: { ...savedPlanner, peakStart: hhmm(draft.rhythm.peakStart), peakEnd: hhmm(draft.rhythm.peakEnd) },
+  }
+  if (draft.region.curriculum !== baselineCurriculum) {
+    const chosen = getCurriculumProfile(draft.region.curriculum)
+    nextSettings.grades = {
+      ...savedGrades,
+      curriculum: chosen.id,
+      scale: chosen.defaultGradeScale.map((step) => ({ letter: step.letter, points: step.points, minPercent: step.minPercent })),
+    }
+  }
+
   return {
     profile: {
       full_name: draft.about.fullName.trim(),
@@ -110,14 +149,11 @@ export function resultFrom(
       program: draft.about.program.trim() || null,
       year: draft.about.year,
       semester: draft.about.semester,
-      timezone,
+      timezone: resolvedTimezone,
+      ...(draft.region.currency && draft.region.currency !== profile.currency ? { currency: draft.region.currency } : {}),
       chronotype: draft.rhythm.chronotype,
       mentor_tone: draft.rhythm.mentorTone,
-      settings: {
-        ...saved,
-        budget: { ...draft.budget },
-        planner: { ...savedPlanner, peakStart: hhmm(draft.rhythm.peakStart), peakEnd: hhmm(draft.rhythm.peakEnd) },
-      },
+      settings: nextSettings,
       // Editing later keeps the first onboarding date.
       onboarded_at: profile.onboarded_at ?? now.toISOString(),
     },

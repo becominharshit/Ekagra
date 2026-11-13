@@ -19,6 +19,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { localToIso } from '@/features/planner/schedule'
+import { currencySymbol } from '@/lib/currency'
 import { useClients } from './clients'
 import type { Hustle } from './hustles'
 import { useHustleMutation } from './hustles'
@@ -128,7 +129,9 @@ function ItemForm({ hustle, editing, columns, onDone, onMoved }: ItemFormProps) 
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div className="grid gap-1.5">
-          <Label htmlFor="item-amount">{words.amount} (₹)</Label>
+          <Label htmlFor="item-amount">
+            {words.amount} ({currencySymbol(hustle.currency)})
+          </Label>
           <Input id="item-amount" type="number" inputMode="numeric" min={0} step={50} value={amount} onChange={(event) => setAmount(event.target.value)} />
         </div>
         <div className="grid gap-1.5">

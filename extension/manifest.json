@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "Ekagra FocusGuard",
+  "version": "1.0.0",
+  "description": "Blocks distracting websites during Ekagra focus sessions and routes emergency unlocks through the Academic Tollbooth.",
+  "permissions": [
+    "declarativeNetRequest",
+    "declarativeNetRequestFeedback",
+    "storage",
+    "alarms",
+    "tabs"
+  ],
+  "host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Ekagra FocusGuard"
+  },
+  "options_page": "options.html",
+  "web_accessible_resources": [
+    {
+      "resources": ["blocked.html", "blocked.js"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

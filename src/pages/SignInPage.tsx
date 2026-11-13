@@ -1,22 +1,41 @@
 import { useEffect, useState } from 'react'
 import { CalendarDays, FlaskConical, LoaderCircle, NotebookPen, Target, TrendingUp } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Link, Navigate } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { clearAccountNotice, readAccountNotice } from '@/features/account/notice'
 import { signInWithGoogle } from '@/features/auth/auth'
 import { useAuthStore } from '@/features/auth/authStore'
+import { PublicTollboothPreview } from '@/features/focus/PublicTollboothPreview'
 import { isSupabaseConfigured } from '@/lib/supabase'
 
-const FEATURES = [
-  { icon: CalendarDays, title: 'A plan for today', text: 'Your syllabus, deadlines and energy in one clear next step.' },
-  { icon: NotebookPen, title: 'Notes that make sense', text: 'Full notes, flowchart mind maps and one-page revision sheets.' },
-  { icon: Target, title: 'Skills beside studies', text: 'A side hustle plan that fits around your college timetable.' },
-  { icon: TrendingUp, title: 'Progress you can see', text: 'Weekly reviews that change the plan when something is not working.' },
-]
+const FEATURE_KEYS = [
+  { icon: CalendarDays, key: 'plan' },
+  { icon: NotebookPen, key: 'notes' },
+  { icon: Target, key: 'skills' },
+  { icon: TrendingUp, key: 'progress' },
+] as const
+
+/** Root entry (`/`): shows the public overview + Tollbooth preview when signed out, or routes signed-in/Demo users straight to `/today`. */
+export function HomeGate() {
+  const { t } = useTranslation('common')
+  const status = useAuthStore((state) => state.status)
+  if (status === 'loading') {
+    return (
+      <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground">
+        <LoaderCircle className="size-4 animate-spin" aria-hidden />
+        {t('loading')}
+      </div>
+    )
+  }
+  if (status === 'signed_in' || status === 'demo') return <Navigate to="/today" replace />
+  return <SignInPage />
+}
 
 /** The first screen: what Ekagra is, and sign-in (Google) or Demo Mode. */
 export function SignInPage() {
+  const { t } = useTranslation('common')
   const status = useAuthStore((state) => state.status)
   const storeError = useAuthStore((state) => state.error)
   const startDemo = useAuthStore((state) => state.startDemo)
@@ -34,7 +53,7 @@ export function SignInPage() {
     try {
       await signInWithGoogle()
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Sign-in failed. Please try again.')
+      setError(caught instanceof Error ? caught.message : t('signIn.signInFailed'))
     } finally {
       setBusy(false)
     }
@@ -49,19 +68,25 @@ export function SignInPage() {
       onClick={() => void continueWithGoogle()}
     >
       {busy ? <LoaderCircle className="animate-spin" aria-hidden /> : <GoogleLogo />}
-      Continue with Google
+      {t('signIn.continueGoogle')}
     </Button>
   )
   const demoButton = (
     <Button key="demo" size="lg" variant={isSupabaseConfigured ? 'outline' : 'default'} onClick={startDemo}>
       <FlaskConical aria-hidden />
-      Try Demo Mode
+      {t('signIn.tryDemo')}
     </Button>
   )
   const problem = error ?? storeError
 
   return (
-    <main className="pt-safe pb-safe relative isolate min-h-full overflow-hidden">
+    <main id="main-content" tabIndex={-1} className="pt-safe pb-safe relative isolate min-h-full overflow-hidden focus:outline-none">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:bg-background focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:shadow-md focus:ring-2 focus:ring-ring"
+      >
+        {t('skipToContent')}
+      </a>
       <div
         aria-hidden
         className="absolute inset-0 -z-10"
@@ -71,39 +96,47 @@ export function SignInPage() {
         }}
       />
       <div className="mx-auto flex min-h-full w-full max-w-6xl flex-col px-5">
-        <header className="flex items-center justify-between py-6">
-          <Link to="/sign-in" className="flex items-center gap-2.5" aria-label="Ekagra home">
+        <header className="flex items-center justify-between gap-4 py-6">
+          <Link to="/" className="flex items-center gap-2.5" aria-label="Ekagra home">
             <img src="/favicon.svg" alt="" className="size-9" />
-            <span className="font-heading text-xl font-semibold tracking-tight">Ekagra</span>
+            <span className="font-heading text-xl font-semibold tracking-tight">{t('appName')}</span>
           </Link>
-          <Link to="/privacy" className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
-            Privacy
-          </Link>
+          <nav aria-label="Public links" className="flex items-center gap-4 text-sm text-muted-foreground">
+            <Link to="/pricing" className="underline-offset-4 hover:text-foreground hover:underline">
+              {t('pricing')}
+            </Link>
+            <Link to="/privacy" className="underline-offset-4 hover:text-foreground hover:underline">
+              {t('privacy')}
+            </Link>
+            <Link to="/terms" className="underline-offset-4 hover:text-foreground hover:underline">
+              {t('terms')}
+            </Link>
+          </nav>
         </header>
 
         <div className="grid flex-1 items-center gap-12 py-10 lg:grid-cols-[1.15fr_0.85fr] lg:gap-16 lg:py-16">
           <section>
             <p className="inline-flex items-center gap-2 rounded-full bg-mode-study/10 px-3 py-1 text-xs font-medium text-mode-study">
               <span className="size-1.5 rounded-full bg-mode-study" aria-hidden />
-              Studies, skills and life in one place
+              {t('signIn.badge')}
             </p>
             <h1 className="mt-5 font-heading text-4xl font-semibold tracking-tight text-balance sm:text-5xl lg:text-6xl">
-              One clear next step.
+              {t('signIn.heroTitleLine1')}
               <br />
-              <span className="text-mode-study">Every day.</span>
+              <span className="text-mode-study">{t('signIn.heroTitleHighlight')}</span>
             </h1>
             <p className="mt-5 max-w-xl text-lg leading-relaxed text-muted-foreground">
-              Ekagra turns your syllabus, deadlines and side hustle into a calm daily plan, with notes and revision made for the way you actually study.
+              {t('signIn.heroSubtitle')}
             </p>
             <ul className="mt-9 grid max-w-xl gap-x-8 gap-y-5 sm:grid-cols-2">
-              {FEATURES.map(({ icon: Icon, title, text }) => (
-                <li key={title} className="flex gap-3">
+              {FEATURE_KEYS.map(({ icon: Icon, key }) => (
+                <li key={key} className="flex gap-3">
                   <span className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-lg bg-mode-study/10 text-mode-study">
                     <Icon className="size-4" aria-hidden />
                   </span>
                   <div>
-                    <p className="text-sm font-medium">{title}</p>
-                    <p className="mt-0.5 text-sm text-muted-foreground">{text}</p>
+                    <p className="text-sm font-medium">{t(`signIn.features.${key}.title`)}</p>
+                    <p className="mt-0.5 text-sm text-muted-foreground">{t(`signIn.features.${key}.text`)}</p>
                   </div>
                 </li>
               ))}
@@ -112,8 +145,8 @@ export function SignInPage() {
 
           <Card className="w-full max-w-md justify-self-center border-foreground/10 shadow-xl shadow-mode-study/10 lg:justify-self-end">
             <CardHeader>
-              <CardTitle className="font-heading text-2xl">Start where you are</CardTitle>
-              <CardDescription>Sign in to keep your plan, notes and progress on every device.</CardDescription>
+              <CardTitle className="font-heading text-2xl">{t('signIn.cardTitle')}</CardTitle>
+              <CardDescription>{t('signIn.cardDescription')}</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-3">
               {notice && (
@@ -125,24 +158,34 @@ export function SignInPage() {
               {isSupabaseConfigured ? [googleButton, demoButton] : [demoButton, googleButton]}
               <p className="text-sm text-muted-foreground">
                 {isSupabaseConfigured
-                  ? 'Demo Mode needs no account. It keeps everything on this device, and nothing is sent to a server.'
-                  : 'Google sign-in turns on once Supabase is connected (see docs/4-setup-guide.md). Demo Mode works now.'}
+                  ? t('signIn.demoConfiguredHint')
+                  : t('signIn.demoUnconfiguredHint')}
               </p>
               {problem && (
                 <p role="alert" className="text-sm text-destructive">
                   {problem}
                 </p>
               )}
-              <p className="mt-1 text-xs text-muted-foreground">Free to start. Your data stays yours.</p>
+              <p className="mt-1 text-xs text-muted-foreground">{t('signIn.freeToStart')}</p>
             </CardContent>
           </Card>
         </div>
 
+        <PublicTollboothPreview />
+
         <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 py-6 text-xs text-muted-foreground">
-          <p>Built for students in India. Your data stays yours.</p>
-          <Link to="/privacy" className="underline underline-offset-3 hover:text-foreground">
-            Privacy policy and permissions
-          </Link>
+          <p>{t('signIn.footerTagline')}</p>
+          <div className="flex flex-wrap items-center gap-4">
+            <Link to="/pricing" className="underline underline-offset-3 hover:text-foreground">
+              {t('pricing')}
+            </Link>
+            <Link to="/privacy" className="underline underline-offset-3 hover:text-foreground">
+              {t('signIn.privacyLink')}
+            </Link>
+            <Link to="/terms" className="underline underline-offset-3 hover:text-foreground">
+              {t('signIn.termsLink')}
+            </Link>
+          </div>
         </footer>
       </div>
     </main>

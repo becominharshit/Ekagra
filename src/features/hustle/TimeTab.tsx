@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { format } from 'date-fns'
 import { LoaderCircle, Plus, X } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -9,7 +8,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { minutesLabel } from '@/features/academics/labels'
-import { useNow } from '@/hooks/useNow'
+import { useNow, useTimezone } from '@/hooks/useNow'
+import { dateKeyInTimezone, formatShortDateInTimezone } from '@/lib/timezone'
 import { useClients, type Client } from './clients'
 import { clientEarnings, earnings, monthEarnings, perHourLabel } from './earnings'
 import { useHustleMutation, type Hustle } from './hustles'
@@ -22,6 +22,7 @@ const NO_CLIENT = 'none'
 /** Hours spent on a hustle and what they earned: earnings per hour for the hustle and each client. */
 export function TimeTab({ hustle }: { hustle: Hustle }) {
   const now = useNow(60_000)
+  const timeZone = useTimezone()
   const entries = useTimeEntries(hustle.id)
   const money = useTransactions(hustle.id)
   const clients = useClients(hustle.id)
@@ -29,10 +30,11 @@ export function TimeTab({ hustle }: { hustle: Hustle }) {
   const [adding, setAdding] = useState(false)
   const rows = entries.data ?? []
   const all = earnings(money.data ?? [], rows)
-  const month = monthEarnings(money.data ?? [], rows, now)
+  const month = monthEarnings(money.data ?? [], rows, now, timeZone)
   const perClient = clientEarnings(money.data ?? [], rows)
   const clientName = new Map((clients.data ?? []).map((client) => [client.id, client.name]))
   const words = clientWord(hustle.type)
+  const monthLabel = new Intl.DateTimeFormat('en', { month: 'long', timeZone }).format(now)
 
   return (
     <div className="grid gap-4">
@@ -43,7 +45,7 @@ export function TimeTab({ hustle }: { hustle: Hustle }) {
         </CardHeader>
         <CardContent className="grid gap-1 text-sm text-muted-foreground">
           <p>
-            In {format(now, 'MMMM')}: {perHourLabel(month, hustle.currency)}
+            In {monthLabel}: {perHourLabel(month, hustle.currency)}
           </p>
           <p>Focus sessions on this hustle's blocks are added here by themselves. Add other time by hand.</p>
         </CardContent>
@@ -83,14 +85,14 @@ export function TimeTab({ hustle }: { hustle: Hustle }) {
         <ul className="grid gap-1">
           {rows.map((entry) => (
             <li key={entry.id} className="flex items-center gap-3 rounded-lg px-2 py-1.5 text-sm">
-              <span className="w-14 shrink-0 text-muted-foreground tabular-nums">{format(new Date(entry.started_at), 'd MMM')}</span>
+              <span className="w-14 shrink-0 text-muted-foreground tabular-nums">{formatShortDateInTimezone(entry.started_at, timeZone)}</span>
               <span className="min-w-0 flex-1 truncate">
                 {minutesLabel(entry.minutes)}
                 {entry.client_id && clientName.has(entry.client_id) && <span className="text-muted-foreground"> · {clientName.get(entry.client_id)}</span>}
                 {entry.note && <span className="text-muted-foreground"> · {entry.note}</span>}
               </span>
               <Badge variant="outline">{entry.source === 'focus' ? 'Focus' : 'Manual'}</Badge>
-              <Button variant="ghost" size="icon-xs" aria-label={`Delete ${minutesLabel(entry.minutes)} on ${format(new Date(entry.started_at), 'd MMM')}`} disabled={remove.isPending} onClick={() => remove.mutate(entry.id)}>
+              <Button variant="ghost" size="icon-xs" aria-label={`Delete ${minutesLabel(entry.minutes)} on ${formatShortDateInTimezone(entry.started_at, timeZone)}`} disabled={remove.isPending} onClick={() => remove.mutate(entry.id)}>
                 <X aria-hidden />
               </Button>
             </li>
@@ -103,13 +105,14 @@ export function TimeTab({ hustle }: { hustle: Hustle }) {
         </p>
       )}
       <Dialog open={adding} onOpenChange={setAdding}>
-        <DialogContent>{adding && <AddTimeForm hustle={hustle} clients={clients.data ?? []} today={format(now, 'yyyy-MM-dd')} onDone={() => setAdding(false)} />}</DialogContent>
+        <DialogContent>{adding && <AddTimeForm hustle={hustle} clients={clients.data ?? []} today={dateKeyInTimezone(now, timeZone)} onDone={() => setAdding(false)} />}</DialogContent>
       </Dialog>
     </div>
   )
 }
 
 function AddTimeForm({ hustle, clients, today, onDone }: { hustle: Hustle; clients: Client[]; today: string; onDone: () => void }) {
+  const timeZone = useTimezone()
   const add = useHustleMutation(addManualTime)
   const words = clientWord(hustle.type)
   const [date, setDate] = useState(today)
@@ -128,7 +131,7 @@ function AddTimeForm({ hustle, clients, today, onDone }: { hustle: Hustle; clien
         if (!(total >= 1 && total <= 24 * 60)) return setProblem('Enter between 1 minute and 24 hours.')
         if (!date) return setProblem('Pick the date.')
         setProblem(null)
-        add.mutate({ hustleId: hustle.id, fields: { date, minutes: total, clientId: clientId === NO_CLIENT ? null : clientId, note } }, { onSuccess: onDone })
+        add.mutate({ hustleId: hustle.id, fields: { date, minutes: total, clientId: clientId === NO_CLIENT ? null : clientId, note }, timeZone }, { onSuccess: onDone })
       }}
     >
       <DialogHeader>

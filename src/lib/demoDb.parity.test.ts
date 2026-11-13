@@ -9,6 +9,8 @@ import reviewMigration from '../../supabase/migrations/006_weekly_review.sql?raw
 import lifeMigration from '../../supabase/migrations/007_life.sql?raw'
 import socialMigration from '../../supabase/migrations/008_social.sql?raw'
 import studioMigration from '../../supabase/migrations/009_studio.sql?raw'
+import codingLangMigration from '../../supabase/migrations/012_coding_languages.sql?raw'
+import mistakesFsrsMigration from '../../supabase/migrations/013_mistakes_fsrs.sql?raw'
 import supabaseStubs from '../../tests/db/supabase-stubs.sql?raw'
 import { stubLocalStorage } from '@/test/memoryStorage'
 import { DEMO_TABLES, demoDb, type DemoTable } from './demoDb'
@@ -234,6 +236,8 @@ beforeAll(async () => {
   await db.exec(lifeMigration)
   await db.exec(socialMigration)
   await db.exec(studioMigration)
+  await db.exec(codingLangMigration)
+  await db.exec(mistakesFsrsMigration)
   await db.exec(`insert into auth.users (id, email, raw_user_meta_data) values ('${USER}', 'demo@example.com', '{}')`)
 })
 

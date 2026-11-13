@@ -1,6 +1,6 @@
 import { useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import type { MealItem } from '@shared/schemas.ts'
-import { addDays, format, parseISO, startOfDay } from 'date-fns'
+import { format, parseISO } from 'date-fns'
 import { Camera, ImagePlus, LoaderCircle, Plus, Sparkles, Trash2, X } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -11,9 +11,12 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { WeekBars } from '@/features/metrics/charts'
 import { useProfile, useSaveSettings } from '@/features/profile/queries'
 import { readSettings } from '@/features/profile/settings'
-import { useNow } from '@/hooks/useNow'
+import { addDays as addLocalDays } from '@/features/planner/time'
+import { useNow, useTimezone } from '@/hooks/useNow'
+import { formatNumber } from '@/lib/currency'
 import { useDataSource } from '@/lib/dataSource'
 import { shrinkPhoto } from '@/lib/files'
+import { dateKeyInTimezone, zonedLocalToIso } from '@/lib/timezone'
 import { useLifeMutation } from '../lifeData'
 import {
   caloriesByDay,
@@ -59,8 +62,7 @@ interface Draft {
   text: string
 }
 
-const number = (value: number) => value.toLocaleString('en-IN')
-const localDate = (iso: string) => format(parseISO(iso), 'yyyy-MM-dd')
+const number = (value: number) => formatNumber(value)
 const nowIso = () => new Date().toISOString()
 const sourceLabel = (source: string) => (source === 'photo' ? 'from a photo' : source === 'preset' ? 'quick add' : 'typed in')
 const toFields = (macros: Macros | null): Fields => ({
@@ -74,9 +76,10 @@ const messageOf = (error: unknown, fallback: string) => (error instanceof Error 
 /** Life → Meals: today against the targets, adding a meal (a photo, mess and hostel food, or typed in), today's meals and the last 7 days. */
 export function MealsTab() {
   const now = useNow(60_000)
-  const today = format(now, 'yyyy-MM-dd')
+  const timeZone = useTimezone()
+  const today = dateKeyInTimezone(now, timeZone)
   const profile = useProfile()
-  const meals = useMeals(startOfDay(addDays(now, 1 - DAYS)).toISOString())
+  const meals = useMeals(zonedLocalToIso(addLocalDays(today, 1 - DAYS), 0, timeZone))
   const [slot, setSlot] = useState<MealSlot>(() => slotFor(now))
   const [text, setText] = useState('')
   const [draft, setDraft] = useState<Draft | null>(null)
@@ -101,7 +104,7 @@ export function MealsTab() {
   }
   const life = readSettings(profile.data?.settings).life
   const all = meals.data ?? []
-  const todays = all.filter((meal) => localDate(meal.eaten_at) === today)
+  const todays = all.filter((meal) => dateKeyInTimezone(meal.eaten_at, timeZone) === today)
   const sum = totals(todays)
   const quickAdd = (preset: MealPreset) =>
     add.mutate(

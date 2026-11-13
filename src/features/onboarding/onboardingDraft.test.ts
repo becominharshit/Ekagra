@@ -138,4 +138,19 @@ describe('resultFrom', () => {
     expect(again.budget).toEqual(draft.budget)
     expect(routineToRows(again.routine)).toEqual(result.routine)
   })
+
+  it('saves curriculum profile, currency, and timezone for global students', () => {
+    const draft = draftFrom(newProfile(), [])
+    draft.region = { curriculum: 'us_gpa', currency: 'USD', timezone: 'America/New_York' }
+
+    const result = resultFrom(draft, newProfile(), NOW)
+    expect(result.profile.currency).toBe('USD')
+    expect(result.profile.timezone).toBe('America/New_York')
+    expect(result.profile.settings).toMatchObject({
+      grades: {
+        curriculum: 'us_gpa',
+        scale: expect.arrayContaining([expect.objectContaining({ letter: 'A', points: 4 })]),
+      },
+    })
+  })
 })

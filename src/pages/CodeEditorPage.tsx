@@ -12,20 +12,23 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { useAcademicsMutation } from '@/features/academics/subjects'
 import { CodeEditor } from '@/features/coding/CodeEditor'
+import { CODING_LANGUAGES, LANGUAGE_SPECS, normalizeCodingLanguage, type CodingLanguage } from '@/features/coding/languages'
 import { problemBody, readCodeAnswer, readCodeTests } from '@/features/coding/problems'
 import { allPassed, resultText, type RunResult } from '@/features/coding/python'
-import { RUN_LIMIT_SECONDS, usePythonRunner, type RunnerStatus } from '@/features/coding/runner'
+import { RUN_LIMIT_SECONDS, useCodeRunner, type RunnerStatus } from '@/features/coding/runner'
 import { updateSnippet, useCodeProblems, useSnippets, type CodeProblem, type Snippet } from '@/features/coding/snippets'
 import type { CodeTest } from '@shared/schemas.ts'
 
-/** One file in the Coding Lab: a problem with its tests, or a free file. */
+/** One file in the Coding Lab: a problem with its tests, or a free file in Python, JS, TS, or SQL. */
 export function CodeEditorPage() {
   const { snippetId } = useParams()
   const snippets = useSnippets()
@@ -66,7 +69,9 @@ function BackLink() {
 }
 
 function Workspace({ snippet, problem }: { snippet: Snippet; problem: CodeProblem | null }) {
-  const runner = usePythonRunner()
+  const [language, setLanguage] = useState<CodingLanguage>(() => normalizeCodingLanguage(snippet.language))
+  const spec = LANGUAGE_SPECS[language]
+  const runner = useCodeRunner(language)
   const save = useAcademicsMutation(updateSnippet)
   const [code, setCode] = useState(snippet.code)
   const [title, setTitle] = useState(snippet.title)
@@ -80,12 +85,30 @@ function Workspace({ snippet, problem }: { snippet: Snippet; problem: CodeProble
   const tests = problem ? readCodeTests(problem.tests) : []
   const answer = problem ? readCodeAnswer(problem.answer) : null
   const savedTitle = problem ? snippet.title : title.trim() || 'Untitled'
-  const dirty = code !== snippet.code || savedTitle !== snippet.title
+  const dirty = code !== snippet.code || savedTitle !== snippet.title || language !== normalizeCodingLanguage(snippet.language)
+
+  function handleLanguageChange(nextRaw: string) {
+    if (runner.status !== 'idle') return
+    const nextLang = normalizeCodingLanguage(nextRaw)
+    if (nextLang === language) return
+    if (code.trim() === '' || code === LANGUAGE_SPECS[language].defaultCode) {
+      setCode(LANGUAGE_SPECS[nextLang].defaultCode)
+    }
+    if (!LANGUAGE_SPECS[nextLang].supportsStdin) {
+      setShowInput(false)
+    }
+    setLanguage(nextLang)
+    setResult(null)
+    setStartError(null)
+  }
 
   // Leaving the page saves what isn't saved yet, so code is never lost.
   const unsaved = useRef({ dirty, save: () => {} })
   useEffect(() => {
-    unsaved.current = { dirty, save: () => save.mutate({ id: snippet.id, patch: { code, title: savedTitle } }) }
+    unsaved.current = {
+      dirty,
+      save: () => save.mutate({ id: snippet.id, patch: { code, title: savedTitle, language } }),
+    }
   })
   useEffect(
     () => () => {
@@ -106,13 +129,14 @@ function Workspace({ snippet, problem }: { snippet: Snippet; problem: CodeProble
         patch: {
           code,
           title: savedTitle,
+          language,
           last_output: resultText(outcome),
           last_run_at: new Date().toISOString(),
           passed: tests.length > 0 ? allPassed(outcome) : null,
         },
       })
     } catch (error) {
-      setStartError(error instanceof Error ? error.message : 'Python could not start.')
+      setStartError(error instanceof Error ? error.message : `${spec.label} could not start.`)
     }
   }
 
@@ -120,15 +144,32 @@ function Workspace({ snippet, problem }: { snippet: Snippet; problem: CodeProble
     <>
       <BackLink />
       {problem ? (
-        <h1 className="mb-3 font-heading text-xl font-semibold tracking-tight">{snippet.title}</h1>
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <h1 className="font-heading text-xl font-semibold tracking-tight">{snippet.title}</h1>
+          <Badge variant="outline">{spec.label}</Badge>
+        </div>
       ) : (
-        <Input
-          aria-label="File name"
-          className="mb-3 h-10 font-heading text-lg font-semibold"
-          value={title}
-          maxLength={120}
-          onChange={(event) => setTitle(event.target.value)}
-        />
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <Input
+            aria-label="File name"
+            className="h-10 min-w-48 flex-1 font-heading text-lg font-semibold"
+            value={title}
+            maxLength={120}
+            onChange={(event) => setTitle(event.target.value)}
+          />
+          <Select value={language} onValueChange={handleLanguageChange} disabled={runner.status !== 'idle'}>
+            <SelectTrigger aria-label="Language" className="h-10 min-w-44">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {CODING_LANGUAGES.map((lang) => (
+                <SelectItem key={lang} value={lang}>
+                  {LANGUAGE_SPECS[lang].label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       )}
 
       <div className="grid gap-4">
@@ -141,7 +182,7 @@ function Workspace({ snippet, problem }: { snippet: Snippet; problem: CodeProble
           </Card>
         )}
 
-        <CodeEditor value={code} onChange={setCode} onRun={() => void run()} label="Python code" />
+        <CodeEditor value={code} onChange={setCode} onRun={() => void run()} label={spec.editorLabel} language={language} />
 
         <div className="flex flex-wrap items-center gap-2">
           {runner.status === 'idle' ? (
@@ -155,14 +196,20 @@ function Workspace({ snippet, problem }: { snippet: Snippet; problem: CodeProble
               Stop
             </Button>
           )}
-          <Button variant="outline" disabled={!dirty || save.isPending} onClick={() => save.mutate({ id: snippet.id, patch: { code, title: savedTitle } })}>
+          <Button
+            variant="outline"
+            disabled={!dirty || save.isPending}
+            onClick={() => save.mutate({ id: snippet.id, patch: { code, title: savedTitle, language } })}
+          >
             <Save aria-hidden />
             Save
           </Button>
-          <Button variant="ghost" aria-expanded={showInput} onClick={() => setShowInput(!showInput)}>
-            <Keyboard aria-hidden />
-            Program input
-          </Button>
+          {spec.supportsStdin && (
+            <Button variant="ghost" aria-expanded={showInput} onClick={() => setShowInput(!showInput)}>
+              <Keyboard aria-hidden />
+              Program input
+            </Button>
+          )}
           {answer && (
             <Button variant="ghost" onClick={() => setResetting(true)}>
               <RotateCcw aria-hidden />
@@ -173,20 +220,20 @@ function Workspace({ snippet, problem }: { snippet: Snippet; problem: CodeProble
         </div>
         <p className="hidden text-xs text-muted-foreground sm:block">Ctrl+Enter runs the code. Running also saves it.</p>
 
-        {showInput && (
+        {spec.supportsStdin && showInput && (
           <div className="grid gap-2">
             <Label htmlFor="program-input">Program input (one line for each input() call)</Label>
             <Textarea id="program-input" rows={3} className="font-mono text-sm" value={input} onChange={(event) => setInput(event.target.value)} />
           </div>
         )}
 
-        <Status status={runner.status} result={result} />
+        <Status status={runner.status} result={result} language={language} />
         {(startError || save.error) && (
           <p role="alert" className="text-sm text-destructive">
             {startError ?? save.error?.message}
           </p>
         )}
-        {result && <Output result={result} />}
+        {result && <Output result={result} supportsStdin={spec.supportsStdin} />}
 
         {answer && (result !== null || snippet.last_run_at !== null) && (
           <Card size="sm">
@@ -251,7 +298,7 @@ function TestList({ tests, result }: { tests: CodeTest[]; result: RunResult | nu
   )
 }
 
-function Status({ status, result }: { status: RunnerStatus; result: RunResult | null }) {
+function Status({ status, result, language }: { status: RunnerStatus; result: RunResult | null; language: CodingLanguage }) {
   if (status === 'idle') {
     return result && !result.error ? <p className="text-xs text-muted-foreground">Ran in {result.durationMs} ms.</p> : null
   }
@@ -259,13 +306,15 @@ function Status({ status, result }: { status: RunnerStatus; result: RunResult | 
     <p className="flex items-center gap-2 text-sm text-muted-foreground">
       <LoaderCircle className="size-4 animate-spin" aria-hidden />
       {status === 'loading'
-        ? 'Getting Python ready… The first time it downloads about 13 MB.'
+        ? language === 'python'
+          ? 'Getting Python ready… The first time it downloads about 13 MB.'
+          : `Starting ${LANGUAGE_SPECS[language].label} runtime…`
         : `Running… (stops by itself after ${RUN_LIMIT_SECONDS} seconds)`}
     </p>
   )
 }
 
-function Output({ result }: { result: RunResult }) {
+function Output({ result, supportsStdin }: { result: RunResult; supportsStdin: boolean }) {
   const passedCount = result.tests.filter((test) => test.passed).length
   return (
     <div className="grid gap-2">
@@ -279,7 +328,7 @@ function Output({ result }: { result: RunResult }) {
         {result.output && result.error ? '\n' : ''}
         {result.error && <span className="text-destructive">{result.error}</span>}
       </pre>
-      {result.error?.includes('EOFError') && (
+      {supportsStdin && result.error?.includes('EOFError') && (
         <p className="text-xs text-muted-foreground">Your program asked for more input than it got. Add lines under Program input, one for each input().</p>
       )}
     </div>

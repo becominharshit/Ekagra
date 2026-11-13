@@ -1,8 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { academicsKey } from '@/features/academics/subjects'
+import type { Grade } from '@/features/flashcards/fsrs'
+import { getScheduler } from '@/features/flashcards/scheduler'
 import { dbError, need, useDataSource, type DataSource } from '@/lib/dataSource'
 import { demoDb } from '@/lib/demoDb'
+import { dateKeyInTimezone } from '@/lib/timezone'
 import type { TablesInsert, TablesUpdate } from '@/types/database'
 import { firstReviewAt, reopenMistake, reviewMistake, type Mistake } from './ladder'
 
@@ -23,7 +26,7 @@ export async function listMistakes(source: DataSource): Promise<Mistake[]> {
 
 /** Adds a mistake. It comes back for its first review 1 day later. */
 export async function addMistake(source: DataSource, values: TablesInsert<'mistakes'>, now = new Date()): Promise<void> {
-  const row = { next_review_at: firstReviewAt(now), ...values }
+  const row = { fsrs: {}, next_review_at: firstReviewAt(now), ...values }
   if (source.kind === 'demo') {
     demoDb.insert('mistakes', [row])
     return
@@ -50,12 +53,20 @@ export async function deleteMistake(source: DataSource, id: string): Promise<voi
   if (error) throw dbError(error)
 }
 
-/** Saves a review: "right" moves the mistake up the ladder (or fixes it), "wrong" starts it again. */
+/** Saves an adaptive ts-fsrs review for a mistake (`grade` 1..4, or boolean `right`). */
 export async function recordMistakeReview(
   source: DataSource,
-  { mistake, right, now = new Date() }: { mistake: Mistake; right: boolean; now?: Date },
+  {
+    mistake,
+    right,
+    grade,
+    now = new Date(),
+    timeZone,
+  }: { mistake: Mistake; right?: boolean; grade?: Grade; now?: Date; timeZone?: string },
 ): Promise<void> {
-  const patch = reviewMistake(mistake, right, now, format(now, 'yyyy-MM-dd'))
+  const scheduler = await getScheduler(0.9, false)
+  const today = timeZone ? dateKeyInTimezone(now, timeZone) : format(now, 'yyyy-MM-dd')
+  const patch = reviewMistake(mistake, grade ?? right ?? false, now, today, scheduler)
   if (Object.keys(patch).length > 0) await updateMistake(source, { id: mistake.id, patch })
 }
 
@@ -84,12 +95,11 @@ async function findOpen(source: DataSource, link: { flashcard_id?: string | null
 
 /**
  * Notes a mistake about a flashcard or question (a forgotten card, a wrong quiz answer). If that
- * card or question already has an open mistake, it isn't added twice: that mistake starts its
- * ladder again, like any wrong answer.
+ * card or question already has an open mistake, it isn't added twice: FSRS logs Again (`1`) on it.
  */
 export async function noteMistake(source: DataSource, values: TablesInsert<'mistakes'>, now = new Date()): Promise<void> {
   const open = await findOpen(source, values)
-  if (open) await recordMistakeReview(source, { mistake: open, right: false, now })
+  if (open) await recordMistakeReview(source, { mistake: open, grade: 1, now })
   else await addMistake(source, values, now)
 }
 

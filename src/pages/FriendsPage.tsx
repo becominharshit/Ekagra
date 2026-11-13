@@ -1,24 +1,27 @@
-import { format, startOfWeek } from 'date-fns'
 import { ArrowLeft, LoaderCircle, Users } from 'lucide-react'
 import { Link } from 'react-router'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { weekStart as weekStartHelper } from '@/features/planner/time'
 import { useProfile } from '@/features/profile/queries'
 import { GroupsCard } from '@/features/social/GroupsCard'
 import { NudgesCard } from '@/features/social/NudgesCard'
 import { PartnerCard } from '@/features/social/PartnerCard'
+import { BlockedUsersCard } from '@/features/social/SafetyDialogs'
 import { SharingCard } from '@/features/social/SharingCard'
 import { DEFAULT_SHARING, firstName, toPublished } from '@/features/social/social'
 import { saveMyStats, useMyNumbers, useMyStats, useSocialMutation } from '@/features/social/socialData'
-import { useNow } from '@/hooks/useNow'
+import { useNow, useTimezone } from '@/hooks/useNow'
 import { useDataSource } from '@/lib/dataSource'
+import { dateKeyInTimezone } from '@/lib/timezone'
 
 /** Me → Partner and groups (/me/friends): what you share, accountability partners and nudges. */
 export function FriendsPage() {
   const { source } = useDataSource()
   const now = useNow(60_000)
-  const weekStart = format(startOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd')
+  const timeZone = useTimezone()
+  const weekStart = weekStartHelper(dateKeyInTimezone(now, timeZone))
   const profile = useProfile()
   const stats = useMyStats()
   const numbers = useMyNumbers(Boolean(stats.data))
@@ -83,6 +86,7 @@ export function FriendsPage() {
             <PartnerCard weekStart={weekStart} demo={demo} />
             <GroupsCard weekStart={weekStart} />
             <SharingCard key={stats.data.display_name} stats={stats.data} numbers={numbers.data ?? null} />
+            <BlockedUsersCard />
           </>
         )}
       </div>

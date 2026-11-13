@@ -112,6 +112,16 @@ describe('saved sessions and recordings', () => {
       session(at(3, 1), 131, 0, 45, {}),
     ]
     expect(practisedOn(sessions, '2026-11-03')).toBe(135)
+    expect(
+      practisedOn(
+        [
+          { created_at: '2026-11-04T02:00:00.000Z', duration_sec: 45 }, // 2026-11-03 21:00 in America/New_York
+          { created_at: '2026-11-04T02:00:00.000Z', duration_sec: 30 },
+        ],
+        '2026-11-03',
+        'America/New_York',
+      ),
+    ).toBe(75)
     expect(progressSeries(sessions)).toEqual({ from: at(2, 21), wpm: [120, 131, 143], fillersPerMinute: [6, 0, 2], score: [null, null, 7] })
     expect([0, 65, 125.4].map(clockLabel)).toEqual(['0:00', '1:05', '2:05'])
   })

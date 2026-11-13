@@ -1,3 +1,4 @@
+import { browserLocale } from '@/lib/currency'
 import { joinSpeech } from './speech'
 
 // Speech-to-text with the browser's own speech recognition (the Web Speech API, no library), while
@@ -5,8 +6,8 @@ import { joinSpeech } from './speech'
 // uses Apple's. Where it's missing (Firefox, most Android WebViews) or fails, the student types what
 // they said instead. Only the words ever go to Ekagra's AI, never the sound.
 
-/** Indian English, so Indian names and Hinglish words such as "matlab" and "yaar" come through. */
-export const SPEECH_LANG = 'en-IN'
+/** Uses the student's active browser locale for Web Speech recognition. */
+export const SPEECH_LANG = browserLocale()
 
 // The few parts of the Web Speech API used here (Chrome still names the class webkitSpeechRecognition).
 interface RecognitionResult {

@@ -1,7 +1,7 @@
 import { APICallError } from 'ai'
 import { MockLanguageModelV4 } from 'ai/test'
 import { describe, expect, it, vi } from 'vitest'
-import { memoryUsage, modelAnswer } from '../_shared/testing.ts'
+import { memoryUsage, modelAnswer, modelStreamAnswer } from '../_shared/testing.ts'
 import { handleStudioNotes, joinParts, type NoteRow, type NotesStore } from './handler.ts'
 
 const SUBJECT = '11111111-1111-4111-8111-111111111111'
@@ -38,12 +38,19 @@ function memoryStore(notesOfVideo: string | null = null) {
   return { store, created, finished, failed, described }
 }
 
-/** A fake Gemini that knows YouTube links (like the real provider, it then passes them on instead of downloading them). */
-const fakeGemini = (...answers: unknown[]) =>
-  new MockLanguageModelV4({
+/** A fake Gemini that knows YouTube links (supporting both generate and stream calls). */
+const fakeGemini = (...answers: unknown[]) => {
+  let streamCall = 0
+  return new MockLanguageModelV4({
     doGenerate: answers.map((answer) => modelAnswer(JSON.stringify(answer))),
+    doStream: async () => {
+      const answer = answers[Math.min(streamCall, Math.max(0, answers.length - 1))]
+      streamCall += 1
+      return modelStreamAnswer(JSON.stringify(answer ?? {}))
+    },
     supportedUrls: { 'video/*': [/^https:\/\/www\.youtube\.com\/watch\?v=/] },
   })
+}
 
 async function call(
   body: unknown,
@@ -87,7 +94,7 @@ describe('studio-notes', () => {
     expect(body).toEqual({ noteId: '33333333-3333-4333-8333-333333333331' })
     expect(notes.created).toEqual([{ userId: 'student-1', subjectId: SUBJECT, materialId: MATERIAL, kind: 'notes', title: 'Lecture 4', source: 'material' }])
     expect(notes.finished).toEqual([
-      { noteId: body.noteId, title: 'SQL joins', content: '## Inner join\n- Matching rows only', model: 'gemini-3.8-flash', promptVersion: 'studio-notes-v5' },
+      { noteId: body.noteId, title: 'SQL joins', content: '## Inner join\n- Matching rows only', model: 'gemini-3.8-flash', promptVersion: 'studio-notes-v6' },
     ])
     expect(usage.logged).toEqual([expect.objectContaining({ feature: 'studio-notes', model: 'gemini-3.8-flash' })])
     const prompt = JSON.stringify(model.doGenerateCalls[0]?.prompt)
@@ -172,7 +179,7 @@ describe('studio-notes', () => {
     expect(asked.some((prompt) => prompt.includes('This is part 1 of 8 of the video, from 0:00 to 14:55'))).toBe(true)
     expect(asked[0]).toContain('one part of a long lecture video')
     const [note] = notes.finished
-    expect(note).toMatchObject({ title: 'Lecture 4', model: 'gemini-3.5-flash-lite', promptVersion: 'studio-notes-v5' })
+    expect(note).toMatchObject({ title: 'Lecture 4', model: 'gemini-3.5-flash-lite', promptVersion: 'studio-notes-v6' })
     expect(note?.content).toContain('- **1:44:25–1:59:15:** Part 8 teaches topic 8.')
     expect(note?.content.indexOf('## Topic 1 (1:00)')).toBeLessThan(note?.content.indexOf('## Topic 8 (8:00)') ?? 0)
     expect(note?.content).toContain('**Exam tip:** Watch 1')
@@ -399,5 +406,109 @@ describe('joining the parts of a long lecture', () => {
         '- Closed surface flux depends on enclosed charge',
       ].join('\n\n'),
     )
+  })
+})
+
+describe('studio-notes SSE streaming', () => {
+  it('streams status, progressive markdown deltas with citations, and persists the finished note', async () => {
+    const streamedAnswer = {
+      title: 'SQL Joins',
+      markdown: '## Inner join\n- Combines rows [p. 12]',
+      citations: [{ label: 'p. 12', pageNumber: 12, timestampSec: null, quote: 'Combines rows' }],
+    }
+    const notes = memoryStore()
+    const waits: number[] = []
+    const model = fakeGemini(streamedAnswer)
+    const handler = handleStudioNotes(() => ({
+      env: ENV,
+      authenticate: async () => 'student-1',
+      usage: memoryUsage(),
+      store: notes.store,
+      background: () => undefined,
+      model: () => model,
+      sleep: async (ms) => {
+        waits.push(ms)
+      },
+    }))
+
+    const response = await handler(
+      new Request('http://localhost/studio-notes', {
+        method: 'POST',
+        headers: { Accept: 'text/event-stream' },
+        body: JSON.stringify(request({ kind: 'text', text: '[Page 12] Combines rows' })),
+      }),
+    )
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('content-type')).toContain('text/event-stream')
+    const raw = await response.text()
+    expect(raw).toContain('event: status')
+    expect(raw).toContain('event: delta')
+    expect(raw).toContain('event: done')
+    expect(raw).toContain('"citations":[{"label":"p. 12"')
+    expect(notes.finished).toEqual([
+      {
+        noteId: '33333333-3333-4333-8333-333333333331',
+        title: 'SQL Joins',
+        content: '## Inner join\n- Combines rows [p. 12]',
+        model: 'gemini-3.8-flash',
+        promptVersion: 'studio-notes-v6',
+      },
+    ])
+  })
+
+  it('retries transient 503/429 stream errors with exponential backoff before succeeding', async () => {
+    const warnQuiet = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const transient503 = new APICallError({
+      message: 'Service busy',
+      url: 'https://generativelanguage.googleapis.com',
+      requestBodyValues: {},
+      statusCode: 503,
+      responseBody: '{}',
+      isRetryable: true,
+    })
+    let calls = 0
+    const model = new MockLanguageModelV4({
+      doStream: async () => {
+        calls += 1
+        if (calls <= 2) throw transient503
+        return modelStreamAnswer(
+          JSON.stringify({
+            title: 'Normalization',
+            markdown: '## 3NF',
+            citations: [],
+          }),
+        )
+      },
+      supportedUrls: { 'video/*': [/^https:\/\/www\.youtube\.com\/watch\?v=/] },
+    })
+    const notes = memoryStore()
+    const waits: number[] = []
+    const handler = handleStudioNotes(() => ({
+      env: ENV,
+      authenticate: async () => 'student-1',
+      usage: memoryUsage(),
+      store: notes.store,
+      background: () => undefined,
+      model: () => model,
+      sleep: async (ms) => {
+        waits.push(ms)
+      },
+    }))
+
+    const response = await handler(
+      new Request('http://localhost/studio-notes', {
+        method: 'POST',
+        headers: { Accept: 'text/event-stream' },
+        body: JSON.stringify(request({ kind: 'text', text: 'Normalization' })),
+      }),
+    )
+
+    const raw = await response.text()
+    expect(calls).toBe(3)
+    expect(waits).toEqual([2_000])
+    expect(raw).toContain('event: done')
+    expect(notes.finished[0]?.title).toBe('Normalization')
+    warnQuiet.mockRestore()
   })
 })

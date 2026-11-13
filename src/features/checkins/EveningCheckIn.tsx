@@ -15,7 +15,7 @@ import { localDateOf, localToIso, minuteOf, type PlanBlock } from '@/features/pl
 import { addDays } from '@/features/planner/time'
 import type { LocalDate } from '@/features/planner/types'
 import { useTodayMutation } from '@/features/today/todayMutation'
-import { useNow } from '@/hooks/useNow'
+import { useNow, useTimezone } from '@/hooks/useNow'
 import { guardOn, saveEveningCheckIn, useCheckIns, type CheckIn } from './checkins'
 
 /** Checking in ends the day, so the card shows from 8 PM, or earlier once the day's last block has started. */
@@ -39,18 +39,19 @@ function summary(row: CheckIn): string {
 /** The 1-minute evening check-in: mark today's blocks, rate energy and mood, name the biggest distraction. */
 export function EveningCheckIn() {
   const now = useNow(60_000)
-  const today = localDateOf(now)
+  const timeZone = useTimezone()
+  const today = localDateOf(now, timeZone)
   const blocks = useBlocks(today, today)
   const checkIns = useCheckIns(today)
   // What "I got distracted" noted most today: suggested as the biggest distraction.
-  const distractions = useDistractions(localToIso(today, 0))
+  const distractions = useDistractions(localToIso(today, 0, timeZone))
   const [open, setOpen] = useState(false)
   if (!blocks.data || !checkIns.data) return null
 
   const row = checkIns.data.find((checkIn) => checkIn.date === today) ?? null
   const checkedIn = row?.checked_in_at != null
   const lastBlockStarted = blocks.data.length > 0 && !blocks.data.some((block) => isOpen(block) && Date.parse(block.start_at) > now.getTime())
-  if (!checkedIn && minuteOf(now) < EVENING && !lastBlockStarted) return null
+  if (!checkedIn && minuteOf(now, timeZone) < EVENING && !lastBlockStarted) return null
 
   return (
     <Card size="sm">

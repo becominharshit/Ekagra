@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Ekagra FocusGuard</title>
+    <style>
+      body { font-family: system-ui, -apple-system, sans-serif; width: 300px; margin: 0; padding: 16px; background: #ffffff; color: #0f172a; }
+      h1 { font-size: 1rem; margin: 0 0 6px; }
+      p { margin: 0 0 12px; font-size: 0.85rem; color: #475569; }
+      .grid { display: grid; gap: 8px; }
+      button { cursor: pointer; font: inherit; font-size: 0.85rem; font-weight: 500; padding: 8px 12px; border-radius: 8px; border: 1px solid #cbd5e1; background: #fff; color: #0f172a; }
+      button.primary { background: #0f172a; color: #fff; border-color: #0f172a; }
+      a { display: inline-block; margin-top: 10px; font-size: 0.8rem; color: #0f172a; }
+    </style>
+  </head>
+  <body>
+    <h1>Ekagra FocusGuard</h1>
+    <p id="status">Loading…</p>
+    <div id="controls" class="grid"></div>
+    <a id="options-link" href="#">Manage blocked sites &amp; app URL</a>
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

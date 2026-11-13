@@ -3,7 +3,11 @@ import { DEFAULT_GRADE_SCALE, scaleProblems } from '@/features/grades/gpa'
 import { DAY_WINDOWS, PEAK_WINDOWS, STANDARD_BUDGET, windowInterval } from '@/features/planner/planner'
 import { formatTime, parseTime } from '@/features/planner/time'
 import type { Area, Budget, Chronotype, PlannerSettings } from '@/features/planner/types'
+import { browserTimezone } from '@/lib/timezone'
 import type { Json } from '@/types/database'
+
+export const CURRICULUM_IDS = ['us_gpa', 'uk_honours', 'eu_ects', 'ib_alevels', 'india_engineering', 'custom'] as const
+export type CurriculumId = (typeof CURRICULUM_IDS)[number]
 
 // What a student can customize, saved in profiles.settings (a JSON column).
 // Zod checks the saved JSON: anything missing or broken falls back to its default,
@@ -80,7 +84,9 @@ const gradeStepSchema = z.object({
 })
 
 const gradesSchema = z.looseObject({
-  /** Letters, grade points and % cut-offs (10-point scale unless changed). */
+  /** Selected curriculum preset ('us_gpa', 'uk_honours', 'eu_ects', 'ib_alevels', 'india_engineering', 'custom'). */
+  curriculum: z.enum(CURRICULUM_IDS).optional().catch(undefined),
+  /** Letters, grade points and % cut-offs (up to 10-point scale unless changed). */
   scale: z
     .array(gradeStepSchema)
     .refine((scale) => scaleProblems(scale).length === 0)
@@ -144,13 +150,9 @@ export function toMentorTone(value: string | null | undefined): MentorTone {
   return value === 'strict' || value === 'friendly' ? value : 'balanced'
 }
 
-/** The timezone this device is set to, e.g. 'Asia/Kolkata'. */
+/** The timezone this device is set to, e.g. 'America/New_York' or 'UTC'. */
 export function deviceTimezone(): string {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Kolkata'
-  } catch {
-    return 'Asia/Kolkata'
-  }
+  return browserTimezone()
 }
 
 /** Reads saved settings. Missing or broken values get their defaults. */

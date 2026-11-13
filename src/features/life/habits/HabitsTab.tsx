@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { addDays, format, parseISO } from 'date-fns'
+import { format, parseISO } from 'date-fns'
 import { Check, Flame, LoaderCircle, Minus, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -7,7 +7,9 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { useNow } from '@/hooks/useNow'
+import { addDays as addLocalDays } from '@/features/planner/time'
+import { useNow, useTimezone } from '@/hooks/useNow'
+import { dateKeyInTimezone } from '@/lib/timezone'
 import { cn } from '@/lib/utils'
 import {
   ALL_DAYS,
@@ -53,9 +55,10 @@ function daysLabel(days: number[]): string {
 /** Life → Habits: today's habits (tick or count), streaks and the last 7 days. */
 export function HabitsTab() {
   const now = useNow(60_000)
-  const today = format(now, 'yyyy-MM-dd')
+  const timeZone = useTimezone()
+  const today = dateKeyInTimezone(now, timeZone)
   const habits = useHabits()
-  const logs = useHabitLogs(format(addDays(now, -LOOKBACK_DAYS), 'yyyy-MM-dd'))
+  const logs = useHabitLogs(addLocalDays(today, -LOOKBACK_DAYS))
   const log = useLifeMutation(logHabit)
   const add = useLifeMutation(saveHabit)
   const [editing, setEditing] = useState<Habit | 'new' | null>(null)

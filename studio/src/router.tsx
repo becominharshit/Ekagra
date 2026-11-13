@@ -1,4 +1,5 @@
 import { createBrowserRouter, Navigate } from 'react-router'
+import { RouteErrorFallback } from '@/components/ErrorBoundary'
 import { PageLoading } from '@/components/layout/PageLoading'
 import { RequireSignIn } from '@studio/features/auth/RequireSignIn'
 import { StudioShell } from '@studio/components/StudioShell'
@@ -9,6 +10,7 @@ import { StudioShell } from '@studio/components/StudioShell'
 export const router = createBrowserRouter([
   {
     HydrateFallback: PageLoading,
+    errorElement: <RouteErrorFallback />,
     children: [
       {
         path: '/sign-in',
@@ -24,6 +26,7 @@ export const router = createBrowserRouter([
           {
             path: '/',
             element: <StudioShell />,
+            errorElement: <RouteErrorFallback />,
             children: [
               {
                 index: true,

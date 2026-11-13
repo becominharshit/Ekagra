@@ -10,8 +10,9 @@ import { profileRepoFor, useProfile, useRoutine } from '@/features/profile/queri
 import { plannerSettingsFor, readSettings, toChronotype } from '@/features/profile/settings'
 import { isOpenTask, toPlannerTasks } from '@/features/tasks/taskRules'
 import { listTasks, useTasks } from '@/features/tasks/tasks'
-import { useNow } from '@/hooks/useNow'
+import { useNow, useTimezone } from '@/hooks/useNow'
 import { need, useDataSource, type DataSource } from '@/lib/dataSource'
+import { resolveTimezone, zonedLocalToIso } from '@/lib/timezone'
 import { latestPlanVersion, listBlocks, listWorkRows, planKey, PlanConflictError, savePlan } from './planBlocks'
 import { buildPlan } from './planner'
 import { reviewMinutesByDay } from './reviewLoad'
@@ -35,10 +36,12 @@ export interface ReplanResult {
 
 /** Plans from now (after the block that is running), or from tomorrow morning. */
 export async function replan(source: DataSource, { from, now = new Date() }: { from: ReplanFrom; now?: Date }): Promise<ReplanResult> {
-  const today = localDateOf(now)
   const repo = profileRepoFor(source)
-  const [profile, routine, study, tasks, cards, mistakes, checkIns, hustles, todayBlocks, workRows, version] = await Promise.all([
-    repo.getProfile(),
+  const profile = await repo.getProfile()
+  if (!profile) throw new Error('Your profile is missing. Please finish setting up first.')
+  const timeZone = resolveTimezone(profile.timezone)
+  const today = localDateOf(now, timeZone)
+  const [routine, study, tasks, cards, mistakes, checkIns, hustles, todayBlocks, workRows, version] = await Promise.all([
     repo.getRoutine(),
     loadStudy(source),
     listTasks(source),
@@ -50,15 +53,14 @@ export async function replan(source: DataSource, { from, now = new Date() }: { f
     listWorkRows(source),
     latestPlanVersion(source),
   ])
-  if (!profile) throw new Error('Your profile is missing. Please finish setting up first.')
 
-  const start = from === 'tomorrow' ? new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1) : replanStart(todayBlocks, now)
-  const planFrom = localDateOf(start)
+  const start = from === 'tomorrow' ? new Date(zonedLocalToIso(addDays(today, 1), 0, timeZone)) : replanStart(todayBlocks, now)
+  const planFrom = localDateOf(start, timeZone)
   const settings = readSettings(profile.settings)
   const done = workDone(workRows, today)
   const plan = buildPlan({
     today: planFrom,
-    nowMinute: planFrom === today ? minuteOf(start) : 0,
+    nowMinute: planFrom === today ? minuteOf(start, timeZone) : 0,
     horizonDays: 14,
     routine: toPlannerRoutine(routine),
     ...toPlannerStudy(study.subjects, study.topics, study.prereqs, done.byTopic),
@@ -72,7 +74,7 @@ export async function replan(source: DataSource, { from, now = new Date() }: { f
     skillMinutesThisWeek: Object.fromEntries(minutesBySubject(workRows, weekStart(planFrom), today)),
     settings: plannerSettingsFor(settings, toChronotype(profile.chronotype)),
   })
-  const rows = planRows(plan, version + 1).filter((row) => Date.parse(row.start_at) >= start.getTime())
+  const rows = planRows(plan, version + 1, timeZone).filter((row) => Date.parse(row.start_at) >= start.getTime())
   await savePlan(source, { rows, replaceFrom: start, missedBefore: today, basedOn: version })
   return { plannedFrom: planFrom, version: version + 1, blockCount: rows.length }
 }
@@ -101,7 +103,8 @@ function writePlanRun(owner: string, run: PlanRun): void {
 
 /** A fingerprint of everything that changes the plan. Null until it's all loaded (or before setup is done). */
 export function usePlanFingerprint(): string | null {
-  const today = localDateOf(useNow(60_000))
+  const timeZone = useTimezone()
+  const today = localDateOf(useNow(60_000), timeZone)
   const profile = useProfile()
   const routine = useRoutine()
   const study = useStudy()
@@ -122,6 +125,7 @@ export function usePlanFingerprint(): string | null {
     // Only the settings the planner uses: changing a focus or Tollbooth setting doesn't re-plan.
     settings: [settings.budget, settings.planner, settings.learning.newCardsPerDay],
     chronotype: profile.data.chronotype,
+    timezone: timeZone,
     routine: routine.data.map((row) => [row.kind, row.days_of_week, row.start_time, row.end_time, row.valid_from, row.valid_to]),
     subjects: study.data.subjects.map((subject) => [subject.id, subject.exam_date, subject.kind, subject.weekly_minutes_limit]),
     // Only "learned or not" matters to the planner (starting a topic doesn't change the plan).
@@ -135,12 +139,13 @@ export function usePlanFingerprint(): string | null {
 /** For screens: make the plan again (from now, or from tomorrow after the evening check-in). */
 export function usePlanner() {
   const { source, owner } = useDataSource()
+  const timeZone = useTimezone()
   const queryClient = useQueryClient()
   const fingerprint = usePlanFingerprint()
   const mutation = useMutation({
     mutationFn: ({ from }: { from: ReplanFrom; fingerprint: string | null }) => replan(need(source), { from }),
     onSuccess: (result, { fingerprint: usedFingerprint }) => {
-      if (owner) writePlanRun(owner, { ranOn: localDateOf(new Date()), plannedFrom: result.plannedFrom, fingerprint: usedFingerprint ?? '' })
+      if (owner) writePlanRun(owner, { ranOn: localDateOf(new Date(), timeZone), plannedFrom: result.plannedFrom, fingerprint: usedFingerprint ?? '' })
     },
     // Show the new plan, or (after a conflict) the plan another device just saved.
     onSettled: () => queryClient.invalidateQueries({ queryKey: planKey(owner) }),
@@ -160,8 +165,9 @@ export function usePlanner() {
  */
 export function usePlanKeeper(): void {
   const { owner } = useDataSource()
+  const timeZone = useTimezone()
   const { fingerprint, replan: makePlan, isPending } = usePlanner()
-  const today = localDateOf(useNow(60_000))
+  const today = localDateOf(useNow(60_000), timeZone)
   const attempted = useRef<string | null>(null)
 
   useEffect(() => {

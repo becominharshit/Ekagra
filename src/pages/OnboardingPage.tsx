@@ -10,7 +10,10 @@ import { BudgetStep } from '@/features/onboarding/BudgetStep'
 import { allProblems, draftFrom, problemsFor, resultFrom } from '@/features/onboarding/onboardingDraft'
 import { RhythmStep } from '@/features/onboarding/RhythmStep'
 import { RoutineStep } from '@/features/onboarding/RoutineStep'
+import { recommendedCurriculumForLocale } from '@/features/academics/curriculum'
 import { useProfile, useRoutine, useSaveOnboarding, type ProfileRow, type RoutineRow } from '@/features/profile/queries'
+import { defaultCurrencyForLocale } from '@/lib/currency'
+import { browserTimezone } from '@/lib/timezone'
 import { cn } from '@/lib/utils'
 
 const STEPS = [
@@ -52,7 +55,22 @@ function OnboardingWizard({ profile, routineRows }: { profile: ProfileRow; routi
   const editing = profile.onboarded_at !== null
   // "?step=routine" (from Attendance) opens the routine straight away when editing.
   const [step, setStep] = useState(() => (editing && params.get('step') === 'routine' ? 1 : 0))
-  const [draft, setDraft] = useState(() => draftFrom(profile, routineRows))
+  const [draft, setDraft] = useState(() => {
+    const base = draftFrom(profile, routineRows)
+    if (profile.onboarded_at === null) {
+      const detectedTimezone = browserTimezone()
+      const detectedCurrency = defaultCurrencyForLocale()
+      return {
+        ...base,
+        region: {
+          curriculum: recommendedCurriculumForLocale(detectedTimezone),
+          currency: detectedCurrency,
+          timezone: detectedTimezone,
+        },
+      }
+    }
+    return base
+  })
   const [problems, setProblems] = useState<string[]>([])
   const isLast = step === STEPS.length - 1
   const current = STEPS[step] ?? STEPS[0]
@@ -82,7 +100,13 @@ function OnboardingWizard({ profile, routineRows }: { profile: ProfileRow; routi
   }
 
   return (
-    <main className="pt-safe pb-safe min-h-full">
+    <main id="main-content" tabIndex={-1} className="pt-safe pb-safe min-h-full focus:outline-none">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:bg-background focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:shadow-md focus:ring-2 focus:ring-ring"
+      >
+        Skip to main content
+      </a>
       <div className="mx-auto grid w-full max-w-lg gap-4 px-4 py-6">
         <div className="flex items-center justify-between">
           <span className="font-heading text-base font-semibold tracking-tight">Ekagra</span>
@@ -118,7 +142,14 @@ function OnboardingWizard({ profile, routineRows }: { profile: ProfileRow; routi
             <CardDescription>{current.description}</CardDescription>
           </CardHeader>
           <CardContent>
-            {step === 0 && <AboutStep value={draft.about} onChange={(about) => setDraft({ ...draft, about })} />}
+            {step === 0 && (
+              <AboutStep
+                value={draft.about}
+                region={draft.region}
+                onChange={(about) => setDraft({ ...draft, about })}
+                onRegionChange={(region) => setDraft({ ...draft, region })}
+              />
+            )}
             {step === 1 && <RoutineStep value={draft.routine} onChange={(routine) => setDraft({ ...draft, routine })} />}
             {step === 2 && <RhythmStep value={draft.rhythm} onChange={(rhythm) => setDraft({ ...draft, rhythm })} />}
             {step === 3 && <BudgetStep value={draft.budget} onChange={(budget) => setDraft({ ...draft, budget })} />}

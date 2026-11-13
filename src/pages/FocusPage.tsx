@@ -1,4 +1,5 @@
 import { ArrowLeft, LoaderCircle } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/button'
@@ -8,20 +9,21 @@ import { StartFocus } from '@/features/focus/StartFocus'
 
 /** The focus timer (/today/focus): pick what to work on and a timer, then the clock while it runs. */
 export function FocusPage() {
+  const { t } = useTranslation(['focus', 'common'])
   const focus = useActiveFocus()
   return (
     <>
       <Button asChild variant="ghost" size="sm" className="-ml-2 mb-2">
         <Link to="/today">
           <ArrowLeft aria-hidden />
-          Today
+          {t('backToToday')}
         </Link>
       </Button>
-      <PageHeader title="Focus" subtitle={focus.data ? 'One thing at a time.' : 'Pick what to work on and a timer.'} />
+      <PageHeader title={t('title')} subtitle={focus.data ? t('runningSubtitle') : t('idleSubtitle')} />
       {focus.isPending && (
         <p className="flex items-center gap-2 text-sm text-muted-foreground">
           <LoaderCircle className="size-4 animate-spin" aria-hidden />
-          Loading…
+          {t('common:loading')}
         </p>
       )}
       {focus.error && (

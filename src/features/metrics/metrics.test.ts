@@ -23,6 +23,9 @@ describe('weekStartOf and median', () => {
   it('starts weeks on Monday', () => {
     expect(weekStartOf(new Date(2026, 10, 8, 23))).toEqual(WEEK) // Sunday evening
     expect(weekStartOf(new Date(2026, 10, 2, 0, 5))).toEqual(WEEK)
+    // 2026-11-09T02:00:00Z is Monday in Tokyo, still Sunday evening in New York.
+    expect(weekStartOf(new Date('2026-11-09T02:00:00Z'), 'America/New_York').toISOString()).toBe('2026-11-02T05:00:00.000Z')
+    expect(weekStartOf(new Date('2026-11-09T02:00:00Z'), 'Asia/Tokyo').toISOString()).toBe('2026-11-08T15:00:00.000Z')
   })
 
   it('takes the middle value', () => {

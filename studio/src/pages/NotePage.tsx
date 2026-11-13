@@ -144,7 +144,21 @@ function NoteView({ note }: { note: Note }) {
               {material ? ' Try again, or delete it.' : ' Its material was deleted, so delete this.'}
             </p>
           ) : (
-            <NoteBody kind={note.kind} title={note.title} content={note.content} />
+            <NoteBody
+              kind={note.kind}
+              title={note.title}
+              content={note.content}
+              onCitePage={
+                material?.kind === 'pdf'
+                  ? (pageNumber) => navigate(`/materials/${material.id}?page=${pageNumber}`)
+                  : undefined
+              }
+              onCiteTimestamp={
+                material?.kind === 'youtube'
+                  ? (seconds) => navigate(`/materials/${material.id}?t=${seconds}`)
+                  : undefined
+              }
+            />
           )}
           {note.status === 'ready' && note.content.trim() !== '' && <NoteQuiz note={note} />}
         </>

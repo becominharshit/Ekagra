@@ -1,5 +1,6 @@
-import { addDays, format, parseISO, startOfWeek } from 'date-fns'
 import { currentStreak } from '@/features/life/habits/habits'
+import { addDays, weekStart as weekStartHelper } from '@/features/planner/time'
+import { dateKeyInTimezone, resolveTimezone } from '@/lib/timezone'
 import type { Tables, TablesInsert } from '@/types/database'
 
 // Sharing with an accountability partner and study groups: the numbers a student may share (focus
@@ -58,24 +59,25 @@ export interface NumbersInputs {
   now: Date
   focus: Pick<Tables<'focus_sessions'>, 'started_at' | 'actual_minutes'>[]
   blocks: Pick<Tables<'plan_blocks'>, 'date' | 'status'>[]
+  timeZone?: string
 }
 
-export function myNumbers({ now, focus, blocks }: NumbersInputs): MyNumbers {
-  const monday = startOfWeek(now, { weekStartsOn: 1 })
-  const weekStart = format(monday, 'yyyy-MM-dd')
-  const weekEnd = format(addDays(monday, 6), 'yyyy-MM-dd')
-  const today = format(now, 'yyyy-MM-dd')
+export function myNumbers({ now, focus, blocks, timeZone }: NumbersInputs): MyNumbers {
+  const zone = resolveTimezone(timeZone)
+  const today = dateKeyInTimezone(now, zone)
+  const monday = weekStartHelper(today)
+  const weekEnd = addDays(monday, 6)
   const minutesByDay = new Map<string, number>()
   for (const session of focus) {
-    const date = format(parseISO(session.started_at), 'yyyy-MM-dd')
+    const date = dateKeyInTimezone(session.started_at, zone)
     minutesByDay.set(date, (minutesByDay.get(date) ?? 0) + (session.actual_minutes ?? 0))
   }
-  const focusMinutes = [...minutesByDay].filter(([date]) => date >= weekStart && date <= weekEnd).reduce((sum, [, minutes]) => sum + minutes, 0)
+  const focusMinutes = [...minutesByDay].filter(([date]) => date >= monday && date <= weekEnd).reduce((sum, [, minutes]) => sum + minutes, 0)
   const studied = new Set([...minutesByDay].filter(([, minutes]) => minutes >= STREAK_MINUTES).map(([date]) => date))
-  const ended = blocks.filter((block) => block.date >= weekStart && block.date <= weekEnd && ['done', 'partial', 'missed'].includes(block.status))
+  const ended = blocks.filter((block) => block.date >= monday && block.date <= weekEnd && ['done', 'partial', 'missed'].includes(block.status))
   const done = ended.reduce((sum, block) => sum + (block.status === 'done' ? 1 : block.status === 'partial' ? 0.5 : 0), 0)
   return {
-    weekStart,
+    weekStart: monday,
     focusMinutes: Math.min(10_080, Math.round(focusMinutes)),
     streakDays: currentStreak({ days_of_week: [0, 1, 2, 3, 4, 5, 6] }, studied, today),
     planPct: ended.length > 0 ? Math.round((done / ended.length) * 100) : null,
@@ -144,7 +146,7 @@ export function viewOf(row: SharedStats, now: Date): SharedView {
 /** When a running focus session should end (its start + planned minutes), if that's still ahead. */
 export function studyingUntil(session: Pick<Tables<'focus_sessions'>, 'started_at' | 'planned_minutes' | 'ended_at'> | null, now: Date): string | null {
   if (!session || session.ended_at) return null
-  const end = parseISO(session.started_at).getTime() + session.planned_minutes * 60_000
+  const end = Date.parse(session.started_at) + session.planned_minutes * 60_000
   return end > now.getTime() ? new Date(end).toISOString() : null
 }
 

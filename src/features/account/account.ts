@@ -1,7 +1,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
-import { AccountDeleteResponseSchema, type AccountDeleteRequest } from '@shared/schemas.ts'
+import {
+  AccountDeleteResponseSchema,
+  AccountExportResponseSchema,
+  type AccountDeleteRequest,
+} from '@shared/schemas.ts'
 import { USER_TABLES } from '@shared/userTables.ts'
 import { callAiFunction } from '@/features/ai/aiClient'
 import { signOut } from '@/features/auth/auth'
@@ -96,6 +100,14 @@ async function readEverything(source: DataSource, onProgress?: (done: number, to
   return tables
 }
 
+function toExportFile(data: DataExport, now: Date): ExportFile {
+  return {
+    name: `ekagra-export-${format(now, 'yyyy-MM-dd')}.json`,
+    json: JSON.stringify(data, null, 2),
+    rows: Object.values(data.counts).reduce((sum, count) => sum + count, 0),
+  }
+}
+
 /** Everything the student added, as one readable JSON file (nothing is sent anywhere). */
 export async function buildExport(
   source: DataSource,
@@ -119,11 +131,17 @@ export async function buildExport(
     counts,
     tables,
   }
-  return {
-    name: `ekagra-export-${format(now, 'yyyy-MM-dd')}.json`,
-    json: JSON.stringify(data, null, 2),
-    rows: Object.values(counts).reduce((sum, count) => sum + count, 0),
+  return toExportFile(data, now)
+}
+
+/** Server-side GDPR export via the `account-export` Edge Function (signed-in accounts only). */
+export async function exportFromServer(source: DataSource, { now = new Date() }: { now?: Date } = {}): Promise<ExportFile> {
+  if (source.kind !== 'supabase') {
+    throw new Error('Server GDPR export requires a signed-in account.')
   }
+  const data = await callAiFunction('account-export', {}, AccountExportResponseSchema, source.client)
+  const parsedDate = Number.isNaN(Date.parse(data.exportedAt)) ? now : new Date(data.exportedAt)
+  return toExportFile(data, parsedDate)
 }
 
 /** Keys this app keeps on the device per person (caches), besides the stores below. */

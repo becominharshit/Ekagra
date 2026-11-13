@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { ArrowLeft, Download, LoaderCircle, RotateCcw, ShieldCheck, Trash2, UserX } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { ArrowLeft, Download, FileText, LoaderCircle, RotateCcw, Shield, ShieldCheck, Trash2, UserX } from 'lucide-react'
 import { Link } from 'react-router'
 import { PageHeader } from '@/components/layout/PageHeader'
 import {
@@ -13,17 +13,24 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { buildExport, forgetOnDevice, useDeleteOnServer } from '@/features/account/account'
+import { buildExport, exportFromServer, forgetOnDevice, useDeleteOnServer } from '@/features/account/account'
 import { useAuthStore } from '@/features/auth/authStore'
 import { useResetDemoData } from '@/features/profile/queries'
 import { need, useDataSource } from '@/lib/dataSource'
 import { saveTextFile } from '@/lib/native/fileSaver'
+import {
+  ANALYTICS_CONSENT_EVENT,
+  getAnalyticsConsent,
+  setAnalyticsConsent,
+  type AnalyticsConsentState,
+} from '@/lib/observability'
 
-/** Me → Account and privacy (/me/account): the privacy policy, a copy of all data, wiping it, deleting the account. */
+/** Me → Account and privacy (/me/account): legal docs, consent preference, data export, wiping, deleting. */
 export function AccountPage() {
   const isDemo = useAuthStore((state) => state.status === 'demo')
 
@@ -39,25 +46,79 @@ export function AccountPage() {
       <div className="grid gap-4">
         <Card>
           <CardHeader>
-            <CardTitle>Privacy</CardTitle>
+            <CardTitle>Privacy and legal</CardTitle>
             <CardDescription>
               Your data is private to your account. AI features send only what a request needs to Anthropic's Claude (in Ekagra Studio, Google's
-              Gemini), through Ekagra's server. The privacy policy explains it all, with every Android permission.
+              Gemini), through Ekagra's server. The privacy policy and terms explain all data practices and Android permissions.
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex flex-wrap gap-2">
             <Button asChild variant="outline">
               <Link to="/privacy">
                 <ShieldCheck aria-hidden />
                 Privacy policy and permissions
               </Link>
             </Button>
+            <Button asChild variant="outline">
+              <Link to="/terms">
+                <FileText aria-hidden />
+                Terms of service
+              </Link>
+            </Button>
           </CardContent>
         </Card>
+        <AnalyticsConsentCard />
         <ExportCard isDemo={isDemo} />
         {isDemo ? <DemoResetCard /> : <DeleteCard />}
       </div>
     </>
+  )
+}
+
+function AnalyticsConsentCard() {
+  const [consent, setConsent] = useState<AnalyticsConsentState>(() => getAnalyticsConsent())
+
+  useEffect(() => {
+    const sync = () => setConsent(getAnalyticsConsent())
+    window.addEventListener(ANALYTICS_CONSENT_EVENT, sync)
+    return () => window.removeEventListener(ANALYTICS_CONSENT_EVENT, sync)
+  }, [])
+
+  const statusLabel = consent === 'granted' ? 'Enabled' : consent === 'denied' ? 'Declined' : 'Not chosen yet'
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between gap-2">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Shield className="size-4 text-primary" aria-hidden />
+            Optional product analytics
+          </CardTitle>
+          <Badge variant={consent === 'granted' ? 'default' : 'secondary'}>{statusLabel}</Badge>
+        </div>
+        <CardDescription>
+          Consent-gated aggregated usage counts stored securely without third-party ad trackers. Crash error reports scrub personal fields automatically.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          size="sm"
+          variant={consent === 'granted' ? 'default' : 'outline'}
+          onClick={() => setAnalyticsConsent('granted')}
+        >
+          Allow optional analytics
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant={consent === 'denied' ? 'default' : 'outline'}
+          onClick={() => setAnalyticsConsent('denied')}
+        >
+          Decline analytics
+        </Button>
+      </CardContent>
+    </Card>
   )
 }
 
@@ -68,10 +129,14 @@ function ExportCard({ isDemo }: { isDemo: boolean }) {
   const user = useAuthStore((state) => state.user)
   const [state, setState] = useState<ExportState>({ busy: false, message: null, error: null })
 
-  async function run() {
+  async function run(mode: 'server' | 'local') {
     setState({ busy: true, done: 0, total: 0 })
     try {
-      const file = await buildExport(need(source), user, { onProgress: (done, total) => setState({ busy: true, done, total }) })
+      const ds = need(source)
+      const file =
+        mode === 'server'
+          ? await exportFromServer(ds)
+          : await buildExport(ds, user, { onProgress: (done, total) => setState({ busy: true, done, total }) })
       const saved = await saveTextFile(file.name, 'application/json', file.json)
       const rows = `${file.rows.toLocaleString()} ${file.rows === 1 ? 'row' : 'rows'}`
       setState({ busy: false, message: saved ? `Saved ${file.name} (${rows}).` : 'Not saved: no place was picked.', error: null })
@@ -86,14 +151,27 @@ function ExportCard({ isDemo }: { isDemo: boolean }) {
         <CardTitle>Export all data</CardTitle>
         <CardDescription>
           One JSON file with everything you added: profile, routine, subjects, topics, flashcards, mistakes, tasks, hustles, clients, money records,
-          focus sessions, check-ins, feedback and the rest.{isDemo && " In Demo Mode, that's what is on this device."}
+          focus sessions, check-ins, feedback and billing metadata.{isDemo && " In Demo Mode, that's what is on this device."}
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-2">
-        <Button variant="outline" disabled={state.busy} onClick={() => void run()}>
-          {state.busy ? <LoaderCircle className="animate-spin" aria-hidden /> : <Download aria-hidden />}
-          {state.busy ? (state.total > 0 ? `Exporting… ${state.done} of ${state.total} tables` : 'Exporting…') : 'Export all data'}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" disabled={state.busy} onClick={() => void run(isDemo ? 'local' : 'server')}>
+            {state.busy ? <LoaderCircle className="animate-spin" aria-hidden /> : <Download aria-hidden />}
+            {state.busy
+              ? state.total > 0
+                ? `Exporting… ${state.done} of ${state.total} tables`
+                : 'Exporting…'
+              : isDemo
+                ? 'Export all data'
+                : 'Download GDPR server export'}
+          </Button>
+          {!isDemo && (
+            <Button variant="ghost" disabled={state.busy} onClick={() => void run('local')}>
+              Export via browser session
+            </Button>
+          )}
+        </div>
         {!state.busy && state.message && (
           <p role="status" className="text-sm text-muted-foreground">
             {state.message}

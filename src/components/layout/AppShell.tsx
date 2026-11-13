@@ -6,12 +6,14 @@ import { FocusGuardSync } from '@/features/focus/FocusGuardSync'
 import { LaunchpadBar } from '@/features/hustle/LaunchpadBar'
 import { InboxDropTarget } from '@/features/inbox/InboxDropTarget'
 import { InboxSheet } from '@/features/inbox/InboxSheet'
+import { UpgradeModal } from '@/features/billing/UpgradeModal'
 import { ModeSwitchGuard } from '@/features/mode/ModeSwitchGuard'
 import { usePlanKeeper } from '@/features/planner/replan'
 import { CaptureButton } from '@/features/tasks/CaptureButton'
 import { StudioBridge } from '@/features/bridge/StudioBridge'
 import { ReviewReminder } from '@/features/review/ReviewNudges'
 import { SocialSync } from '@/features/social/SocialSync'
+import { SyncStatusBanner } from '@/features/sync/SyncController'
 import { CaptureSheet } from '@/features/tasks/CaptureSheet'
 import { BottomTabBar } from './BottomTabBar'
 import { SideNav } from './SideNav'
@@ -31,7 +33,14 @@ export function AppShell() {
 
   return (
     <div className="flex h-full flex-col">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:bg-background focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:shadow-md focus:ring-2 focus:ring-ring"
+      >
+        Skip to content
+      </a>
       <TopBar />
+      <SyncStatusBanner />
       {/* A running Launchpad session (10 minutes on Upwork, Instagram…) stays in view on every screen. */}
       <LaunchpadBar />
       {/* So does a running focus session (Today and the focus screen show it themselves). */}
@@ -46,7 +55,7 @@ export function AppShell() {
       <StudioBridge />
       <div className="flex min-h-0 flex-1">
         <SideNav />
-        <main ref={mainRef} className="min-w-0 flex-1 overflow-y-auto">
+        <main id="main-content" tabIndex={-1} ref={mainRef} className="min-w-0 flex-1 overflow-y-auto focus:outline-none">
           {/* Extra space at the bottom so the floating + button never covers the last item. */}
           <div className="mx-auto w-full max-w-2xl px-4 pt-5 pb-24 lg:max-w-4xl lg:px-8">
             <Outlet />
@@ -60,6 +69,7 @@ export function AppShell() {
       <InboxSheet />
       <InboxDropTarget />
       <FeedbackSheet />
+      <UpgradeModal />
       <ModeSwitchGuard />
     </div>
   )

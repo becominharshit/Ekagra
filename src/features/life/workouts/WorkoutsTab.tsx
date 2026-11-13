@@ -9,9 +9,11 @@ import { Textarea } from '@/components/ui/textarea'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { countLabel } from '@/features/academics/labels'
 import { WeekBars } from '@/features/metrics/charts'
+import { addDays as addLocalDays } from '@/features/planner/time'
 import { useProfile, useSaveSettings } from '@/features/profile/queries'
 import { readSettings } from '@/features/profile/settings'
-import { useNow } from '@/hooks/useNow'
+import { useNow, useTimezone } from '@/hooks/useNow'
+import { dateKeyInTimezone } from '@/lib/timezone'
 import { useLifeMutation } from '../lifeData'
 import {
   blankLog,
@@ -49,11 +51,12 @@ const shortName = (program: Program) => program.title.split(' (')[0] ?? program.
 /** Life → Workouts: a program (hostel, dumbbells or gym), today's workout, the logger and progress. */
 export function WorkoutsTab() {
   const now = useNow(60_000)
-  const today = format(now, 'yyyy-MM-dd')
+  const timeZone = useTimezone()
+  const today = dateKeyInTimezone(now, timeZone)
   const profile = useProfile()
   const life = readSettings(profile.data?.settings).life
   const programKey = toProgramKey(life.program)
-  const workouts = useWorkouts(format(addDays(now, -LOOKBACK_DAYS), 'yyyy-MM-dd'))
+  const workouts = useWorkouts(addLocalDays(today, -LOOKBACK_DAYS))
   const [logging, setLogging] = useState<{ day: ProgramDay | null; startedAt: number } | null>(null)
   const [picking, setPicking] = useState(false)
 

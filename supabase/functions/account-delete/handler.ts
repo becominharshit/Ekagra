@@ -12,6 +12,7 @@ import { KEPT_BY_WIPE, USER_TABLES, type UserTable } from '../_shared/userTables
 // Files go first: a row can always be found again, a file whose row is gone can't.
 
 export interface AccountDeps {
+  env?: Record<string, string | undefined>
   /** The signed-in student's id, or null. */
   authenticate(request: Request): Promise<string | null>
   /** Deletes every file under <userId>/ in the private buckets; returns how many. */
@@ -20,6 +21,8 @@ export interface AccountDeps {
   deleteRows(userId: string, table: UserTable): Promise<void>
   /** Puts the profile back to how sign-up left it (PROFILE_RESET). */
   resetProfile(userId: string): Promise<void>
+  /** Cancels any active paid subscription on Stripe/Razorpay before removing the account. */
+  cancelSubscription?: (userId: string) => Promise<void>
   /** Deletes the sign-in account; every row goes with it. */
   deleteUser(userId: string): Promise<void>
 }
@@ -28,27 +31,31 @@ export interface AccountDeps {
 export const WIPED_TABLES = USER_TABLES.filter((table) => !KEPT_BY_WIPE.includes(table))
 
 export function handleAccountRequest(deps: () => AccountDeps): (request: Request) => Promise<Response> {
-  return handleJson(async (request): Promise<AccountDeleteResponse> => {
-    const { authenticate, removeFiles, deleteRows, resetProfile, deleteUser } = deps()
-    const userId = await requireUser(authenticate, request)
-    const { mode } = await readBody(request, AccountDeleteRequestSchema)
-    try {
-      const files = await removeFiles(userId)
-      if (mode === 'account') {
-        await deleteUser(userId)
-        return { deleted: 'account', files }
+  return handleJson(
+    async (request): Promise<AccountDeleteResponse> => {
+      const { authenticate, removeFiles, deleteRows, resetProfile, cancelSubscription, deleteUser } = deps()
+      const userId = await requireUser(authenticate, request)
+      const { mode } = await readBody(request, AccountDeleteRequestSchema)
+      try {
+        const files = await removeFiles(userId)
+        if (mode === 'account') {
+          await cancelSubscription?.(userId)
+          await deleteUser(userId)
+          return { deleted: 'account', files }
+        }
+        for (const table of WIPED_TABLES) await deleteRows(userId, table)
+        await resetProfile(userId)
+        return { deleted: 'data', files }
+      } catch (error) {
+        console.error(`account-delete (${mode}) stopped:`, error)
+        throw new AiError(
+          503,
+          'delete_incomplete',
+          "Deleting didn't finish (the server had a problem). Please try again: it carries on with what is left.",
+          { cause: error },
+        )
       }
-      for (const table of WIPED_TABLES) await deleteRows(userId, table)
-      await resetProfile(userId)
-      return { deleted: 'data', files }
-    } catch (error) {
-      console.error(`account-delete (${mode}) stopped:`, error)
-      throw new AiError(
-        503,
-        'delete_incomplete',
-        "Deleting didn't finish (the server had a problem). Please try again: it carries on with what is left.",
-        { cause: error },
-      )
-    }
-  })
+    },
+    () => deps().env ?? {},
+  )
 }

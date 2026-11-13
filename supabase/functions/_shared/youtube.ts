@@ -26,8 +26,11 @@ export function youtubeId(input: string): string | null {
 /** The plain watch link, the form Gemini reads. */
 export const watchUrl = (id: string) => `https://www.youtube.com/watch?v=${id}`
 
-/** The privacy-enhanced player: no YouTube cookies until the student plays the video. */
-export const embedUrl = (id: string) => `https://www.youtube-nocookie.com/embed/${id}`
+/** The privacy-enhanced player: no YouTube cookies until the student plays the video (optional start time in seconds). */
+export const embedUrl = (id: string, startSec?: number | null): string =>
+  typeof startSec === 'number' && Number.isFinite(startSec) && startSec > 0
+    ? `https://www.youtube-nocookie.com/embed/${id}?start=${Math.floor(startSec)}`
+    : `https://www.youtube-nocookie.com/embed/${id}`
 
 /** Videos up to this long are watched at Gemini's usual 1 frame a second. */
 const FULL_FRAME_RATE_SECONDS = 20 * 60

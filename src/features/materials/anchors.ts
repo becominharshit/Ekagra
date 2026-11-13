@@ -1,7 +1,13 @@
 import { useQuery } from '@tanstack/react-query'
-import { TutorResponseSchema, type AnchorAction, type TutorRequest, type TutorResponse } from '@shared/schemas.ts'
+import {
+  TutorResponseSchema,
+  type AnchorAction,
+  type SourceCitation,
+  type TutorRequest,
+  type TutorResponse,
+} from '@shared/schemas.ts'
 import { academicsKey } from '@/features/academics/subjects'
-import { callAiFunction } from '@/features/ai/aiClient'
+import { callAiFunction, streamAiFunction } from '@/features/ai/aiClient'
 import { demoTutor } from '@/features/ai/demoAi'
 import { dbError, need, useDataSource, type DataSource } from '@/lib/dataSource'
 import { demoDb } from '@/lib/demoDb'
@@ -22,7 +28,33 @@ export const ACTION_LABEL: Record<AnchorAction, string> = {
   ask: 'Ask',
 }
 
-/** Signed in: the ai-tutor Edge Function (Fast model). Demo Mode: a sample made from the page. */
+/** Signed in: SSE streaming via ai-tutor (Fast model). Demo Mode: a sample made from the page. */
+export async function askTutorStream(
+  source: DataSource,
+  request: TutorRequest,
+  options?: {
+    onDelta?: (delta: { answerMd: string; citations: SourceCitation[] }) => void
+    signal?: AbortSignal
+  },
+): Promise<TutorResponse> {
+  if (source.kind === 'demo') {
+    const sample = demoTutor(request)
+    options?.onDelta?.({ answerMd: sample.answerMd, citations: sample.citations ?? [] })
+    return sample
+  }
+  return streamAiFunction('ai-tutor', request, {
+    schema: TutorResponseSchema,
+    signal: options?.signal,
+    onDelta: (partial) => {
+      const obj = partial as Record<string, unknown>
+      const answerMd = typeof obj.answerMd === 'string' ? obj.answerMd : ''
+      const citations = Array.isArray(obj.citations) ? (obj.citations as SourceCitation[]) : []
+      options?.onDelta?.({ answerMd, citations })
+    },
+  })
+}
+
+/** Non-streaming tutor fallback (keeps JSON compatibility for non-streaming callers/tests). */
 export async function askTutor(source: DataSource, request: TutorRequest): Promise<TutorResponse> {
   if (source.kind === 'demo') return demoTutor(request)
   return callAiFunction('ai-tutor', request, TutorResponseSchema)
@@ -49,11 +81,16 @@ export interface NewAnchor {
   material: Material
   request: TutorRequest
   rect: PageRect | null
+  onDelta?: (delta: { answerMd: string; citations: SourceCitation[] }) => void
+  signal?: AbortSignal
 }
 
-/** Asks the tutor and saves the answer as an anchor (and its flashcards, for that action). */
-export async function createAnchor(source: DataSource, { material, request, rect }: NewAnchor): Promise<{ anchor: Anchor; cardCount: number }> {
-  const answer = await askTutor(source, request)
+/** Asks the tutor (streaming over SSE when interactive callbacks/signal are given) and saves the answer as an anchor. */
+export async function createAnchor(source: DataSource, { material, request, rect, onDelta, signal }: NewAnchor): Promise<{ anchor: Anchor; cardCount: number }> {
+  const answer =
+    onDelta || signal
+      ? await askTutorStream(source, request, { onDelta, signal })
+      : await askTutor(source, request)
   const anchor: TablesInsert<'ai_anchors'> = {
     id: crypto.randomUUID(),
     material_id: material.id,

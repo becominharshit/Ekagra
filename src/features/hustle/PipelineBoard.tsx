@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { format } from 'date-fns'
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ExternalLink, LoaderCircle, Plus } from 'lucide-react'
 import {
   AlertDialog,
@@ -12,6 +11,8 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
+import { useTimezone } from '@/hooks/useNow'
+import { dateKeyInTimezone, formatShortDateInTimezone } from '@/lib/timezone'
 import { useClients } from './clients'
 import type { Hustle } from './hustles'
 import { useHustleMutation } from './hustles'
@@ -24,6 +25,7 @@ import { TEMPLATES, toHustleType } from './templates'
 
 /** The hustle's pipeline board: a column per stage, cards moved with arrow buttons (they work on phones too). */
 export function PipelineBoard({ hustle }: { hustle: Hustle }) {
+  const timeZone = useTimezone()
   const items = useHustleItems(hustle.id)
   const money = useTransactions(hustle.id)
   const clients = useClients(hustle.id)
@@ -121,7 +123,7 @@ export function PipelineBoard({ hustle }: { hustle: Hustle }) {
                   fields: {
                     kind: 'income',
                     amount: Number(paying.amount),
-                    occurredOn: format(new Date(), 'yyyy-MM-dd'),
+                    occurredOn: dateKeyInTimezone(new Date(), timeZone),
                     clientId: paying.client_id,
                     itemId: paying.id,
                     category: paying.title,
@@ -156,8 +158,9 @@ interface BoardCardProps {
 }
 
 function BoardCard({ card, currency, busy, onEdit, onUp, onDown, previous, next }: BoardCardProps) {
+  const timeZone = useTimezone()
   const link = safeUrl(card.url)
-  const details = [card.amount === null ? null : formatMoney(Number(card.amount), card.currency ?? currency), card.due_at ? format(new Date(card.due_at), 'd MMM') : null].filter(Boolean)
+  const details = [card.amount === null ? null : formatMoney(Number(card.amount), card.currency ?? currency), card.due_at ? formatShortDateInTimezone(card.due_at, timeZone) : null].filter(Boolean)
   return (
     <article className="grid gap-1.5 rounded-lg border bg-card p-2.5 shadow-xs">
       <button type="button" className="text-left text-sm font-medium hover:underline" onClick={onEdit}>

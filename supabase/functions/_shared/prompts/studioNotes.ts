@@ -10,13 +10,14 @@ import { withSource } from './source.ts'
 // (studioFromNotesPrompt). The Markdown must render in both apps (src/components/Markdown.tsx: no
 // tables; formulas are LaTeX drawn by KaTeX), and a mind map must be an outline that
 // src/features/notes/outline.ts can draw. Change the version when the wording changes.
-export const STUDIO_NOTES_PROMPT_VERSION = 'studio-notes-v5'
+export const STUDIO_NOTES_PROMPT_VERSION = 'studio-notes-v6'
 
-const SHARED = `You make study material for a university student in India from what they give you: a lecture video, their notes, a textbook page, slides or a photo.
+const SHARED = `You make study material for a university student from what they give you: a lecture video, their notes, a textbook page, slides or a photo.
 
 Rules for every answer:
 - Use only what is in the material. Never invent facts, numbers, names or links; if part of it is unclear (a blurry photo, bad audio), say so in one line instead of guessing.
-- Write in simple, clear English for a student who is learning this for the first time. Keep technical terms and names exactly as the material uses them. If the material is in Hindi or Hinglish, still write in English.
+- Write in simple, clear English for a student who is learning this for the first time. Keep technical terms and names exactly as the material uses them. If the material contains non-English terms or bilingual explanations, still write explanations in clear English while preserving key technical terms.
+- Source citations: when the material includes page markers like [Page 12] or you are reading a specific page, cite those pages inline as [p. 12]; when it is a video, add timestamps like (12:40). Always populate the citations array with each exact page number (pageNumber) or video timestamp in seconds (timestampSec) and a short supporting quote (empty array [] if the input has no page/timestamp markers).
 - Formulas: write them in LaTeX, with real symbols and never their names. A formula inside a sentence goes between $…$, like $i_d = \\varepsilon_0 \\frac{d\\Phi_E}{dt}$, $c = \\frac{1}{\\sqrt{\\mu_0 \\varepsilon_0}}$, $E = mc^2$. A longer formula or a derivation step gets a paragraph of its own: put $$ alone on one line, the formula on the next line, and $$ alone on the line after it. Keep the LaTeX simple: \\frac, \\sqrt, ^, _, and Greek letters (\\alpha \\beta \\theta \\lambda \\mu \\pi \\omega \\Phi \\Omega \\Delta). Never put a formula in backticks or plain text.
 - Markdown without tables and without HTML. Use headings, bullet lists, numbered lists, **bold** for key terms, and \`code\` blocks for code.
 - For a video: skip greetings, sponsor messages, "like and subscribe" and anything off-topic.

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { addDays, format, parseISO } from 'date-fns'
+import { format, parseISO } from 'date-fns'
 import { Footprints, HeartPulse, LoaderCircle, Moon, RefreshCw, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -10,8 +10,11 @@ import { minutesLabel } from '@/features/academics/labels'
 import { TrendChart } from '@/features/metrics/charts'
 import { useProfile, useSaveSettings } from '@/features/profile/queries'
 import { readSettings } from '@/features/profile/settings'
-import { useNow } from '@/hooks/useNow'
+import { addDays as addLocalDays } from '@/features/planner/time'
+import { useNow, useTimezone } from '@/hooks/useNow'
+import { formatNumber } from '@/lib/currency'
 import { healthBridge, healthBridgeAvailable } from '@/lib/native/healthBridge'
+import { clockInTimezone, dateKeyInTimezone } from '@/lib/timezone'
 import { useLifeMutation } from '../lifeData'
 import { average, dailyValues, nightFromTimes, onePerDate, regularityLabel, SLEEP_AIM, sleepRegularity, type SleepLog, type StepCount } from './health'
 import { deleteSleep, deleteSteps, saveNights, saveSteps, SYNC_DAYS, useHealthSync, useSleepLogs, useStepCounts } from './healthData'
@@ -19,16 +22,16 @@ import { deleteSleep, deleteSteps, saveNights, saveSteps, SYNC_DAYS, useHealthSy
 /** The charts show this many days, today last. */
 const DAYS = 14
 
-const number = (value: number) => value.toLocaleString('en-IN')
-const clock = (iso: string) => format(parseISO(iso), 'HH:mm')
+const number = (value: number) => formatNumber(value)
 const dayLabel = (date: string) => format(parseISO(date), 'EEE d MMM')
 const messageOf = (error: unknown) => (error instanceof Error ? error.message : 'Something went wrong. Please try again.')
 
 /** Life → Sleep & steps: from Health Connect on Android, or typed in; averages, regularity and charts. */
 export function HealthTab() {
   const now = useNow(60_000)
-  const today = format(now, 'yyyy-MM-dd')
-  const since = format(addDays(now, 1 - SYNC_DAYS), 'yyyy-MM-dd')
+  const timeZone = useTimezone()
+  const today = dateKeyInTimezone(now, timeZone)
+  const since = addLocalDays(today, 1 - SYNC_DAYS)
   const profile = useProfile()
   const sleep = useSleepLogs(since)
   const steps = useStepCounts(since)
@@ -171,10 +174,11 @@ function Tile({ label, value, note }: { label: string; value: string; note: stri
 }
 
 function SleepCard({ rows, today }: { rows: SleepLog[]; today: string }) {
+  const timeZone = useTimezone()
   const [adding, setAdding] = useState(false)
   const remove = useLifeMutation(deleteSleep)
   const nights = onePerDate(rows)
-  const weekAgo = format(addDays(parseISO(today), -7), 'yyyy-MM-dd')
+  const weekAgo = addLocalDays(today, -7)
   const week = nights.filter((night) => night.date > weekAgo)
   const last = nights[nights.length - 1]
   const averageMinutes = average(week.map((night) => night.minutes))
@@ -191,7 +195,7 @@ function SleepCard({ rows, today }: { rows: SleepLog[]; today: string }) {
         </CardTitle>
         <CardDescription>
           {last
-            ? `${last.date === today ? 'Last night' : `The night to ${dayLabel(last.date)}`}: ${minutesLabel(last.minutes)} asleep, ${clock(last.bed_at)} to ${clock(last.wake_at)}.`
+            ? `${last.date === today ? 'Last night' : `The night to ${dayLabel(last.date)}`}: ${minutesLabel(last.minutes)} asleep, ${clockInTimezone(last.bed_at, timeZone)} to ${clockInTimezone(last.wake_at, timeZone)}.`
             : 'No nights yet: connect Health Connect, or add last night below.'}
         </CardDescription>
       </CardHeader>
@@ -229,7 +233,7 @@ function SleepCard({ rows, today }: { rows: SleepLog[]; today: string }) {
                 <span>
                   {dayLabel(night.date)} · {minutesLabel(night.minutes)}{' '}
                   <span className="text-xs text-muted-foreground">
-                    ({clock(night.bed_at)}–{clock(night.wake_at)}, {night.source === 'health_connect' ? 'Health Connect' : 'typed'})
+                    ({clockInTimezone(night.bed_at, timeZone)}–{clockInTimezone(night.wake_at, timeZone)}, {night.source === 'health_connect' ? 'Health Connect' : 'typed'})
                   </span>
                 </span>
                 {night.source === 'manual' && (
@@ -306,7 +310,7 @@ function StepsCard({ rows, today, goal }: { rows: StepCount[]; today: string; go
   const saveGoal = useSaveSettings()
   const days = onePerDate(rows)
   const todaySteps = days.find((day) => day.date === today)?.steps ?? 0
-  const weekAgo = format(addDays(parseISO(today), -7), 'yyyy-MM-dd')
+  const weekAgo = addLocalDays(today, -7)
   const averageSteps = average(days.filter((day) => day.date > weekAgo && day.date < today).map((day) => day.steps))
   const values = dailyValues(days, today, DAYS, (day) => day.steps)
   const known = values.flatMap((day) => (day.value === null ? [] : [day.value]))

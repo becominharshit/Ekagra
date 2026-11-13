@@ -22,7 +22,10 @@ export default defineConfig({
       '@studio': fileURLToPath(new URL('./studio/src', import.meta.url)),
     },
   },
-  // The Python worker is an ES module (Pyodide needs a module worker).
+  // The Python and SQL workers are ES modules; exclude PGlite from Vite prebundling so its WASM/data assets resolve cleanly.
+  optimizeDeps: {
+    exclude: ['@electric-sql/pglite'],
+  },
   worker: {
     format: 'es',
   },

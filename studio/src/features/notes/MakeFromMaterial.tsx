@@ -1,16 +1,19 @@
 import { useState } from 'react'
 import { FileText, ListChecks, LoaderCircle, Network, type LucideIcon } from 'lucide-react'
 import { useNavigate } from 'react-router'
-import type { StudioNoteKind } from '@shared/schemas.ts'
+import type { SourceCitation, StudioNoteKind } from '@shared/schemas.ts'
 import { clockTime, DEFAULT_WINDOW_SECONDS, videoWindows, type VideoPart } from '@shared/youtube.ts'
+import { CitationChips } from '@/components/CitationChips'
+import { Markdown } from '@/components/Markdown'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useAcademicsMutation } from '@/features/academics/subjects'
 import { useProfile } from '@/features/profile/queries'
+import type { DataSource } from '@/lib/dataSource'
 import type { Material } from '@studio/features/library/library'
 import { NoteList } from '@studio/features/library/lists'
-import { makeNotes } from './makeNotes'
+import { makeNotesStream, type MakeNotesInput } from './makeNotes'
 import { useStudioNotes } from './studioNotes'
 
 const OPTIONS: { kind: StudioNoteKind; label: string; about: string; icon: LucideIcon }[] = [
@@ -39,7 +42,35 @@ const UNKNOWN_DURATION_WINDOWS: VideoPart[] = [
 export function MakeFromMaterial({ material }: { material: Material }) {
   const navigate = useNavigate()
   const profile = useProfile()
-  const make = useAcademicsMutation(makeNotes)
+  const [streamPreview, setStreamPreview] = useState<{
+    stageLabel: string
+    title: string
+    markdown: string
+    citations: SourceCitation[]
+  } | null>(null)
+  const make = useAcademicsMutation((source: DataSource, input: MakeNotesInput) =>
+    makeNotesStream(source, input, {
+      onStatus: (status) => {
+        const label =
+          typeof status.completedParts === 'number' && typeof status.totalParts === 'number'
+            ? `Streaming parts (${status.completedParts}/${status.totalParts})…`
+            : status.stage === 'saving'
+              ? 'Saving note…'
+              : 'Streaming from Gemini…'
+        setStreamPreview((prev) =>
+          prev ? { ...prev, stageLabel: label } : { stageLabel: label, title: material.title, markdown: '', citations: [] },
+        )
+      },
+      onDelta: (delta) => {
+        setStreamPreview((prev) => ({
+          stageLabel: prev?.stageLabel ?? 'Streaming from Gemini…',
+          title: delta.title || prev?.title || material.title,
+          markdown: delta.markdown || prev?.markdown || '',
+          citations: delta.citations && delta.citations.length > 0 ? delta.citations : (prev?.citations ?? []),
+        }))
+      },
+    }),
+  )
   const made = useStudioNotes({ materialId: material.id })
   const [making, setMaking] = useState<StudioNoteKind | null>(null)
   const [firstPage, setFirstPage] = useState('1')
@@ -61,6 +92,7 @@ export function MakeFromMaterial({ material }: { material: Material }) {
     const startSec = parsedStart !== undefined && !Number.isNaN(parsedStart) && parsedStart > 0 ? parsedStart * 60 : undefined
     const endSec = parsedEnd !== undefined && !Number.isNaN(parsedEnd) && parsedEnd > 0 ? parsedEnd * 60 : undefined
     setMaking(kind)
+    setStreamPreview({ stageLabel: 'Starting Gemini stream…', title: material.title, markdown: '', citations: [] })
     make.mutate(
       {
         material,
@@ -72,7 +104,13 @@ export function MakeFromMaterial({ material }: { material: Material }) {
         program: profile.data?.program,
         year: profile.data?.year,
       },
-      { onSuccess: (noteId) => navigate(`/notes/${noteId}`), onSettled: () => setMaking(null) },
+      {
+        onSuccess: (noteId) => navigate(`/notes/${noteId}`),
+        onSettled: () => {
+          setMaking(null)
+          setStreamPreview(null)
+        },
+      },
     )
   }
 
@@ -170,6 +208,23 @@ export function MakeFromMaterial({ material }: { material: Material }) {
           <Label htmlFor="first-page">Start at page</Label>
           <Input id="first-page" inputMode="numeric" className="h-8 w-20" value={firstPage} onChange={(event) => setFirstPage(event.target.value.replace(/\D/g, ''))} />
           {material.page_count ? <span className="text-xs text-muted-foreground">of {material.page_count}</span> : null}
+        </div>
+      )}
+      {streamPreview && (
+        <div className="grid gap-2 rounded-lg border bg-muted/30 p-3" aria-live="polite">
+          <div className="flex items-center justify-between gap-2 text-xs font-medium text-primary">
+            <span className="flex items-center gap-1.5">
+              <LoaderCircle className="size-3.5 animate-spin" aria-hidden />
+              {streamPreview.stageLabel}
+            </span>
+            {streamPreview.title && <span className="truncate text-muted-foreground">{streamPreview.title}</span>}
+          </div>
+          {streamPreview.markdown && (
+            <div className="max-h-64 overflow-y-auto rounded-md border bg-background p-3">
+              <Markdown>{streamPreview.markdown}</Markdown>
+            </div>
+          )}
+          <CitationChips citations={streamPreview.citations} />
         </div>
       )}
       {make.error && (

@@ -40,15 +40,15 @@ export function clientEarnings(transactions: Money[], entries: Time[]): Map<stri
   )
 }
 
-/** Time entries of one month ('YYYY-MM'), by their local date. */
-export function entriesInMonth<T extends Pick<TimeEntry, 'started_at'>>(entries: T[], month: string): T[] {
-  return entries.filter((entry) => monthKey(new Date(entry.started_at)) === month)
+/** Time entries of one month ('YYYY-MM'), by their local date in `timeZone` (or OS local time if omitted). */
+export function entriesInMonth<T extends Pick<TimeEntry, 'started_at'>>(entries: T[], month: string, timeZone?: string): T[] {
+  return entries.filter((entry) => monthKey(new Date(entry.started_at), timeZone) === month)
 }
 
 /** This month's earnings of one hustle. */
-export function monthEarnings(transactions: Money[], entries: Time[], now: Date): Earnings {
-  const month = monthKey(now)
-  return earnings(inMonth(transactions, month), entriesInMonth(entries, month))
+export function monthEarnings(transactions: Money[], entries: Time[], now: Date, timeZone?: string): Earnings {
+  const month = monthKey(now, timeZone)
+  return earnings(inMonth(transactions, month), entriesInMonth(entries, month, timeZone))
 }
 
 /** "₹6,000 in 40 h = ₹150/h", or "₹6,000, no time logged yet". */

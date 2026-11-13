@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { format } from 'date-fns'
 import { Check, LoaderCircle, NotebookPen, ShieldCheck, X } from 'lucide-react'
 import { useNavigate } from 'react-router'
 import { Button } from '@/components/ui/button'
@@ -13,9 +12,10 @@ import { useBlocks } from '@/features/planner/planBlocks'
 import { blockAt, localDateOf, localToIso, type PlanBlock } from '@/features/planner/schedule'
 import { useProfile } from '@/features/profile/queries'
 import { readSettings } from '@/features/profile/settings'
-import { useNow } from '@/hooks/useNow'
+import { useNow, useTimezone } from '@/hooks/useNow'
 import { useDataSource } from '@/lib/dataSource'
 import { focusGuard, focusGuardAvailable } from '@/lib/native/focusGuard'
+import { clockInTimezone } from '@/lib/timezone'
 import { distractionsKey, useDistractions } from './distractions'
 import { useFocusStore } from './focusStore'
 import { useActiveFocus } from './sessions'
@@ -44,14 +44,16 @@ const isOpen = (block: PlanBlock) => block.status === 'planned' || block.status 
 /** The Academic Tollbooth: questions from the current subject, then a reason, for a few minutes with blocked apps. */
 export function TollboothFlow({ appPackage, appLabel }: { appPackage: string | null; appLabel: string | null }) {
   const now = useNow(1000)
-  const today = localDateOf(now)
+  const timeZone = useTimezone()
+  const today = localDateOf(now, timeZone)
   const focus = useActiveFocus()
   const blocks = useBlocks(today, today)
   const subjects = useSubjects()
   const profile = useProfile()
   const settings = readSettings(profile.data?.settings).tollbooth
   const pool = useTollboothPool()
-  const events = useDistractions(localToIso(today, 0))
+  const dayStartIso = localToIso(today, 0, timeZone)
+  const events = useDistractions(dayStartIso)
   const save = useSaveTollbooth()
   const addToNotebook = useAcademicsMutation(noteMistake)
   const setPass = useFocusStore((state) => state.setPass)
@@ -66,7 +68,7 @@ export function TollboothFlow({ appPackage, appLabel }: { appPackage: string | n
   // The subject being studied: the focus session's, else the plan block's of right now.
   const subjectId = session?.subject_id ?? blockAt((blocks.data ?? []).filter(isOpen), now)?.subject_id ?? null
   const subjectName = subjects.data?.find((subject) => subject.id === subjectId)?.name
-  const status = tollboothStatus(events.data ?? [], { dayStart: new Date(localToIso(today, 0)), now, dailyLimit: settings.dailyLimit })
+  const status = tollboothStatus(events.data ?? [], { dayStart: new Date(dayStartIso), now, dailyLimit: settings.dailyLimit })
   const appName = appLabel ?? 'blocked apps'
   const back = () => void navigate(session ? '/today/focus' : '/today')
 
@@ -74,7 +76,7 @@ export function TollboothFlow({ appPackage, appLabel }: { appPackage: string | n
     if (!pool.data) return
     const time = Date.now()
     setTyped('')
-    setStep({ kind: 'question', questions: pickQuestions(pool.data, subjectId, time, settings.questions), answers: [], startedAt: time, shownAt: time })
+    setStep({ kind: 'question', questions: pickQuestions(pool.data, subjectId, time, settings.questions, new Date(time)), answers: [], startedAt: time, shownAt: time })
   }
 
   /** An answer ('' = the time ran out): right moves on, wrong ends the try. */
@@ -132,6 +134,28 @@ export function TollboothFlow({ appPackage, appLabel }: { appPackage: string | n
   })
   useEffect(() => () => onLeave.current(), [])
 
+  // Keyboard shortcuts: 1-4 selects an MCQ option quickly without needing the mouse.
+  const onAnswerKey = useRef<(key: string) => void>(() => undefined)
+  useEffect(() => {
+    onAnswerKey.current = (key: string) => {
+      if (step.kind !== 'question') return
+      const question = step.questions[step.answers.length]
+      if (!question || question.type !== 'mcq') return
+      const idx = Number(key) - 1
+      if (idx >= 0 && idx < question.options.length) answer(String(idx))
+    }
+  })
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.metaKey || event.ctrlKey || event.altKey) return
+      const tag = (event.target as HTMLElement | null)?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+      if (event.key >= '1' && event.key <= '4') onAnswerKey.current(event.key)
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
   const errorLine = save.error && (
     <p role="alert" className="text-sm text-destructive">
       {save.error.message}
@@ -149,7 +173,13 @@ export function TollboothFlow({ appPackage, appLabel }: { appPackage: string | n
           <CardDescription className="flex justify-between gap-3">
             <span>
               Question {index + 1} of {step.questions.length}
-              {subjectName && question.origin !== 'builtin' ? ` · ${subjectName}` : ''}
+              {question.origin === 'mistake'
+                ? ' · From mistake notebook'
+                : question.origin === 'coding'
+                  ? ' · Coding debug'
+                  : subjectName && question.origin !== 'builtin'
+                    ? ` · ${subjectName}`
+                    : ''}
             </span>
             <span className="tabular-nums">{left} s</span>
           </CardDescription>
@@ -162,10 +192,14 @@ export function TollboothFlow({ appPackage, appLabel }: { appPackage: string | n
           {question.type === 'mcq' ? (
             <div className="grid gap-2">
               {question.options.map((option, optionIndex) => (
-                <Button key={optionIndex} variant="outline" className="h-auto justify-start py-3 text-left whitespace-normal" onClick={() => answer(String(optionIndex))}>
-                  {option}
+                <Button key={optionIndex} variant="outline" className="h-auto justify-start gap-2.5 py-3 text-left whitespace-normal" onClick={() => answer(String(optionIndex))}>
+                  <kbd aria-hidden className="inline-flex size-5 shrink-0 items-center justify-center rounded border bg-muted font-mono text-xs text-muted-foreground">
+                    {optionIndex + 1}
+                  </kbd>
+                  <span>{option}</span>
                 </Button>
               ))}
+              <p className="hidden text-xs text-muted-foreground sm:block">Keys: press 1–{question.options.length} to answer.</p>
             </div>
           ) : (
             <form
@@ -224,7 +258,7 @@ export function TollboothFlow({ appPackage, appLabel }: { appPackage: string | n
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Check className="size-5" aria-hidden />
-            Open until {format(new Date(step.until), 'HH:mm')}
+            Open until {clockInTimezone(step.until, timeZone)}
           </CardTitle>
           <CardDescription>
             {appName === 'blocked apps' ? 'Blocked apps are' : `${appName} is`} open for {settings.unlockMinutes} minutes, then the block comes back. {status.left} emergency{' '}

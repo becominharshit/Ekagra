@@ -1,0 +1,30 @@
+{
+  "backToAcademics": "Academics",
+  "title": "Coding Lab",
+  "subtitle": "Write and run Python, JavaScript, TypeScript, and SQL right here on your device.",
+  "newFile": "New file",
+  "newFileLanguage": "Language for new file",
+  "offlineNote": "JavaScript, TypeScript, and SQL run offline immediately. Python downloads once (~13 MB) and is cached for offline use.",
+  "offlineReadyPython": "Python 3: Ready offline",
+  "offlineNeedPython": "Python 3: Download for offline (~13 MB)",
+  "offlineDownloadingPython": "Downloading Python ({{loaded}}/{{total}})…",
+  "offlineInstantOther": "JS / TS / SQL: Always ready offline",
+  "practiceProblems": "Practice problems",
+  "solvedSummary": "{{solved}} of {{total}} solved. Tests check your answer each time you run it.",
+  "practiceDescription": "Small problems with tests that check your answer.",
+  "addStarterProblems": "Add {{count}} practice problems",
+  "yourFiles": "Your files",
+  "yourFilesDescription": "Free files to try things out in Python, JS, TS, or SQL.",
+  "noFiles": "None yet. Tap New file to start one.",
+  "notRunYet": "Not run yet",
+  "lastRun": "Last run {{when}}",
+  "deleteTitle": "Delete “{{title}}”?",
+  "deleteDescription": "The file and its code are deleted. This can't be undone.",
+  "keepIt": "Keep it",
+  "deleteAction": "Delete",
+  "status": {
+    "solved": "Solved",
+    "started": "Started",
+    "new": "New"
+  }
+}

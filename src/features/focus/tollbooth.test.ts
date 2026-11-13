@@ -7,6 +7,9 @@ import type { Tables } from '@/types/database'
 import {
   builtinQuestion,
   cardQuestion,
+  cardWeaknessScore,
+  codingDebugQuestion,
+  mistakeQuestion,
   pickQuestions,
   saveTollbooth,
   seededRandom,
@@ -90,6 +93,63 @@ describe('picking Tollbooth questions', () => {
       expect(isRight(made, String(made.correct))).toBe(true)
       expect(made.explanation).toContain(made.options[made.correct] ?? '?')
     }
+  })
+
+  it('prioritizes weak/due FSRS flashcards and open mistakes over untouched items', () => {
+    const now = new Date('2026-11-02T10:00:00.000Z')
+    const weakCard = {
+      id: 'weak-c',
+      front: 'What is ACID?',
+      back: 'Atomicity, Consistency, Isolation, Durability',
+      topic_id: 'dbms-topic',
+      suspended: false,
+      due_at: '2026-11-01T10:00:00.000Z',
+      fsrs: { state: 3, lapses: 4, stability: 0.6, difficulty: 8 },
+    }
+    const standaloneMistake: NonNullable<TollboothPool['mistakes']>[number] = {
+      id: 'm1',
+      topic_id: 'dbms-topic',
+      question_id: null,
+      flashcard_id: null,
+      concept: 'Difference between BCNF and 3NF',
+      why_wrong: 'Confused non-prime attribute rule',
+      correct_approach: 'Every determinant is a superkey',
+      status: 'open',
+      fsrs: { state: 1, lapses: 2, stability: 0.5, difficulty: 7 },
+      next_review_at: '2026-11-01T08:00:00.000Z',
+      correct_count: 0,
+    }
+    expect(cardWeaknessScore(weakCard, now)).toBeGreaterThan(100)
+
+    const enriched: TollboothPool = {
+      ...POOL,
+      cards: [weakCard, ...POOL.cards],
+      mistakes: [standaloneMistake],
+    }
+    const picked = pickQuestions(enriched, 'dbms', 17, 3, now)
+    expect(picked.some((q) => q.origin === 'mistake' && q.id === 'm1')).toBe(true)
+    expect(picked.some((q) => q.origin === 'flashcard' && q.id === 'weak-c')).toBe(true)
+
+    const mq = mistakeQuestion(standaloneMistake, ['Answer A', 'Answer B', 'Answer C'], seededRandom(1))
+    expect(mq?.origin).toBe('mistake')
+    expect(mq?.type === 'mcq' && mq.options[mq.correct]).toBe('Every determinant is a superkey')
+  })
+
+  it('includes coding debugging prompts prioritizing failed snippets in Coding Lab pools', () => {
+    const now = new Date('2026-11-02T10:00:00.000Z')
+    const withSnippets: TollboothPool = {
+      ...POOL,
+      snippets: [{ id: 's1', topic_id: 'python-topic', title: 'Fix recursion', language: 'python', passed: false, last_output: 'RecursionError' }],
+    }
+    const picked = pickQuestions(withSnippets, 'python', 5, 3, now)
+    const debugQ = picked.find((q) => q.origin === 'coding')
+    expect(debugQ).toBeDefined()
+    expect(debugQ?.prompt).toContain('Fix recursion')
+
+    const sqlPrompt = codingDebugQuestion(seededRandom(3), 0, 'sql')
+    expect(sqlPrompt.origin).toBe('coding')
+    expect(sqlPrompt.prompt).toContain('SQL')
+    expect(tollboothMistake({ question: sqlPrompt, given: '' })).toMatchObject({ question_id: null, flashcard_id: null })
   })
 })
 

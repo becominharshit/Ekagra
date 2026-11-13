@@ -246,7 +246,20 @@ export function demoTutor(request: TutorRequest): TutorResponse {
       break
     }
   }
-  return { answerMd, flashcards, model: 'demo', promptVersion: 'demo-sample' }
+  return {
+    answerMd,
+    flashcards,
+    citations: [
+      {
+        label: page,
+        pageNumber: request.pageNumber,
+        timestampSec: null,
+        quote: (selected || sentences(request.pageText)[0] || '').slice(0, 140),
+      },
+    ],
+    model: 'demo',
+    promptVersion: 'demo-sample',
+  }
 }
 
 /** What Demo Mode knows about a topic besides the request: facts from the student's roadmap. */

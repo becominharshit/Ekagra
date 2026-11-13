@@ -132,12 +132,25 @@ export const TutorRequestSchema = z
   })
 export type TutorRequest = z.infer<typeof TutorRequestSchema>
 
+export const SourceCitationSchema = z.object({
+  label: z.string().min(1).max(40).describe('Short citation badge such as "p. 12" or "12:40"'),
+  pageNumber: z.number().int().nullable().describe('1-based PDF page number when citing a PDF, or null'),
+  timestampSec: z.number().int().nullable().describe('Whole seconds from the start of a lecture video when citing a video, or null'),
+  quote: z.string().max(180).describe('Short excerpt or topic phrase from the source supporting the claim, or ""'),
+})
+export type SourceCitation = z.infer<typeof SourceCitationSchema>
+
 export const TutorAnswerSchema = z.object({
   answerMd: z.string().min(1).max(6000).describe('The answer, in Markdown'),
   flashcards: z
     .array(z.object({ front: z.string().min(1).max(300), back: z.string().min(1).max(600) }))
     .max(8)
     .describe('Only for the "flashcards" action; otherwise an empty list'),
+  citations: z
+    .array(SourceCitationSchema)
+    .max(12)
+    .default([])
+    .describe('Source references cited in answerMd (PDF page numbers or timestamps); empty array [] if none'),
 })
 
 /** What ai-tutor returns (model and prompt version are saved with the anchor). */
@@ -380,6 +393,11 @@ export type StudioNotesRequest = z.infer<typeof StudioNotesRequestSchema>
 export const StudioNoteAnswerSchema = z.object({
   title: z.string().min(1).max(200).describe('A short title, e.g. "SQL joins" or "Normalization: 1NF to BCNF"'),
   markdown: z.string().min(1).max(200_000).describe('The notes, mind map or revision sheet in Markdown, as the instructions describe'),
+  citations: z
+    .array(SourceCitationSchema)
+    .max(40)
+    .default([])
+    .describe('Source references (PDF page numbers or lecture timestamps) cited in markdown; empty array [] if none'),
 })
 export type StudioNoteAnswer = z.infer<typeof StudioNoteAnswerSchema>
 
@@ -831,8 +849,14 @@ export type SpeakResponse = z.infer<typeof SpeakResponseSchema>
 // AI usage dashboard: the limits and what the whole app spent (ai-usage, no AI call)
 // ---------------------------------------------------------------------------
 
-/** The limits when the secrets AI_USER_DAILY_REQUESTS and AI_MONTHLY_BUDGET_USD aren't set. */
-export const DEFAULT_AI_LIMITS = { userDailyRequests: 150, monthlyBudgetUsd: 10 } as const
+export const PlanTierSchema = z.enum(['free', 'pro', 'campus'])
+export const BillingProviderSchema = z.enum(['stripe', 'razorpay'])
+export const SubscriptionStatusSchema = z.enum(['trialing', 'active', 'past_due', 'canceled', 'incomplete', 'expired'])
+export const CurrencyCodeSchema = z.enum(['USD', 'EUR', 'GBP', 'INR'])
+export const BillingIntervalSchema = z.enum(['month', 'year'])
+
+/** Default fallback limits when environment variables or DB entitlements aren't loaded yet. */
+export const DEFAULT_AI_LIMITS = { userDailyRequests: 25, monthlyBudgetUsd: 100 } as const
 
 export const AiUsageRequestSchema = z
   .object({
@@ -842,14 +866,38 @@ export const AiUsageRequestSchema = z
   .optional()
 export type AiUsageRequest = z.infer<typeof AiUsageRequestSchema>
 
+export const PlanEntitlementSchema = z.object({
+  planTier: PlanTierSchema,
+  dailyAiRequests: z.number().int().positive(),
+  monthlyAiTokens: z.number().int().positive(),
+  maxStudioSources: z.number().int().positive(),
+  codingLabLanguages: z.array(z.string()),
+  offlineSyncEnabled: z.boolean(),
+  priorityTier: z.enum(['standard', 'priority']),
+})
+
 export const AiUsageResponseSchema = z.object({
+  tier: PlanTierSchema,
+  entitlement: PlanEntitlementSchema,
+  user: z.object({
+    requestsLast24h: z.number().int().min(0),
+    tokensThisMonth: z.number().int().min(0),
+  }),
+  subscription: z
+    .object({
+      provider: BillingProviderSchema,
+      status: SubscriptionStatusSchema,
+      currentPeriodEnd: z.string().nullable(),
+      cancelAtPeriodEnd: z.boolean(),
+    })
+    .nullable(),
   limits: z.object({
-    /** AI requests per student in any 24 hours. */
+    /** Active student's AI requests allowed in any 24 hours. */
     userDailyRequests: z.number().int().positive(),
-    /** The app's AI budget per month (USD), shared by all students. */
+    /** Active student's monthly AI token allowance. */
+    monthlyAiTokens: z.number().int().positive(),
+    /** Admin circuit-breaker alert threshold per month (USD); does not lock out users. */
     monthlyBudgetUsd: z.number().positive(),
-    /** The most the app may spend in any 24 hours: 1/30 of the monthly budget. */
-    dailyBudgetUsd: z.number().positive(),
   }),
   app: z.object({
     /** What all students' AI requests cost in the last 24 hours (USD). Null: too many to add up. */
@@ -857,10 +905,52 @@ export const AiUsageResponseSchema = z.object({
     /** The same since monthStart. */
     spentThisMonthUsd: z.number().min(0).nullable(),
   }),
+  /** True when aggregate spend has crossed the admin alert threshold (triggers admin alert, never user lockout). */
+  budgetAlert: z.boolean(),
   /** False while the AI secrets (key, models, prices) aren't set on the server. */
   aiConfigured: z.boolean(),
 })
 export type AiUsageResponse = z.infer<typeof AiUsageResponseSchema>
+
+// ---------------------------------------------------------------------------
+// Billing checkout & self-serve portal (billing-checkout, billing-portal)
+// ---------------------------------------------------------------------------
+
+export const BillingCheckoutRequestSchema = z.object({
+  planTier: z.enum(['pro', 'campus']),
+  interval: BillingIntervalSchema.default('month'),
+  currency: CurrencyCodeSchema.default('USD'),
+  provider: BillingProviderSchema.optional(),
+  successUrl: z.url(),
+  cancelUrl: z.url(),
+})
+export type BillingCheckoutRequest = z.infer<typeof BillingCheckoutRequestSchema>
+
+export const BillingCheckoutResponseSchema = z.object({
+  provider: BillingProviderSchema,
+  planTier: z.enum(['pro', 'campus']),
+  interval: BillingIntervalSchema,
+  currency: CurrencyCodeSchema,
+  checkoutUrl: z.url().nullable(),
+  sessionId: z.string().nullable(),
+  subscriptionId: z.string().nullable(),
+  keyId: z.string().nullable(),
+})
+export type BillingCheckoutResponse = z.infer<typeof BillingCheckoutResponseSchema>
+
+export const BillingPortalRequestSchema = z.object({
+  returnUrl: z.url(),
+  action: z.enum(['portal', 'cancel']).default('portal'),
+})
+export type BillingPortalRequest = z.infer<typeof BillingPortalRequestSchema>
+
+export const BillingPortalResponseSchema = z.object({
+  provider: BillingProviderSchema,
+  url: z.url().nullable(),
+  canceledAtPeriodEnd: z.boolean(),
+  message: z.string(),
+})
+export type BillingPortalResponse = z.infer<typeof BillingPortalResponseSchema>
 
 // ---------------------------------------------------------------------------
 // Wiping data or deleting the account (account-delete, no AI call)
@@ -880,3 +970,23 @@ export const AccountDeleteResponseSchema = z.object({
   files: z.number().int().min(0),
 })
 export type AccountDeleteResponse = z.infer<typeof AccountDeleteResponseSchema>
+
+// ---------------------------------------------------------------------------
+// Server-side GDPR data export (account-export, no AI call)
+// ---------------------------------------------------------------------------
+
+export const AccountExportResponseSchema = z.object({
+  app: z.literal('Ekagra'),
+  format: z.literal(1),
+  exportedAt: z.string(),
+  mode: z.literal('signed_in'),
+  user: z.object({
+    id: z.string(),
+    email: z.string().nullable(),
+    name: z.string(),
+  }),
+  note: z.string(),
+  counts: z.record(z.string(), z.number().int().min(0)),
+  tables: z.record(z.string(), z.array(z.unknown())),
+})
+export type AccountExportResponse = z.infer<typeof AccountExportResponseSchema>

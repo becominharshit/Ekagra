@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { format, parseISO } from 'date-fns'
 import { CheckCircle2, Lightbulb, LoaderCircle, Mic, RotateCcw, Sparkles, Square, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -8,8 +7,9 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { countLabel } from '@/features/academics/labels'
 import { TrendChart } from '@/features/metrics/charts'
-import { useNow } from '@/hooks/useNow'
+import { useNow, useTimezone } from '@/hooks/useNow'
 import { useDataSource } from '@/lib/dataSource'
+import { clockInTimezone, dateKeyInTimezone, formatShortDateInTimezone } from '@/lib/timezone'
 import { cn } from '@/lib/utils'
 import { useLifeMutation } from '../lifeData'
 import { canRecognizeSpeech, startListening, type Listener } from './recognizer'
@@ -53,6 +53,7 @@ const nowMs = () => Date.now()
 /** Life → Speaking: practise answering a question out loud, get feedback, and watch pace and fillers improve. */
 export function SpeakingTab() {
   const now = useNow(60_000)
+  const timeZone = useTimezone()
   const sessions = useSpeakingSessions()
   const [scenario, setScenario] = useState<Scenario>('interview')
   const [promptIndex, setPromptIndex] = useState(0)
@@ -95,7 +96,7 @@ export function SpeakingTab() {
           setOwnPrompt(null)
           setPromptIndex(promptIndex + 1)
         }}
-        practisedSeconds={practisedOn(list, format(now, 'yyyy-MM-dd'))}
+        practisedSeconds={practisedOn(list, dateKeyInTimezone(now, timeZone), timeZone)}
         onSaved={(session) => setShownId(session.id)}
       />
       {shown && <SessionCard session={shown} onClose={() => setShownId(null)} />}
@@ -450,6 +451,7 @@ function Tile({ label, value, note }: { label: string; value: string; note: stri
 
 /** One session: pace, fillers, the AI's scores and tips, and the transcript with the fillers marked. */
 function SessionCard({ session, onClose }: { session: SpeakingSession; onClose: () => void }) {
+  const timeZone = useTimezone()
   const scores = readScores(session.scores)
   const feedback = readFeedback(session.feedback)
   const fillers = topFillers(readFillers(session.fillers))
@@ -466,7 +468,8 @@ function SessionCard({ session, onClose }: { session: SpeakingSession; onClose: 
           </Button>
         </CardTitle>
         <CardDescription>
-          {SCENARIO_LABEL[toScenario(session.scenario)]} · {format(parseISO(session.created_at), 'EEE d MMM, HH:mm')} · {session.source === 'ai' ? 'feedback from the AI' : 'counted on your device'}
+          {SCENARIO_LABEL[toScenario(session.scenario)]} · {formatShortDateInTimezone(session.created_at, timeZone)}, {clockInTimezone(session.created_at, timeZone)} ·{' '}
+          {session.source === 'ai' ? 'feedback from the AI' : 'counted on your device'}
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4 text-sm">
@@ -525,6 +528,7 @@ function SessionCard({ session, onClose }: { session: SpeakingSession; onClose: 
 }
 
 function ProgressCard({ sessions }: { sessions: SpeakingSession[] }) {
+  const timeZone = useTimezone()
   if (sessions.length === 0) return null
   if (sessions.length === 1) {
     return (
@@ -537,7 +541,7 @@ function ProgressCard({ sessions }: { sessions: SpeakingSession[] }) {
     )
   }
   const series = progressSeries(sessions)
-  const firstLabel = series.from ? format(parseISO(series.from), 'd MMM') : ''
+  const firstLabel = series.from ? formatShortDateInTimezone(series.from, timeZone) : ''
   const count = series.wpm.length
   const lastWpm = series.wpm[count - 1] ?? 0
   const lastFillers = series.fillersPerMinute[count - 1] ?? 0
@@ -609,6 +613,7 @@ function HistoryCard({
   onShow: (id: string) => void
   onDelete: (id: string) => void
 }) {
+  const timeZone = useTimezone()
   if (sessions.length === 0) return null
   return (
     <Card>
@@ -625,7 +630,7 @@ function HistoryCard({
                 <button type="button" className={cn('min-w-0 flex-1 text-left', session.id === shownId && 'font-medium')} aria-current={session.id === shownId} onClick={() => onShow(session.id)}>
                   <span className="block truncate">{session.prompt}</span>
                   <span className="text-xs text-muted-foreground tabular-nums">
-                    {format(parseISO(session.created_at), 'd MMM')} · {SCENARIO_LABEL[toScenario(session.scenario)]} · {Math.round(Number(session.wpm ?? 0))} words a minute ·{' '}
+                    {formatShortDateInTimezone(session.created_at, timeZone)} · {SCENARIO_LABEL[toScenario(session.scenario)]} · {Math.round(Number(session.wpm ?? 0))} words a minute ·{' '}
                     {countLabel(session.filler_count, 'filler')}
                     {scores ? ` · ${averageScore(scores)}/10` : ''}
                   </span>

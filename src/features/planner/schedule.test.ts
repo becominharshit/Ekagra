@@ -51,6 +51,15 @@ describe('local time and UTC', () => {
     expect(minuteOf(new Date(iso))).toBe(870)
     expect(localToIso('2026-11-02', 1440)).toBe(at('2026-11-03', '00:00').toISOString()) // the end of the day
   })
+
+  it('converts timestamps using an explicit user IANA timezone regardless of host machine offset', () => {
+    // 14:30 in New York on 2026-11-02 (EST, UTC-5) is 19:30Z; in Tokyo (JST, UTC+9) it is 05:30Z.
+    const nyIso = localToIso('2026-11-02', 14 * 60 + 30, 'America/New_York')
+    expect(nyIso).toBe('2026-11-02T19:30:00.000Z')
+    expect(localDateOf('2026-11-03T02:00:00.000Z', 'America/New_York')).toBe('2026-11-02')
+    expect(localDateOf('2026-11-03T02:00:00.000Z', 'Asia/Tokyo')).toBe('2026-11-03')
+    expect(minuteOf(new Date('2026-11-02T19:30:00.000Z'), 'America/New_York')).toBe(870)
+  })
 })
 
 describe('planRows', () => {

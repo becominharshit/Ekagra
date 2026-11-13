@@ -1,45 +1,85 @@
 import { useState } from 'react'
 import { ExternalLink, LoaderCircle, Send, Trash2 } from 'lucide-react'
+import type { AnchorAction, SourceCitation } from '@shared/schemas.ts'
+import { CitationChips } from '@/components/CitationChips'
 import { Markdown } from '@/components/Markdown'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
 import { openInStudio } from '@/features/bridge/studio'
+import { extractCitations } from '@/features/notes/citations'
 import { ACTION_LABEL, type Anchor } from './anchors'
 
-/** A saved AI answer, with what it was about. */
+export interface StreamingAnchorPreview {
+  action: AnchorAction
+  pageNumber: number
+  selectedText: string | null
+  question: string | null
+  answerMd: string
+  citations: SourceCitation[]
+}
+
+/** A saved AI answer (or live streaming answer), with source citations and what it was about. */
 export function AnchorDialog({
   anchor,
+  streaming = null,
   cardCount,
   materialTitle,
   deleting,
+  onJumpToPage,
   onDelete,
   onClose,
 }: {
   anchor: Anchor | null
+  streaming?: StreamingAnchorPreview | null
   cardCount: number
   /** The PDF's title, sent along to Ekagra Studio. */
   materialTitle: string | null
   deleting: boolean
+  onJumpToPage?: (pageNumber: number) => void
   onDelete: (anchor: Anchor) => void
   onClose: () => void
 }) {
   const [studioProblem, setStudioProblem] = useState<string | null>(null)
-  const action = anchor && anchor.action in ACTION_LABEL ? ACTION_LABEL[anchor.action as keyof typeof ACTION_LABEL] : 'Answer'
+  const open = anchor !== null || streaming !== null
+  const activeAction = anchor ? anchor.action : streaming?.action
+  const action = activeAction && activeAction in ACTION_LABEL ? ACTION_LABEL[activeAction as keyof typeof ACTION_LABEL] : 'Answer'
+  const pageNo = anchor ? anchor.page_no : (streaming?.pageNumber ?? 1)
+  const question = anchor ? anchor.question : (streaming?.question ?? null)
+  const selectedText = anchor ? anchor.selected_text : (streaming?.selectedText ?? null)
+  const markdown = anchor ? (anchor.response_md ?? '') : (streaming?.answerMd ?? '')
+  const citations = extractCitations(markdown, streaming?.citations ?? [])
+
   return (
-    <Dialog open={anchor !== null} onOpenChange={(open) => !open && onClose()}>
+    <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
       <DialogContent className="max-h-[85dvh] overflow-y-auto">
-        {anchor && (
+        {open && (
           <>
             <DialogHeader>
-              <DialogTitle>
-                {action} · page {anchor.page_no}
+              <DialogTitle className="flex items-center gap-2">
+                <span>
+                  {action} · page {pageNo}
+                </span>
+                {streaming && !anchor && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                    <LoaderCircle className="size-3 animate-spin" aria-hidden />
+                    Streaming
+                  </span>
+                )}
               </DialogTitle>
               <DialogDescription>
-                {anchor.question ? `You asked: ${anchor.question}` : anchor.selected_text ? `“${anchor.selected_text.slice(0, 200)}”` : 'About this page'}
+                {question ? `You asked: ${question}` : selectedText ? `“${selectedText.slice(0, 200)}”` : 'About this page'}
               </DialogDescription>
             </DialogHeader>
-            <Markdown>{anchor.response_md ?? ''}</Markdown>
+            {markdown ? (
+              <Markdown onCitePage={onJumpToPage}>{markdown}</Markdown>
+            ) : (
+              <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                <LoaderCircle className="size-4 animate-spin" aria-hidden />
+                Reading this page…
+              </p>
+            )}
+            <CitationChips citations={citations} onCitePage={onJumpToPage} />
             {cardCount > 0 && (
               <p className="text-sm text-muted-foreground">
                 {cardCount === 1 ? '1 flashcard was' : `${cardCount} flashcards were`} added to your cards.
@@ -51,20 +91,24 @@ export function AnchorDialog({
               </p>
             )}
             <DialogFooter>
-              <Button variant="ghost" className="text-destructive" disabled={deleting} onClick={() => onDelete(anchor)}>
-                <Trash2 aria-hidden />
-                Delete
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setStudioProblem(null)
-                  openInStudio(anchor, materialTitle).catch(() => setStudioProblem("Ekagra Studio couldn't be opened. Check that it's running (docs/4)."))
-                }}
-              >
-                <ExternalLink aria-hidden />
-                Open in Ekagra Studio
-              </Button>
+              {anchor && (
+                <>
+                  <Button variant="ghost" className="text-destructive" disabled={deleting} onClick={() => onDelete(anchor)}>
+                    <Trash2 aria-hidden />
+                    Delete
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setStudioProblem(null)
+                      openInStudio(anchor, materialTitle).catch(() => setStudioProblem("Ekagra Studio couldn't be opened. Check that it's running (docs/4)."))
+                    }}
+                  >
+                    <ExternalLink aria-hidden />
+                    Open in Ekagra Studio
+                  </Button>
+                </>
+              )}
               <Button onClick={onClose}>Done</Button>
             </DialogFooter>
           </>

@@ -1,7 +1,7 @@
 import { format } from 'date-fns'
 import { ArrowLeft, ExternalLink, LoaderCircle } from 'lucide-react'
-import { Link, Navigate, useParams } from 'react-router'
-import { embedUrl, watchUrl, youtubeId } from '@shared/youtube.ts'
+import { Link, Navigate, useParams, useSearchParams } from 'react-router'
+import { clockTime, embedUrl, watchUrl, youtubeId } from '@shared/youtube.ts'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -92,6 +92,7 @@ function MaterialView({ material }: { material: Material }) {
 
 /** The material itself: YouTube's player, the photo or the text. */
 function Viewer({ material }: { material: Material }) {
+  const [params] = useSearchParams()
   const file = useMaterialFile(material)
   const text = useMaterialText(material)
   const box = 'rounded-xl border bg-card'
@@ -99,17 +100,23 @@ function Viewer({ material }: { material: Material }) {
   if (material.kind === 'youtube') {
     const id = youtubeId(material.source_url ?? '')
     if (!id) return <p className="text-sm text-destructive">This video's link is broken. Delete it and add the video again in Ekagra Studio.</p>
+    const rawStart = Number(params.get('t'))
+    const startSec = Number.isFinite(rawStart) && rawStart > 0 ? Math.floor(rawStart) : undefined
     return (
       <div className="grid gap-2">
+        {startSec !== undefined && (
+          <p className="text-xs text-muted-foreground">Jumped to timestamp {clockTime(startSec)}</p>
+        )}
         <iframe
-          src={embedUrl(id)}
+          key={startSec ?? 'start'}
+          src={embedUrl(id, startSec)}
           title={material.title}
           className={`aspect-video w-full ${box}`}
           allow="accelerometer; encrypted-media; gyroscope; picture-in-picture; fullscreen"
           referrerPolicy="strict-origin-when-cross-origin"
         />
         <Button asChild variant="ghost" size="sm" className="justify-self-start">
-          <a href={watchUrl(id)} target="_blank" rel="noreferrer">
+          <a href={startSec ? `${watchUrl(id)}&t=${startSec}s` : watchUrl(id)} target="_blank" rel="noreferrer">
             <ExternalLink aria-hidden />
             Open on YouTube
           </a>

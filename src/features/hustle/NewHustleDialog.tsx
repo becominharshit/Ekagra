@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useAuthStore } from '@/features/auth/authStore'
 import { useProfile } from '@/features/profile/queries'
+import { defaultCurrencyForLocale } from '@/lib/currency'
 import { need, useDataSource } from '@/lib/dataSource'
 import { makeCustomPlan, type CustomPlan } from './customPlan'
 import { createHustle, useHustleMutation } from './hustles'
@@ -100,7 +101,7 @@ function HustleDetailsForm({ type, onBack, onClose }: { type: HustleType; onBack
         goal: goal.trim() || null,
         goalAmount: checked.goalAmount,
         goalDate: date || null,
-        currency: profile.data?.currency ?? 'INR',
+        currency: profile.data?.currency ?? defaultCurrencyForLocale(),
         phases,
         stages,
       },

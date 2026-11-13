@@ -1,5 +1,4 @@
 import { useState, type FormEvent } from 'react'
-import { format, parseISO } from 'date-fns'
 import { Copy, LoaderCircle, Timer, Trophy } from 'lucide-react'
 import { useNavigate } from 'react-router'
 import { Badge } from '@/components/ui/badge'
@@ -10,9 +9,11 @@ import { Label } from '@/components/ui/label'
 import { minutesLabel } from '@/features/academics/labels'
 import { startFocus, useActiveFocus } from '@/features/focus/sessions'
 import { useTodayMutation } from '@/features/today/todayMutation'
-import { useNow } from '@/hooks/useNow'
+import { useNow, useTimezone } from '@/hooks/useNow'
+import { clockInTimezone } from '@/lib/timezone'
 import { cn } from '@/lib/utils'
 import { FriendNumbers } from './FriendStats'
+import { FriendSafetyActions, SafetyDialog, type SafetyTarget } from './SafetyDialogs'
 import { GROUP_FOCUS_MINUTES, groupNameProblem, leaderboard, minutesLeft, runningSession, studyingNow, type GroupView } from './groups'
 import { createGroup, joinGroup, leaveGroup, newGroupCode, removeMember, startGroupFocus, useGroups } from './groupsData'
 import { formatCode, isCode } from './social'
@@ -53,6 +54,7 @@ export function GroupsCard({ weekStart }: { weekStart: string }) {
 
 function GroupPanel({ group, weekStart }: { group: GroupView; weekStart: string }) {
   const now = useNow(30_000)
+  const timeZone = useTimezone()
   const navigate = useNavigate()
   const active = useActiveFocus()
   const startOwn = useTodayMutation(startFocus)
@@ -62,6 +64,8 @@ function GroupPanel({ group, weekStart }: { group: GroupView; weekStart: string 
   const remove = useSocialMutation(removeMember)
   const [leaving, setLeaving] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [safetyTarget, setSafetyTarget] = useState<SafetyTarget | null>(null)
+  const [safetyNotice, setSafetyNotice] = useState<string | null>(null)
   const me = group.members.find((member) => member.me)
   const owner = me?.userId === group.ownerId
   const board = leaderboard(group.members, weekStart)
@@ -86,7 +90,7 @@ function GroupPanel({ group, weekStart }: { group: GroupView; weekStart: string 
         <div className="flex flex-wrap gap-1.5" aria-label="Studying now">
           {studying.map((member) => (
             <Badge key={member.userId} className="bg-mode-study/15 text-mode-study">
-              {member.name} until {format(parseISO(member.stats?.studying_until ?? ''), 'HH:mm')}
+              {member.name} until {clockInTimezone(member.stats?.studying_until ?? now, timeZone)}
             </Badge>
           ))}
         </div>
@@ -161,11 +165,22 @@ function GroupPanel({ group, weekStart }: { group: GroupView; weekStart: string 
                 </span>
                 <FriendNumbers stats={member.stats} weekStart={weekStart} />
               </span>
-              {owner && !member.me && !group.sample && (
-                <Button size="sm" variant="ghost" disabled={remove.isPending} onClick={() => remove.mutate({ groupId: group.id, userId: member.userId })}>
-                  Remove
-                </Button>
-              )}
+              <div className="flex flex-wrap items-center gap-1">
+                {!member.me && (
+                  <FriendSafetyActions
+                    userId={member.userId}
+                    name={member.name}
+                    contextType="group"
+                    contextId={group.sample ? null : group.id}
+                    onSelect={setSafetyTarget}
+                  />
+                )}
+                {owner && !member.me && !group.sample && (
+                  <Button size="sm" variant="ghost" disabled={remove.isPending} onClick={() => remove.mutate({ groupId: group.id, userId: member.userId })}>
+                    Remove
+                  </Button>
+                )}
+              </div>
             </li>
           ))}
         </ul>
@@ -210,11 +225,21 @@ function GroupPanel({ group, weekStart }: { group: GroupView; weekStart: string 
           ))}
       </div>
       {group.sample && <p className="text-xs text-muted-foreground">A sample group: its members and their numbers are made up, and its code doesn't work.</p>}
+      {safetyNotice && (
+        <p role="status" className="text-xs text-muted-foreground">
+          {safetyNotice}
+        </p>
+      )}
       {problem && (
         <p role="alert" className="text-sm text-destructive">
           {problem.message}
         </p>
       )}
+      <SafetyDialog
+        target={safetyTarget}
+        onOpenChange={(open) => !open && setSafetyTarget(null)}
+        onSubmitted={(msg) => setSafetyNotice(msg)}
+      />
     </section>
   )
 }

@@ -1,0 +1,25 @@
+{
+  "title": "Academics",
+  "subtitle": "Your subjects and their roadmaps.",
+  "actions": {
+    "addSubject": "Add subject",
+    "addFile": "Add a file",
+    "library": "Library (PDFs)",
+    "codingLab": "Coding Lab",
+    "attendance": "Attendance",
+    "grades": "Grades",
+    "progress": "Progress"
+  },
+  "loadingSubjects": "Loading subjects…",
+  "empty": {
+    "title": "No subjects yet",
+    "description": "Add a subject, then import its syllabus: the AI turns it into a roadmap of topics on two tracks, one for the exam and one for real-world skills.",
+    "addSample": "Add sample subjects (DBMS and Python)"
+  },
+  "skillCourseBadge": "Skill course",
+  "weeklyLimit": "{{time}} a week",
+  "noRoadmapYet": "No roadmap yet",
+  "highPriorityCount": "{{count}} high priority",
+  "examReadiness": "Exam readiness {{percent}}",
+  "openSubjectHint": "Open a subject, then a topic, to study it: lesson, check quiz and flashcards."
+}

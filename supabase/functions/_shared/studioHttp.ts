@@ -8,12 +8,15 @@ import { handleJson, readBody, requireUser } from './respond.ts'
 // and models, the same limits and ai_usage. A separate file, so Ekagra's functions don't bundle Gemini.
 
 export function handleStudioAiRequest<I, O>(feature: AiFeature<I, O>, deps: () => ServerDeps): (request: Request) => Promise<Response> {
-  return handleJson(async (request) => {
-    const { env, authenticate, usage, model } = deps()
-    const userId = await requireUser(authenticate, request)
-    const input = await readBody(request, feature.input)
-    const config = readStudioAiConfig(env)
-    const ai = createAiGateway({ config, usage, model: model ?? geminiModels(config.apiKey) })
-    return feature.run({ input, userId, ai })
-  })
+  return handleJson(
+    async (request) => {
+      const { env, authenticate, usage, model } = deps()
+      const userId = await requireUser(authenticate, request)
+      const input = await readBody(request, feature.input)
+      const config = readStudioAiConfig(env)
+      const ai = createAiGateway({ config, usage, model: model ?? geminiModels(config.apiKey) })
+      return feature.run({ input, userId, ai })
+    },
+    () => deps().env,
+  )
 }

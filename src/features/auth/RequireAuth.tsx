@@ -2,6 +2,7 @@ import { LoaderCircle } from 'lucide-react'
 import { Navigate, Outlet, useLocation } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { useProfile } from '@/features/profile/queries'
+import { SyncController } from '@/features/sync/SyncController'
 import { signOut } from './auth'
 import { useAuthStore } from './authStore'
 
@@ -26,8 +27,12 @@ export function RequireAuth() {
       />
     )
   }
-  if (!profile.data.onboarded_at && pathname !== '/onboarding') return <Navigate to="/onboarding" replace />
-  return <Outlet />
+  return (
+    <>
+      <SyncController />
+      {!profile.data.onboarded_at && pathname !== '/onboarding' ? <Navigate to="/onboarding" replace /> : <Outlet />}
+    </>
+  )
 }
 
 function Loading() {

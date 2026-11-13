@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { dbError, need, useDataSource, type DataSource } from '@/lib/dataSource'
 import { demoDb } from '@/lib/demoDb'
+import { dateKeyInTimezone } from '@/lib/timezone'
 import type { Tables } from '@/types/database'
 import { hustlesKey } from './hustles'
 
@@ -32,9 +33,9 @@ export function totals(transactions: Amount[]): Totals {
   return { income: round(income), expense: round(expense), net: round(income - expense) }
 }
 
-/** 'YYYY-MM' of a date in local time, e.g. '2026-11'. */
-export function monthKey(date: Date): string {
-  return format(date, 'yyyy-MM')
+/** 'YYYY-MM' of a date in `timeZone` (or local time if omitted), e.g. '2026-11'. */
+export function monthKey(date: Date, timeZone?: string): string {
+  return timeZone ? dateKeyInTimezone(date, timeZone).slice(0, 7) : format(date, 'yyyy-MM')
 }
 
 /** The money of one month ('YYYY-MM'). */

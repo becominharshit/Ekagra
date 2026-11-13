@@ -1,6 +1,6 @@
 import { format } from 'date-fns'
 import { ArrowLeft, ExternalLink, LoaderCircle } from 'lucide-react'
-import { Link, useParams } from 'react-router'
+import { Link, useNavigate, useParams } from 'react-router'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -42,6 +42,7 @@ export function NotePage() {
 }
 
 function NoteView({ note }: { note: Note }) {
+  const navigate = useNavigate()
   const isDemo = useAuthStore((state) => state.status === 'demo')
   const subject = useSubject(note.subject_id)
   const roadmap = useRoadmap(note.subject_id)
@@ -49,6 +50,14 @@ function NoteView({ note }: { note: Note }) {
   const material = useStudyMaterial(note.material_id ?? undefined)
   const topic = roadmap.data?.topics.find((candidate) => candidate.id === note.topic_id) ?? null
   const details = [noteKindLabel(note.kind), noteSourceLabel(note.source), `updated ${format(new Date(note.updated_at), 'd MMM yyyy')}`].filter(Boolean)
+  const onCitePage =
+    material.data?.kind === 'pdf'
+      ? (pageNumber: number) => navigate(`/academics/library/${material.data!.id}?page=${pageNumber}`)
+      : undefined
+  const onCiteTimestamp =
+    material.data?.kind === 'youtube'
+      ? (seconds: number) => navigate(`/academics/materials/${material.data!.id}?t=${seconds}`)
+      : undefined
 
   return (
     <>
@@ -97,7 +106,13 @@ function NoteView({ note }: { note: Note }) {
           Ekagra Studio couldn't make this{note.error ? `: ${note.error.replace(/\.$/, '')}.` : '.'} Try again in Studio.
         </p>
       ) : (
-        <NoteBody kind={note.kind} title={note.title} content={note.content} />
+        <NoteBody
+          kind={note.kind}
+          title={note.title}
+          content={note.content}
+          onCitePage={onCitePage}
+          onCiteTimestamp={onCiteTimestamp}
+        />
       )}
     </>
   )

@@ -1,9 +1,13 @@
 import { useQuery } from '@tanstack/react-query'
-import { addMinutes, format, startOfWeek } from 'date-fns'
+import { addMinutes } from 'date-fns'
+import { weekStart as weekStartHelper } from '@/features/planner/time'
+import { useTimezone } from '@/hooks/useNow'
 import { dbError, need, useDataSource, type DataSource } from '@/lib/dataSource'
 import { demoDb } from '@/lib/demoDb'
+import { resolveTimezone, timePartsInTimezone, zonedLocalToIso } from '@/lib/timezone'
 import { groupNameProblem, type GroupView, type Member } from './groups'
-import { normalizeCode, viewOf } from './social'
+import { listBlockedUserIds } from './safety'
+import { isCode, normalizeCode, viewOf } from './social'
 import { loadSharedViews, SAMPLE_PARTNER_ID, socialKey } from './socialData'
 
 // Study groups, from Supabase or (Demo Mode) the device. Real groups need accounts: Demo Mode shows
@@ -12,13 +16,15 @@ import { loadSharedViews, SAMPLE_PARTNER_ID, socialKey } from './socialData'
 export const SAMPLE_GROUP_ID = 'sample-group'
 
 /** Demo Mode's sample group: members' numbers grow through the week, and each studies at set hours. */
-export function sampleGroup(now: Date): GroupView {
-  const weekStart = format(startOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd')
-  const daysIn = (now.getDay() + 6) % 7
-  const hour = now.getHours()
-  const atHour = (value: number) => new Date(now.getFullYear(), now.getMonth(), now.getDate(), value)
+export function sampleGroup(now: Date, timeZone?: string): GroupView {
+  const zone = resolveTimezone(timeZone)
+  const parts = timePartsInTimezone(now, zone)
+  const weekStart = weekStartHelper(parts.date)
+  const daysIn = (parts.weekday + 6) % 7
+  const hour = parts.hour
+  const atHourIso = (value: number) => zonedLocalToIso(parts.date, value * 60, zone)
   const sample = (userId: string, name: string, minutesADay: number, from: number, to: number): Member => {
-    const until = hour >= from && hour < to ? atHour(to).toISOString() : null
+    const until = hour >= from && hour < to ? atHourIso(to) : null
     return {
       userId,
       name,
@@ -48,6 +54,7 @@ export function sampleGroup(now: Date): GroupView {
   const mine = demoDb.list('shared_stats')[0]
   if (mine) members.push({ userId: mine.user_id, name: `${mine.display_name} (you)`, role: 'member', me: true, stats: viewOf(mine, now) })
   // Riya starts a 50-minute group focus at the top of each hour from 20:00 to 21:00.
+  const startIso = atHourIso(hour)
   const sessions =
     hour >= 20 && hour < 22
       ? [
@@ -57,18 +64,28 @@ export function sampleGroup(now: Date): GroupView {
             group_id: SAMPLE_GROUP_ID,
             mode: 'custom',
             minutes: 50,
-            starts_at: atHour(hour).toISOString(),
-            ends_at: addMinutes(atHour(hour), 50).toISOString(),
-            created_at: atHour(hour).toISOString(),
-            updated_at: atHour(hour).toISOString(),
+            starts_at: startIso,
+            ends_at: addMinutes(new Date(startIso), 50).toISOString(),
+            created_at: startIso,
+            updated_at: startIso,
           },
         ]
       : []
   return { id: SAMPLE_GROUP_ID, name: 'DBMS study circle (sample)', ownerId: 'sample-riya', code: '9C4E1B7A30', members, sessions, sample: true }
 }
 
-export async function listGroups(source: DataSource, now: Date): Promise<GroupView[]> {
-  if (source.kind === 'demo') return [sampleGroup(now)]
+export async function listGroups(source: DataSource, now: Date, timeZone?: string): Promise<GroupView[]> {
+  const blocked = await listBlockedUserIds(source)
+  if (source.kind === 'demo') {
+    const group = sampleGroup(now, timeZone)
+    return [
+      {
+        ...group,
+        members: group.members.filter((m) => m.me || !blocked.has(m.userId)),
+        sessions: group.sessions.filter((s) => !blocked.has(s.user_id)),
+      },
+    ]
+  }
   const { client, userId } = source
   // The rules return only the groups this student is in.
   const { data: groups, error } = await client.from('study_groups').select('id, name, user_id, invite_code').order('created_at')
@@ -81,13 +98,14 @@ export async function listGroups(source: DataSource, now: Date): Promise<GroupVi
   ])
   if (members.error) throw dbError(members.error)
   if (sessions.error) throw dbError(sessions.error)
-  const views = await loadSharedViews(source, [...new Set(members.data.map((member) => member.user_id))])
+  const visibleMembers = members.data.filter((m) => m.user_id === userId || !blocked.has(m.user_id))
+  const views = await loadSharedViews(source, [...new Set(visibleMembers.map((member) => member.user_id))])
   return groups.map((group) => ({
     id: group.id,
     name: group.name,
     ownerId: group.user_id,
     code: group.invite_code,
-    members: members.data
+    members: visibleMembers
       .filter((member) => member.group_id === group.id)
       .map((member) => {
         const stats = views.get(member.user_id) ?? null
@@ -95,7 +113,7 @@ export async function listGroups(source: DataSource, now: Date): Promise<GroupVi
         const name = stats?.display_name ?? 'Member'
         return { userId: member.user_id, name: me ? `${name} (you)` : name, role: member.role, me, stats }
       }),
-    sessions: sessions.data.filter((session) => session.group_id === group.id),
+    sessions: sessions.data.filter((session) => session.group_id === group.id && !blocked.has(session.user_id)),
   }))
 }
 
@@ -110,6 +128,7 @@ export async function createGroup(source: DataSource, name: string): Promise<voi
 }
 
 export async function joinGroup(source: DataSource, code: string): Promise<void> {
+  if (!isCode(code)) throw new Error('Enter the 10-character group code.')
   if (source.kind === 'demo') throw new Error(SIGN_IN)
   const { error } = await source.client.rpc('join_group', { code: normalizeCode(code) })
   if (error) throw dbError(error)
@@ -155,5 +174,11 @@ export async function startGroupFocus(source: DataSource, { groupId, minutes, no
 
 export function useGroups(enabled = true) {
   const { source, owner } = useDataSource()
-  return useQuery({ queryKey: [...socialKey(owner), 'groups'], queryFn: () => listGroups(need(source), new Date()), enabled: source !== null && enabled, refetchInterval: 60_000 })
+  const timeZone = useTimezone()
+  return useQuery({
+    queryKey: [...socialKey(owner), 'groups', timeZone],
+    queryFn: () => listGroups(need(source), new Date(), timeZone),
+    enabled: source !== null && enabled,
+    refetchInterval: 60_000,
+  })
 }

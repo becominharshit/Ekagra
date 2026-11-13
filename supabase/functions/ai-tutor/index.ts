@@ -1,4 +1,4 @@
-import { serveAi } from '../_shared/server.ts'
-import { tutorFeature } from './feature.ts'
+import { productionDeps } from '../_shared/server.ts'
+import { handleTutorRequest } from './feature.ts'
 
-serveAi(tutorFeature)
+Deno.serve(handleTutorRequest(productionDeps))

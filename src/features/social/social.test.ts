@@ -43,6 +43,29 @@ describe('my numbers', () => {
     expect(numbers).toEqual({ weekStart: '2026-11-02', focusMinutes: 45, streakDays: 3, planPct: 50 })
     expect(myNumbers({ now: NOW, focus: [], blocks: [] })).toEqual({ weekStart: '2026-11-02', focusMinutes: 0, streakDays: 0, planPct: null })
   })
+
+  it('computes daily streak boundaries and weekStart in the saved IANA timezone across UTC midnight', () => {
+    // At 2026-11-09T02:00:00Z, it is Monday 9 Nov in Tokyo (+09:00) and Sunday 8 Nov in New York (-05:00).
+    const instant = new Date('2026-11-09T02:00:00.000Z')
+    const sessions = [
+      { started_at: '2026-11-08T04:00:00.000Z', actual_minutes: 30 }, // Saturday night NY (Nov 7) / Sunday afternoon Tokyo (Nov 8)
+      { started_at: '2026-11-08T18:00:00.000Z', actual_minutes: 25 }, // Sunday afternoon NY (Nov 8) / Monday morning Tokyo (Nov 9)
+    ]
+
+    expect(myNumbers({ now: instant, focus: sessions, blocks: [], timeZone: 'America/New_York' })).toEqual({
+      weekStart: '2026-11-02',
+      focusMinutes: 55,
+      streakDays: 2,
+      planPct: null,
+    })
+
+    expect(myNumbers({ now: instant, focus: sessions, blocks: [], timeZone: 'Asia/Tokyo' })).toEqual({
+      weekStart: '2026-11-09',
+      focusMinutes: 25,
+      streakDays: 2,
+      planPct: null,
+    })
+  })
 })
 
 describe('publishing', () => {

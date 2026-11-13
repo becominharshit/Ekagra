@@ -18,7 +18,9 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { useNow } from '@/hooks/useNow'
+import { useNow, useTimezone } from '@/hooks/useNow'
+import { currencySymbol } from '@/lib/currency'
+import { dateKeyInTimezone } from '@/lib/timezone'
 import { cn } from '@/lib/utils'
 import { useClients, type Client } from './clients'
 import { useHustleMutation, type Hustle } from './hustles'
@@ -36,20 +38,22 @@ interface Editing {
 /** A hustle's money: this month's net profit, all of it, and the list of income and expenses. */
 export function MoneyTab({ hustle }: { hustle: Hustle }) {
   const now = useNow(60_000)
+  const timeZone = useTimezone()
   const money = useTransactions(hustle.id)
   const clients = useClients(hustle.id)
   const [editing, setEditing] = useState<Editing | null>(null)
   const all = money.data ?? []
-  const month = totals(inMonth(all, monthKey(now)))
+  const month = totals(inMonth(all, monthKey(now, timeZone)))
   const overall = totals(all)
   const clientName = new Map((clients.data ?? []).map((client) => [client.id, client.name]))
   const show = (amount: number) => formatMoney(amount, hustle.currency)
+  const monthLabel = new Intl.DateTimeFormat('en', { month: 'long', timeZone }).format(now)
 
   return (
     <div className="grid gap-4">
       <Card size="sm">
         <CardHeader>
-          <CardDescription>Net profit in {format(now, 'MMMM')}</CardDescription>
+          <CardDescription>Net profit in {monthLabel}</CardDescription>
           <CardTitle className={cn('text-2xl', month.net < 0 && 'text-destructive')}>{show(month.net)}</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-1 text-sm text-muted-foreground">
@@ -108,7 +112,7 @@ export function MoneyTab({ hustle }: { hustle: Hustle }) {
           {money.error.message}
         </p>
       )}
-      <TransactionDialog hustle={hustle} clients={clients.data ?? []} editing={editing} today={format(now, 'yyyy-MM-dd')} onClose={() => setEditing(null)} />
+      <TransactionDialog hustle={hustle} clients={clients.data ?? []} editing={editing} today={dateKeyInTimezone(now, timeZone)} onClose={() => setEditing(null)} />
     </div>
   )
 }
@@ -197,7 +201,7 @@ function TransactionForm({ hustle, clients, editing, today, onDone }: Transactio
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div className="grid gap-1.5">
-          <Label htmlFor="money-amount">Amount (₹)</Label>
+          <Label htmlFor="money-amount">Amount ({currencySymbol(hustle.currency)})</Label>
           <Input id="money-amount" type="number" inputMode="decimal" min={0} step="any" value={amount} onChange={(event) => setAmount(event.target.value)} />
         </div>
         <div className="grid gap-1.5">

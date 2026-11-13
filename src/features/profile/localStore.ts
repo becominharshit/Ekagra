@@ -1,4 +1,5 @@
 import { DEMO_USER } from '@/features/auth/demo'
+import { defaultCurrencyForLocale } from '@/lib/currency'
 import { demoDb } from '@/lib/demoDb'
 import type { ProfileRepo, ProfileRow, RoutineRow } from './queries'
 import { deviceTimezone } from './settings'
@@ -26,7 +27,7 @@ function freshData(): DemoData {
       year: null,
       semester: null,
       timezone: deviceTimezone(),
-      currency: 'INR',
+      currency: defaultCurrencyForLocale(),
       chronotype: 'neutral',
       mentor_tone: 'balanced',
       onboarded_at: null,

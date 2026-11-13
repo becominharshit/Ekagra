@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { format } from 'date-fns'
 import { ExternalLink, LoaderCircle, Trash2 } from 'lucide-react'
-import { useLocation, useNavigate, useParams } from 'react-router'
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
+import { clockTime, watchUrl } from '@shared/youtube.ts'
 import { PageHeader } from '@/components/layout/PageHeader'
 import {
   AlertDialog,
@@ -141,6 +142,7 @@ function MaterialView({ material }: { material: Material }) {
 
 /** The material itself: the browser's PDF viewer, the photo, the text, or YouTube's player. */
 function Viewer({ material }: { material: Material }) {
+  const [params] = useSearchParams()
   const file = useMaterialFile(material)
   const text = useMaterialText(material)
   const box = 'rounded-xl border bg-card'
@@ -148,16 +150,27 @@ function Viewer({ material }: { material: Material }) {
   if (material.kind === 'youtube') {
     const id = youtubeId(material.source_url ?? '')
     if (!id) return <p className="text-sm text-destructive">This video's link is broken. Delete it and add the video again.</p>
+    const rawStart = Number(params.get('t'))
+    const startSec = Number.isFinite(rawStart) && rawStart > 0 ? Math.floor(rawStart) : undefined
     return (
       <div className="grid gap-2">
+        {startSec !== undefined && (
+          <p className="text-xs text-muted-foreground">Jumped to timestamp {clockTime(startSec)}</p>
+        )}
         <iframe
-          src={embedUrl(id)}
+          key={startSec ?? 'start'}
+          src={embedUrl(id, startSec)}
           title={material.title}
           className={`aspect-video w-full ${box}`}
           allow="accelerometer; encrypted-media; gyroscope; picture-in-picture; fullscreen"
           referrerPolicy="strict-origin-when-cross-origin"
         />
-        <a href={material.source_url ?? '#'} target="_blank" rel="noreferrer" className="justify-self-start text-xs text-muted-foreground underline underline-offset-3 hover:text-foreground">
+        <a
+          href={startSec ? `${watchUrl(id)}&t=${startSec}s` : (material.source_url ?? '#')}
+          target="_blank"
+          rel="noreferrer"
+          className="justify-self-start text-xs text-muted-foreground underline underline-offset-3 hover:text-foreground"
+        >
           Open on YouTube
         </a>
       </div>
@@ -172,12 +185,18 @@ function Viewer({ material }: { material: Material }) {
   if (file.error) return <p className="text-sm text-destructive">{file.error.message}</p>
   if (!file.data) return <p className="text-sm text-destructive">This file is missing. Delete it and add it again.</p>
   if (material.kind === 'image') return <img src={file.data} alt={material.title} className={`mx-auto max-h-[78vh] object-contain ${box}`} />
+  const rawPage = Number(params.get('page'))
+  const targetPage = Number.isInteger(rawPage) && rawPage >= 1 ? rawPage : null
+  const pdfSrc = targetPage ? `${file.data}#page=${targetPage}` : file.data
   return (
     <div className="grid gap-2">
+      {targetPage !== null && (
+        <p className="text-xs text-muted-foreground">Opened at page {targetPage}</p>
+      )}
       {/* Phone browsers can't show a PDF inside a page; they open it instead. */}
-      {navigator.pdfViewerEnabled && <iframe src={file.data} title={material.title} className={`h-[78vh] w-full ${box}`} />}
+      {navigator.pdfViewerEnabled && <iframe key={pdfSrc} src={pdfSrc} title={material.title} className={`h-[78vh] w-full ${box}`} />}
       <Button asChild variant={navigator.pdfViewerEnabled ? 'ghost' : 'default'} size="sm" className="justify-self-start">
-        <a href={file.data} target="_blank" rel="noreferrer">
+        <a href={pdfSrc} target="_blank" rel="noreferrer">
           <ExternalLink aria-hidden />
           {navigator.pdfViewerEnabled ? 'Open in a new tab' : 'Open the PDF'}
         </a>

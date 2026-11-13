@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ekagra FocusGuard Settings</title>
+    <style>
+      body { font-family: system-ui, -apple-system, sans-serif; max-width: 600px; margin: 32px auto; padding: 0 20px; color: #0f172a; }
+      h1 { font-size: 1.4rem; margin-bottom: 6px; }
+      p { color: #475569; font-size: 0.9rem; }
+      label { display: block; font-weight: 600; font-size: 0.9rem; margin: 16px 0 6px; }
+      textarea, input { width: 100%; box-sizing: border-box; font: inherit; padding: 10px; border-radius: 8px; border: 1px solid #cbd5e1; }
+      .row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+      button { cursor: pointer; font: inherit; font-weight: 500; padding: 9px 14px; border-radius: 8px; border: 1px solid #cbd5e1; background: #fff; }
+      button.primary { background: #0f172a; color: #fff; border-color: #0f172a; }
+      #feedback { margin-top: 12px; font-size: 0.85rem; color: #047857; }
+    </style>
+  </head>
+  <body>
+    <h1>Ekagra FocusGuard Settings</h1>
+    <p>Choose which distracting domains are redirected during focus blocks, and set your Ekagra app URL.</p>
+
+    <label for="origin-input">Ekagra Web App URL</label>
+    <input id="origin-input" type="url" placeholder="https://ekagra.app" />
+
+    <label for="domains-input">Blocked domains (one per line or comma-separated)</label>
+    <textarea id="domains-input" rows="8"></textarea>
+
+    <div class="row">
+      <button id="save-btn" class="primary" type="button">Save settings</button>
+      <button id="defaults-btn" type="button">Restore defaults</button>
+    </div>
+    <p id="feedback" role="status"></p>
+    <script type="module" src="options.js"></script>
+  </body>
+</html>

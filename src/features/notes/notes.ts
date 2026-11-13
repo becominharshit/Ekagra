@@ -192,7 +192,7 @@ export async function seedSampleNotes(source: DataSource, subjectId: string): Pr
       source: 'youtube',
       status: 'ready',
       model: 'gemini-3.5-flash-lite',
-      prompt_version: 'studio-notes-v5',
+      prompt_version: 'studio-notes-v6',
     },
     {
       subject_id: subjectId,
@@ -202,7 +202,7 @@ export async function seedSampleNotes(source: DataSource, subjectId: string): Pr
       source: 'youtube',
       status: 'ready',
       model: 'gemini-3.5-flash-lite',
-      prompt_version: 'studio-notes-v5',
+      prompt_version: 'studio-notes-v6',
     },
   ])
 }

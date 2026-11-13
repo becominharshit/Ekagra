@@ -60,7 +60,7 @@ const parts = (body: Json | undefined): unknown[] => {
 describe('Ekagra Studio on Gemini (the real provider, no network)', () => {
   it('sends a YouTube video as its link (fileData), to the fast model, thinking a little, asking for JSON', async () => {
     const { result, sent, usage } = await generate(BASE, 'https://www.youtube.com/watch?v=9hE5-98ZeCg', 'fast')
-    expect(result).toEqual({ data: { title: 'SQL joins', markdown: '## Joins\n- Inner' }, model: 'gemini-3.5-flash-lite' })
+    expect(result).toEqual({ data: { title: 'SQL joins', markdown: '## Joins\n- Inner', citations: [] }, model: 'gemini-3.5-flash-lite' })
     expect(sent).toHaveLength(1)
     expect(sent[0]?.url).toContain('/models/gemini-3.5-flash-lite:generateContent')
     expect(parts(sent[0]?.body)).toContainEqual({ fileData: { mimeType: 'video/mp4', fileUri: 'https://www.youtube.com/watch?v=9hE5-98ZeCg' } })
