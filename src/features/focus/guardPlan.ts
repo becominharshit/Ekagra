@@ -55,8 +55,8 @@ export function guardPlan({ now, session, blocks, blockDuring, blockedPackages, 
 }
 
 /**
- * The screen for a link from FocusGuard's blocker screen: ekagra://focus → the focus screen,
- * ekagra://focus/tollbooth?app=…&label=… → the Academic Tollbooth for that app. Other links → null.
+ * The screen for a native link: FocusGuard's blocker screen (ekagra://focus, ekagra://focus/tollbooth)
+ * or Android's Share sheet (ekagra://share?text=… → Library with the shared link pre-filled).
  */
 export function focusRoute(url: string): string | null {
   let link: URL
@@ -65,7 +65,15 @@ export function focusRoute(url: string): string | null {
   } catch {
     return null
   }
-  if (link.protocol !== 'ekagra:' || link.hostname !== 'focus') return null
+  if (link.protocol !== 'ekagra:') return null
+  if (link.hostname === 'share') {
+    const text = link.searchParams.get('text')?.trim()
+    if (!text) return '/academics/library'
+    const urlMatch = /https?:\/\/\S+/.exec(text)
+    const shared = urlMatch ? urlMatch[0] : text
+    return `/academics/library?${new URLSearchParams({ share: shared }).toString()}`
+  }
+  if (link.hostname !== 'focus') return null
   if (link.pathname !== '/tollbooth') return '/today/focus'
   const params = new URLSearchParams()
   for (const key of ['app', 'label']) {

@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { CalendarDays, FlaskConical, LoaderCircle, Mail, NotebookPen, Target, TrendingUp } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link, Navigate } from 'react-router'
+import { ThemeToggle } from '@/components/ThemeToggle'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -157,7 +158,7 @@ export function SignInPage() {
             <img src="/favicon.svg" alt="" className="size-9" />
             <span className="font-heading text-xl font-semibold tracking-tight">{t('appName')}</span>
           </Link>
-          <nav aria-label="Public links" className="flex items-center gap-4 text-sm text-muted-foreground">
+          <nav aria-label="Public links" className="flex items-center gap-3 text-sm text-muted-foreground sm:gap-4">
             <Link to="/pricing" className="underline-offset-4 hover:text-foreground hover:underline">
               {t('pricing')}
             </Link>
@@ -167,6 +168,7 @@ export function SignInPage() {
             <Link to="/terms" className="underline-offset-4 hover:text-foreground hover:underline">
               {t('terms')}
             </Link>
+            <ThemeToggle className="text-foreground" />
           </nav>
         </header>
 

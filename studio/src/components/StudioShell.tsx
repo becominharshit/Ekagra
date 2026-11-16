@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { ArrowUpRight, Inbox, Library, LogOut } from 'lucide-react'
 import { Outlet, useLocation } from 'react-router'
 import { StudioLink as Link, StudioNavLink as NavLink } from '@studio/lib/studioPath'
+import { ThemeToggle } from '@/components/ThemeToggle'
 import { Button } from '@/components/ui/button'
 import { useSubjects } from '@/features/academics/subjects'
 import { signOut } from '@/features/auth/auth'
@@ -41,6 +42,7 @@ export function StudioShell() {
                 Ekagra
               </a>
             </Button>
+            <ThemeToggle />
             <Button variant="ghost" size="icon" aria-label={`Sign out${user?.email ? ` (${user.email})` : ''}`} title="Sign out" onClick={() => void signOut()}>
               <LogOut aria-hidden />
             </Button>

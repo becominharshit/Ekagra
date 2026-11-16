@@ -6,6 +6,7 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { RouterProvider } from 'react-router/dom'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { initAuth } from '@/features/auth/auth'
+import { initTheme } from '@/hooks/useTheme'
 import { initObservability } from '@/lib/observability'
 import { registerServiceWorker } from '@/lib/pwa'
 import { queryClient } from '@/lib/queryClient'
@@ -13,6 +14,8 @@ import { router } from '@/router'
 import '@/lib/i18n'
 import './index.css'
 
+// Apply saved light/dark theme before rendering UI and watch OS/tab updates.
+initTheme()
 // Initialize crash reporting before mounting (no-op if VITE_SENTRY_DSN is unset).
 initObservability('web')
 // Start following sign-in changes (and Android sign-in links) before the first screen shows.

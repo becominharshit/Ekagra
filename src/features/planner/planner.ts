@@ -73,6 +73,7 @@ export const DEFAULT_PLANNER_SETTINGS: PlannerSettings = {
   maxDailyIncreasePct: 20,
   examSeasonDays: 21,
   examSeasonBudget: EXAM_SEASON_BUDGET,
+  examSeasonMode: 'auto',
   burnoutEnergyMax: 2,
   burnoutCheckIns: 3,
   burnoutWindowDays: 7,
@@ -103,22 +104,32 @@ const NO_DATE: LocalDate = '9999-12-31'
 // Rules for one day: small pure functions, each tested on its own
 // ---------------------------------------------------------------------------
 
-/** Days from `date` until the nearest exam on or after it, or null when there's none. */
-export function daysToNextExam(date: LocalDate, subjects: PlannerSubject[]): number | null {
-  const upcoming = subjects
-    .flatMap((subject) => (subject.examDate ? [daysBetween(date, subject.examDate)] : []))
-    .filter((days) => days >= 0)
-  return upcoming.length > 0 ? Math.min(...upcoming) : null
+/** The nearest upcoming exam on or after `date` and how many days away it is, or null when there's none. */
+export function nextExamSubject(date: LocalDate, subjects: PlannerSubject[]): { subject: PlannerSubject; days: number } | null {
+  let nearest: { subject: PlannerSubject; days: number } | null = null
+  for (const subject of subjects) {
+    if (!subject.examDate) continue
+    const days = daysBetween(date, subject.examDate)
+    if (days < 0) continue
+    if (!nearest || days < nearest.days) nearest = { subject, days }
+  }
+  return nearest
 }
 
-/** Exam season = an exam is 0–21 days away: the budget becomes 80/5/15 and the skill track pauses. */
+/** Days from `date` until the nearest exam on or after it, or null when there's none. */
+export function daysToNextExam(date: LocalDate, subjects: PlannerSubject[]): number | null {
+  return nextExamSubject(date, subjects)?.days ?? null
+}
+
+/** Exam season = an exam is 0–21 days away (or examSeasonMode is 'on'): the budget becomes 80/5/15 and the skill track pauses. */
 export function dayBudget(
   date: LocalDate,
   subjects: PlannerSubject[],
   settings: PlannerSettings,
 ): { budget: Budget; examSeason: boolean } {
+  const mode = settings.examSeasonMode ?? 'auto'
   const days = daysToNextExam(date, subjects)
-  const examSeason = days !== null && days <= settings.examSeasonDays
+  const examSeason = mode === 'on' ? true : mode === 'off' ? false : days !== null && days <= settings.examSeasonDays
   return { budget: examSeason ? settings.examSeasonBudget : settings.budget, examSeason }
 }
 

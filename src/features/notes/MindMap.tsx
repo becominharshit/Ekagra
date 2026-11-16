@@ -14,7 +14,7 @@ function lineClass(depth: number): string {
 }
 
 function labelClass(depth: number): string {
-  if (depth === 0) return 'w-48 rounded-2xl bg-mode-study px-4 py-3 text-center font-heading text-base font-semibold text-white shadow-sm'
+  if (depth === 0) return 'w-48 rounded-2xl bg-mode-study px-4 py-3 text-center font-heading text-base font-semibold text-white dark:text-neutral-950 shadow-sm'
   if (depth === 1) return 'w-44 rounded-xl border-l-4 border-mode-study bg-card px-3 py-2 text-sm font-medium shadow-sm ring-1 ring-foreground/10'
   if (depth === 2) return 'w-44 rounded-lg bg-mode-study/5 px-3 py-2 text-sm ring-1 ring-mode-study/15'
   return 'w-44 rounded-lg bg-muted px-3 py-2 text-sm'

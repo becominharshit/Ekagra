@@ -97,6 +97,8 @@ export interface PlannerSettings {
   maxDailyIncreasePct: number
   examSeasonDays: number
   examSeasonBudget: Budget
+  /** 'auto' = on when an exam is within examSeasonDays; 'on' = forced on (80/5/15); 'off' = forced off. */
+  examSeasonMode?: 'auto' | 'on' | 'off'
   burnoutEnergyMax: number
   burnoutCheckIns: number
   burnoutWindowDays: number

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { dayWindowOf, nextReviewAt, noSleep, readWeekStats, RESTED_MINUTES, reviewOffset, reviewWeekStart, weekStats, type WeekStatsInputs } from './weekStats'
+import { dayWindowOf, nextDailyReminderAt, nextReviewAt, noSleep, readWeekStats, RESTED_MINUTES, reviewOffset, reviewWeekStart, weekStats, type WeekStatsInputs } from './weekStats'
 
 // The week of Monday 2 November 2026 (local time).
 const WEEK = new Date(2026, 10, 2)
@@ -222,6 +222,14 @@ describe('reminders and saved numbers', () => {
     expect(nextReviewAt(sunday(19), 0)).toEqual(new Date(2026, 10, 15, 18))
     expect(nextReviewAt(sunday(10), 0, { doneThisWeek: true })).toEqual(new Date(2026, 10, 15, 18))
     expect(nextReviewAt(new Date(2026, 10, 4, 9), 6)).toEqual(new Date(2026, 10, 7, 18)) // Wednesday → Saturday
+  })
+
+  it('schedules daily morning (08:00) and evening (21:00) reminders for today or tomorrow', () => {
+    const day = (hour: number) => new Date(2026, 10, 8, hour)
+    expect(nextDailyReminderAt(day(7), 8)).toEqual(new Date(2026, 10, 8, 8))
+    expect(nextDailyReminderAt(day(9), 8)).toEqual(new Date(2026, 10, 9, 8))
+    expect(nextDailyReminderAt(day(19), 21)).toEqual(new Date(2026, 10, 8, 21))
+    expect(nextDailyReminderAt(day(19), 21, { doneToday: true })).toEqual(new Date(2026, 10, 9, 21))
   })
 
   it('reads saved numbers back, and nothing from broken ones', () => {

@@ -1,5 +1,6 @@
 import { FileUp, MessageSquareWarning } from 'lucide-react'
 import { useLocation } from 'react-router'
+import { ThemeToggle } from '@/components/ThemeToggle'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useAuthStore } from '@/features/auth/authStore'
@@ -30,6 +31,7 @@ export function TopBar() {
           <Button variant="ghost" size="icon" aria-label="Send feedback or report a bug" title="Send feedback" onClick={() => showFeedback(pathname)}>
             <MessageSquareWarning aria-hidden />
           </Button>
+          <ThemeToggle />
           <ModeChip />
         </div>
       </div>

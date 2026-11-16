@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { DataSource } from '@/lib/dataSource'
 import { demoDb } from '@/lib/demoDb'
 import { stubLocalStorage } from '@/test/memoryStorage'
-import { extractNoteHeadings, getNote, listNotes, listSubjectNotes, noteKindLabel, noteSourceLabel, seedSampleNotes } from './notes'
+import { cardsFromNote, extractNoteHeadings, getNote, listNotes, listSubjectNotes, noteKindLabel, noteSourceLabel, sampleNoteQuiz, seedSampleNotes } from './notes'
 
 stubLocalStorage()
 
@@ -53,7 +53,7 @@ describe('notes in Demo Mode', () => {
   })
 })
 
-describe('table of contents headings', () => {
+describe('table of contents headings and flashcard/quiz extraction', () => {
   it('extracts ## headings in order and ignores # titles and fenced code blocks', () => {
     const markdown = [
       '# Lecture Title',
@@ -72,6 +72,24 @@ describe('table of contents headings', () => {
       { id: 'sec-permeability-mu-r-and-mu-r', text: 'Permeability $\\mu_r$ and $\\mu_r$' },
       { id: 'sec-key-points', text: 'Key points' },
     ])
+  })
+
+  it('extracts flashcards and a local practice quiz from a note', async () => {
+    const [dbms] = demoDb.insert('subjects', [{ name: 'DBMS' }])
+    if (!dbms) throw new Error('No subject')
+    const [sample] = await seedSampleNotes(DEMO, dbms.id)
+    if (!sample) throw new Error('No sample note')
+
+    const cards = cardsFromNote(sample.title, sample.content)
+    expect(cards.length).toBeGreaterThanOrEqual(6)
+    expect(cards.some((card) => card.front.startsWith('Exam tip — '))).toBe(true)
+
+    const quiz = sampleNoteQuiz(sample.title, sample.content, 5)
+    expect(quiz).toHaveLength(5)
+    for (const item of quiz) {
+      expect(item.options).toHaveLength(4)
+      expect(item.options[item.correctIndex]).toBeTruthy()
+    }
   })
 })
 

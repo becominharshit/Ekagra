@@ -161,6 +161,40 @@ export async function addTextMaterial(source: DataSource, { text, subjectId, tit
   return data
 }
 
+async function fetchYoutubeTitle(canonicalUrl: string): Promise<string> {
+  try {
+    const response = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(canonicalUrl)}&format=json`, { signal: AbortSignal.timeout(4000) })
+    if (!response.ok) return 'YouTube video'
+    const body = (await response.json()) as { title?: unknown }
+    return typeof body.title === 'string' && body.title.trim() ? body.title.trim() : 'YouTube video'
+  } catch {
+    return 'YouTube video'
+  }
+}
+
+/** Saves a YouTube video link as study material in either Ekagra or Studio (works in Demo Mode and Supabase). */
+export async function addYoutubeMaterial(
+  source: DataSource,
+  { url, subjectId, title: given }: { url: string; subjectId: string | null; title?: string },
+): Promise<Material> {
+  const { watchUrl, youtubeId } = await import('@shared/youtube.ts')
+  const id = youtubeId(url)
+  if (!id) throw new Error('Paste a YouTube video link (youtube.com/watch?v=… or youtu.be/…).')
+  const canonicalUrl = watchUrl(id)
+  const title = (given?.trim() || (await fetchYoutubeTitle(canonicalUrl))).slice(0, 300)
+  const row = { subject_id: subjectId, kind: 'youtube', purpose: 'study', title, source_url: canonicalUrl, status: 'ready' }
+
+  if (source.kind === 'demo') {
+    const [saved] = demoDb.insert('materials', [row])
+    if (!saved) throw new Error('The YouTube link was not saved.')
+    return saved
+  }
+  const { data, error } = await source.client.from('materials').insert(row).select().single()
+  if (error) throw dbError(error)
+  return data
+}
+
+
 /** The PDF file itself, for the viewer. */
 export async function loadPdfFile(source: DataSource, material: Material): Promise<Blob> {
   if (source.kind === 'demo') {

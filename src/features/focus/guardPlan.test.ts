@@ -57,13 +57,17 @@ describe('what FocusGuard blocks', () => {
   })
 })
 
-describe("the blocker screen's links", () => {
-  it('opens the focus screen or the Tollbooth for the blocked app, and ignores other links', () => {
+describe("the blocker screen's and Android Share's links", () => {
+  it('opens the focus screen, Tollbooth, or Library for shared YouTube links, and ignores other links', () => {
     expect(focusRoute('ekagra://focus')).toBe('/today/focus')
     expect(focusRoute('ekagra://focus/tollbooth?app=com.instagram.android&label=Instagram%20Lite')).toBe('/today/focus/tollbooth?app=com.instagram.android&label=Instagram+Lite')
     expect(focusRoute('ekagra://focus/tollbooth')).toBe('/today/focus/tollbooth')
+    expect(focusRoute('ekagra://share?text=Watch%20this%20https%3A%2F%2Fyoutu.be%2FdQw4w9WgXcQ')).toBe(
+      '/academics/library?share=https%3A%2F%2Fyoutu.be%2FdQw4w9WgXcQ',
+    )
     expect(focusRoute('ekagra://auth/callback?code=abc')).toBeNull()
     expect(focusRoute('https://example.com/focus')).toBeNull()
     expect(focusRoute('not a link')).toBeNull()
   })
 })
+

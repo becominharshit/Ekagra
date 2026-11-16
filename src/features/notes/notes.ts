@@ -222,3 +222,115 @@ export async function seedSampleNotes(source: DataSource, subjectId: string): Pr
     },
   ])
 }
+
+export interface NoteCardDraft {
+  front: string
+  back: string
+}
+
+function cleanHeadingTopic(heading: string): string {
+  return heading.replace(/\s*\(\d{1,2}:\d{2}(?::\d{2})?(?:[–-]\d{1,2}:\d{2}(?::\d{2})?)?\)\s*$/, '').trim()
+}
+
+/**
+ * Extracts study flashcards from a note's Markdown sections, Exam tips, and Key points so a student
+ * can save a note's high-yield ideas straight into Ekagra's spaced-repetition deck with one tap.
+ */
+export function cardsFromNote(noteTitle: string, markdown: string): NoteCardDraft[] {
+  const shortTitle = cleanHeadingTopic(noteTitle.replace(/^Sample:\s*/i, '')) || 'Note'
+  const cards: NoteCardDraft[] = []
+  const seen = new Set<string>()
+  const pushCard = (front: string, back: string) => {
+    const cleanFront = front.trim().slice(0, 220)
+    const cleanBack = back.trim().slice(0, 700)
+    if (!cleanFront || !cleanBack) return
+    const key = `${cleanFront.toLowerCase()}::${cleanBack.toLowerCase()}`
+    if (seen.has(key)) return
+    seen.add(key)
+    cards.push({ front: cleanFront, back: cleanBack })
+  }
+
+  const sections = markdown.split(/\r?\n(?=##\s+)/)
+  for (const rawSection of sections) {
+    const lines = rawSection
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+    const first = lines[0] ?? ''
+    const match = /^##\s+(.+)$/.exec(first)
+    if (!match?.[1]) continue
+    const rawHeading = match[1].replace(/\s+#+\s*$/, '').replace(/[*_`~]/g, '').trim()
+    const heading = cleanHeadingTopic(rawHeading)
+    const bodyLines = lines.slice(1)
+    if (!heading || /^overview$/i.test(heading) || bodyLines.length === 0) continue
+
+    if (/^key points$/i.test(heading)) {
+      bodyLines
+        .filter((line) => /^[-*]\s+/.test(line))
+        .forEach((line, index) => {
+          const text = line.replace(/^[-*]\s+/, '').trim()
+          const boldSplit = /^\*\*([^*]+)\*\*[:\s—-]+(.+)$/.exec(text)
+          if (boldSplit?.[1] && boldSplit[2]) {
+            pushCard(`${shortTitle} — ${boldSplit[1].trim()}`, boldSplit[2].trim())
+          } else {
+            pushCard(`${shortTitle} — Key point ${index + 1}`, text)
+          }
+        })
+      continue
+    }
+
+    const examTipLine = bodyLines.find((line) => /^\*\*Exam tip:\*\*/i.test(line))
+    const mainLines = bodyLines.filter((line) => !/^\*\*Exam tip:\*\*/i.test(line))
+    if (mainLines.length > 0) {
+      pushCard(`${shortTitle}: ${heading}`, mainLines.join('\n'))
+    }
+    if (examTipLine) {
+      const tip = examTipLine.replace(/^\*\*Exam tip:\*\*\s*/i, '').trim()
+      pushCard(`Exam tip — ${heading}`, tip)
+    }
+  }
+
+  return cards.slice(0, 24)
+}
+
+export interface NoteQuizItem {
+  question: string
+  options: [string, string, string, string]
+  correctIndex: number
+  explanation: string
+}
+
+/** Builds a local practice quiz from a note's flashcards in Demo Mode so "Test yourself" works offline without a cloud call. */
+export function sampleNoteQuiz(noteTitle: string, markdown: string, count: 5 | 10 = 5): NoteQuizItem[] {
+  const drafts = cardsFromNote(noteTitle, markdown)
+  if (drafts.length === 0) return []
+  const pool = drafts.map((card) => card.back.replace(/^[-*]\s+/gm, '').split(/\r?\n/)[0]?.slice(0, 140) ?? card.back.slice(0, 140))
+  const fallbackDistractors = [
+    'It only applies when all attributes are atomic and unindexed.',
+    'It reduces time complexity only when the input is already sorted in descending order.',
+    'It is ignored during exam grading unless explicitly stated in the schema.',
+  ]
+  const items: NoteQuizItem[] = []
+  const total = Math.min(count, drafts.length)
+  for (let i = 0; i < total; i++) {
+    const card = drafts[i]!
+    const correct = pool[i] ?? card.back.slice(0, 140)
+    const others = pool.filter((text, idx) => idx !== i && text !== correct)
+    const wrong1 = others[0] ?? fallbackDistractors[0]!
+    const wrong2 = others[1] ?? fallbackDistractors[1]!
+    const wrong3 = others[2] ?? fallbackDistractors[2]!
+    const rawOptions = [correct, wrong1, wrong2, wrong3]
+    const correctIndex = i % 4
+    const options: [string, string, string, string] = [rawOptions[0]!, rawOptions[1]!, rawOptions[2]!, rawOptions[3]!]
+    options[0] = options[correctIndex]!
+    options[correctIndex] = correct
+    items.push({
+      question: `Which statement best matches "${card.front}"?`,
+      options,
+      correctIndex,
+      explanation: card.back,
+    })
+  }
+  return items
+}
+

@@ -37,6 +37,11 @@ const plannerSchema = z.looseObject({
   maxBlockMinutes: z.number().int().min(20).max(90).catch(50),
   /** Subjects to study at a set part of the day, by subject id (from the weekly review). */
   subjectWindows: z.record(z.string(), z.enum(DAY_WINDOWS)).catch(() => ({})),
+  /** Exam Season Mode: 'auto' (within 21 days of an exam), 'on' (forced 80/5/15), or 'off'. */
+  examSeasonMode: z.enum(['auto', 'on', 'off']).catch('auto'),
+  /** Android daily notifications: morning plan brief (08:00) and evening 1-minute check-in (21:00). */
+  morningReminder: z.boolean().catch(true),
+  eveningReminder: z.boolean().catch(true),
 })
 
 const learningSchema = z.looseObject({
@@ -196,6 +201,7 @@ export function plannerSettingsFor(settings: Settings, chronotype: Chronotype): 
     revisionDays: settings.planner.revisionDays,
     maxReviewMinutes: settings.planner.maxReviewMinutes,
     maxDailyIncreasePct: settings.planner.maxDailyIncreasePct,
+    examSeasonMode: settings.planner.examSeasonMode,
     peakWindow: { start: parseTime(peak.start), end: parseTime(peak.end) },
     maxBlockMinutes: settings.planner.maxBlockMinutes,
     subjectWindows: Object.fromEntries(Object.entries(settings.planner.subjectWindows).map(([subjectId, window]) => [subjectId, windowInterval(window)])),

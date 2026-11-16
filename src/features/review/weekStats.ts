@@ -316,6 +316,14 @@ export function readWeekStats(json: unknown): WeekStats | null {
 
 /** The reminder's time on the review day. */
 export const REMINDER_HOUR = 18
+export const MORNING_REMINDER_HOUR = 8
+export const EVENING_REMINDER_HOUR = 21
+
+/** When a daily local reminder (e.g. 08:00 morning brief or 21:00 evening check-in) should fire next. */
+export function nextDailyReminderAt(now: Date, hour: number, { doneToday = false }: { doneToday?: boolean } = {}): Date {
+  const candidate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hour)
+  return candidate.getTime() <= now.getTime() || doneToday ? addDays(candidate, 1) : candidate
+}
 
 /** When the next review reminder should come: the review day at 18:00 (next week's when today's has passed or is done). */
 export function nextReviewAt(now: Date, reviewDay: number, { doneThisWeek = false, timeZone }: { doneThisWeek?: boolean; timeZone?: string } = {}): Date {

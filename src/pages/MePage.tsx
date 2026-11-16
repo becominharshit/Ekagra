@@ -1,5 +1,17 @@
 import { useState } from 'react'
-import { CalendarCheck2, CreditCard, LockKeyhole, LogOut, ShieldCheck, SlidersHorizontal, UserRound, Users } from 'lucide-react'
+import {
+  CalendarCheck2,
+  CreditCard,
+  LockKeyhole,
+  LogOut,
+  Monitor,
+  Moon,
+  ShieldCheck,
+  SlidersHorizontal,
+  Sun,
+  UserRound,
+  Users,
+} from 'lucide-react'
 import { Link, useNavigate } from 'react-router'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Badge } from '@/components/ui/badge'
@@ -11,7 +23,9 @@ import { useAuthStore } from '@/features/auth/authStore'
 import { PLAN_CATALOG, useBilling } from '@/features/billing/billing'
 import { FeedbackCard } from '@/features/feedback/FeedbackCard'
 import { blockedPackages, useBlockedApps } from '@/features/focus/blockedApps'
-import { useProfile, useRoutine } from '@/features/profile/queries'
+import { useProfile, useRoutine, useSaveSettings } from '@/features/profile/queries'
+import { type ThemePreference } from '@/features/theme/theme'
+import { useTheme } from '@/hooks/useTheme'
 import {
   CHRONOTYPE_LABEL,
   MENTOR_TONE_LABEL,
@@ -27,6 +41,7 @@ export function MePage() {
       <PageHeader title="Me" subtitle="Your profile and settings." />
       <div className="grid gap-4">
         <AccountCard />
+        <AppearanceCard />
         <PlanAndBillingCard />
         <ReviewCard />
         <FriendsCard />
@@ -36,6 +51,45 @@ export function MePage() {
         <FeedbackCard />
       </div>
     </>
+  )
+}
+
+const THEME_OPTIONS: readonly { value: ThemePreference; label: string; icon: typeof Sun }[] = [
+  { value: 'light', label: 'Light', icon: Sun },
+  { value: 'dark', label: 'Dark', icon: Moon },
+  { value: 'system', label: 'System', icon: Monitor },
+]
+
+/** Light, dark, or system appearance preference stored in localStorage. */
+function AppearanceCard() {
+  const { preference, resolved, setTheme } = useTheme()
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Appearance</CardTitle>
+        <CardDescription>
+          Choose light, dark, or match your device setting (currently {resolved}).
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Appearance theme">
+          {THEME_OPTIONS.map(({ value, label, icon: Icon }) => (
+            <Button
+              key={value}
+              type="button"
+              size="sm"
+              variant={preference === value ? 'default' : 'outline'}
+              aria-pressed={preference === value}
+              onClick={() => setTheme(value)}
+            >
+              <Icon className="size-4" aria-hidden />
+              {label}
+            </Button>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 
@@ -198,6 +252,7 @@ function PlanSettingsCard() {
   const navigate = useNavigate()
   const profile = useProfile()
   const routine = useRoutine()
+  const saveSettings = useSaveSettings()
 
   // RequireAuth has already loaded the profile before this page shows.
   if (!profile.data) return null
@@ -205,6 +260,7 @@ function PlanSettingsCard() {
   const chronotype = toChronotype(profile.data.chronotype)
   const peak = peakWindowFor(settings, chronotype)
   const { academics, hustle, life } = settings.budget
+  const { examSeasonMode, morningReminder, eveningReminder } = settings.planner
 
   return (
     <Card>
@@ -227,6 +283,58 @@ function PlanSettingsCard() {
           <dt className="text-muted-foreground">Fixed times</dt>
           <dd>{routine.data ? `${routine.data.length} repeating blocks` : 'Loading…'}</dd>
         </dl>
+
+        <div className="grid gap-1.5 border-t pt-3">
+          <p className="text-xs font-medium text-muted-foreground">Exam Season Mode (80% Academics · 5% Hustle · 15% Life)</p>
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Exam Season Mode">
+            {(
+              [
+                ['auto', 'Auto (21d before exams)'],
+                ['on', 'Always on'],
+                ['off', 'Off'],
+              ] as const
+            ).map(([mode, label]) => (
+              <Button
+                key={mode}
+                type="button"
+                size="xs"
+                variant={examSeasonMode === mode ? 'default' : 'outline'}
+                aria-pressed={examSeasonMode === mode}
+                disabled={saveSettings.isPending}
+                onClick={() => saveSettings.mutate({ planner: { examSeasonMode: mode } })}
+              >
+                {label}
+              </Button>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid gap-1.5 border-t pt-3">
+          <p className="text-xs font-medium text-muted-foreground">Daily reminders (Android notifications)</p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              size="xs"
+              variant={morningReminder ? 'secondary' : 'outline'}
+              aria-pressed={morningReminder}
+              disabled={saveSettings.isPending}
+              onClick={() => saveSettings.mutate({ planner: { morningReminder: !morningReminder } })}
+            >
+              08:00 morning plan: {morningReminder ? 'On' : 'Off'}
+            </Button>
+            <Button
+              type="button"
+              size="xs"
+              variant={eveningReminder ? 'secondary' : 'outline'}
+              aria-pressed={eveningReminder}
+              disabled={saveSettings.isPending}
+              onClick={() => saveSettings.mutate({ planner: { eveningReminder: !eveningReminder } })}
+            >
+              21:00 evening check-in: {eveningReminder ? 'On' : 'Off'}
+            </Button>
+          </div>
+        </div>
+
         <Button variant="outline" onClick={() => navigate('/onboarding')}>
           <SlidersHorizontal aria-hidden />
           Edit routine and budget
@@ -235,3 +343,4 @@ function PlanSettingsCard() {
     </Card>
   )
 }
+

@@ -1,4 +1,5 @@
-import { BatteryLow, ShieldCheck, Undo2 } from 'lucide-react'
+import { BatteryLow, Flame, ShieldCheck, Undo2 } from 'lucide-react'
+import { Link } from 'react-router'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -11,8 +12,12 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
-import { Card, CardAction, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { useStudy } from '@/features/academics/roadmap'
+import { dayBudget, nextExamSubject, resolveSettings } from '@/features/planner/planner'
 import { localDateOf } from '@/features/planner/schedule'
+import { useProfile } from '@/features/profile/queries'
+import { plannerSettingsFor, readSettings, toChronotype } from '@/features/profile/settings'
 import { useTodayMutation } from '@/features/today/todayMutation'
 import { useNow, useTimezone } from '@/hooks/useNow'
 import { crashToday, guardOn, undoCrash, useCheckIns } from './checkins'
@@ -57,14 +62,30 @@ export function CrashButton() {
   )
 }
 
-/** Notes about how today is planned: a minimum day (with Undo) and the Burnout Guard. */
+/** Notes about how today is planned: a minimum day (with Undo), Burnout Guard, and Exam Season Mode. */
 export function DayStatus() {
   const today = localDateOf(useNow(60_000))
   const checkIns = useCheckIns(today)
+  const profile = useProfile()
+  const study = useStudy()
   const undo = useTodayMutation(undoCrash)
   const rows = checkIns.data ?? []
   const minimumDay = rows.some((row) => row.date === today && row.minimum_day)
   const guard = guardOn(today, rows)
+
+  const settings = readSettings(profile.data?.settings)
+  const plannerSettings = resolveSettings(plannerSettingsFor(settings, toChronotype(profile.data?.chronotype)))
+  const plannerSubjects = (study.data?.subjects ?? [])
+    .filter((subject) => subject.archived_at === null)
+    .map((subject) => ({ id: subject.id, name: subject.name, examDate: subject.exam_date }))
+  const { examSeason, budget } = dayBudget(today, plannerSubjects, plannerSettings)
+  const nearestExam = nextExamSubject(today, plannerSubjects)
+  const highYieldTopics = examSeason
+    ? (study.data?.topics ?? [])
+        .filter((topic) => topic.parent_id !== null && topic.track === 'exam' && topic.status !== 'mastered')
+        .sort((a, b) => Number(b.priority_score) - Number(a.priority_score))
+        .slice(0, 3)
+    : []
 
   return (
     <>
@@ -101,6 +122,35 @@ export function DayStatus() {
           </CardHeader>
         </Card>
       )}
+      {examSeason && (
+        <Card size="sm" className="bg-violet-500/10 ring-violet-500/30">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Flame className="size-4 text-mode-study" aria-hidden />
+              Exam Season Mode{nearestExam ? ` · ${nearestExam.subject.name} in ${nearestExam.days === 0 ? 'today' : `${nearestExam.days}d`}` : ''}
+            </CardTitle>
+            <CardDescription>
+              Plan shifted to {budget.academics}% Academics · {budget.hustle}% Hustle · {budget.life}% Life, with skill courses paused to protect exam prep.
+            </CardDescription>
+            <CardAction>
+              <Button asChild variant="ghost" size="sm">
+                <Link to="/me">Adjust</Link>
+              </Button>
+            </CardAction>
+          </CardHeader>
+          {highYieldTopics.length > 0 && (
+            <CardContent className="flex flex-wrap items-center gap-1.5 pt-0">
+              <span className="text-xs text-muted-foreground">High-yield next:</span>
+              {highYieldTopics.map((topic) => (
+                <Button key={topic.id} asChild variant="outline" size="xs">
+                  <Link to={`/academics/topics/${topic.id}`}>{topic.title}</Link>
+                </Button>
+              ))}
+            </CardContent>
+          )}
+        </Card>
+      )}
     </>
   )
 }
+

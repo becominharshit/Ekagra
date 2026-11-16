@@ -258,6 +258,17 @@ describe('exam season', () => {
     }
     expect(minutesByArea(day(result, 4))).toEqual({ academics: 670, hustle: 40, life: 130 })
   })
+
+  it('honors manual examSeasonMode overrides (on or off)', () => {
+    expect(dayBudget(TODAY, [subject('dbms', 40)], resolveSettings({ examSeasonMode: 'on' }))).toEqual({
+      budget: EXAM_SEASON_BUDGET,
+      examSeason: true,
+    })
+    expect(dayBudget(TODAY, [subject('dbms', 5)], resolveSettings({ examSeasonMode: 'off' }))).toEqual({
+      budget: STANDARD_BUDGET,
+      examSeason: false,
+    })
+  })
 })
 
 describe('burnout guard', () => {
